@@ -17,8 +17,10 @@ namespace AutoWashPro.DAL.Entities
         [MaxLength(50)]
         public string TierName { get; set; }
 
-        public double PointMultiplier { get; set; }
+        public decimal PointMultiplier { get; set; }
         public int BookingWindowDays { get; set; }
+        public int MaxActiveBookings { get; set; }
+        public int RequiredPointsToUpgrade { get; set; }
 
         public ICollection<CustomerProfile> Customers { get; set; }
     }

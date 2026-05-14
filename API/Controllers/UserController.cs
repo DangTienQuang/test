@@ -20,8 +20,8 @@ namespace AutoWashPro.API.Controllers
             _userService = userService;
         }
 
-        [HttpGet("profile")]
-        public async Task<IActionResult> GetProfile()
+        [HttpGet("me")]
+        public async Task<IActionResult> GetMyProfile()
         {
             try
             {
@@ -39,8 +39,8 @@ namespace AutoWashPro.API.Controllers
             }
         }
 
-        [HttpPost("vehicles")]
-        public async Task<IActionResult> AddVehicle([FromBody] CreateVehicleDTO request)
+        [HttpPut("me")]
+        public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateProfileDTO request)
         {
             try
             {
@@ -48,14 +48,64 @@ namespace AutoWashPro.API.Controllers
                 if (userIdClaim == null) return Unauthorized(new { statusCode = 401, message = "Unauthorized" });
 
                 int userId = int.Parse(userIdClaim);
-                await _userService.AddVehicleAsync(userId, request);
+                var result = await _userService.UpdateProfileAsync(userId, request);
 
-                return Created("", new { statusCode = 201, message = "Success" });
+                return Ok(new { statusCode = 200, message = "Success", data = result });
             }
             catch (Exception ex)
             {
                 return BadRequest(new { statusCode = 400, message = ex.Message });
             }
         }
+
+        [HttpGet]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> GetAllUsers([FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 10, [FromQuery] string? searchName = null, [FromQuery] string? searchPhone = null, [FromQuery] string? searchPlate = null, [FromQuery] int? tierId = null, [FromQuery] string? status = null)
+        {
+            try
+            {
+                var result = await _userService.GetAllUsersAsync(pageIndex, pageSize, searchName, searchPhone, searchPlate, tierId, status);
+                return Ok(new { statusCode = 200, message = "Success", data = result });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { statusCode = 400, message = ex.Message });
+            }
+        }
+
+        [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> GetUserById(int id)
+        {
+            try
+            {
+                var result = await _userService.GetUserByIdAsync(id);
+                return Ok(new { statusCode = 200, message = "Success", data = result });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { statusCode = 400, message = ex.Message });
+            }
+        }
+
+        [HttpPut("{id}/status")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> ChangeUserStatus(int id, [FromBody] ChangeStatusRequest request)
+        {
+            try
+            {
+                await _userService.ChangeUserStatusAsync(id, request.Status);
+                return Ok(new { statusCode = 200, message = "Success" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { statusCode = 400, message = ex.Message });
+            }
+        }
+    }
+
+    public class ChangeStatusRequest
+    {
+        public string Status { get; set; }
     }
 }

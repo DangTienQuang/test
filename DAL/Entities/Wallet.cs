@@ -18,6 +18,8 @@ namespace AutoWashPro.DAL.Entities
         public User User { get; set; }
 
         public decimal MainBalance { get; set; }
-        public int TotalLoyaltyPoints { get; set; }
+
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
     }
 }

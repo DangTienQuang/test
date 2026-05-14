@@ -11,6 +11,9 @@ namespace AutoWashPro.BLL.Services
     public interface IUserService
     {
         Task<UserProfileDTO> GetProfileAsync(int userId);
-        Task<bool> AddVehicleAsync(int userId, CreateVehicleDTO request);
+        Task<UserProfileDTO> UpdateProfileAsync(int userId, UpdateProfileDTO request);
+        Task<PaginatedResponseDTO<UserProfileDTO>> GetAllUsersAsync(int pageIndex, int pageSize, string? searchName, string? searchPhone, string? searchPlate, int? tierId, string? status);
+        Task<UserProfileDTO> GetUserByIdAsync(int userId);
+        Task<bool> ChangeUserStatusAsync(int userId, string status);
     }
 }

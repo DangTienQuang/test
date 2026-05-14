@@ -44,5 +44,53 @@ namespace AutoWashPro.API.Controllers
                 return Unauthorized(new { statusCode = 401, message = ex.Message });
             }
         }
+
+        [HttpPost("refresh-token")]
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDTO request)
+        {
+            try
+            {
+                var result = await _authService.RefreshTokenAsync(request);
+                return Ok(new { statusCode = 200, message = "Success", data = result });
+            }
+            catch (Exception ex)
+            {
+                return Unauthorized(new { statusCode = 401, message = ex.Message });
+            }
+        }
+
+        [HttpPost("change-password")]
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDTO request)
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (userIdClaim == null) return Unauthorized(new { statusCode = 401, message = "Unauthorized" });
+
+                int userId = int.Parse(userIdClaim);
+                await _authService.ChangePasswordAsync(userId, request);
+
+                return Ok(new { statusCode = 200, message = "Password changed successfully." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { statusCode = 400, message = ex.Message });
+            }
+        }
+
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDTO request)
+        {
+            try
+            {
+                await _authService.ForgotPasswordAsync(request);
+                return Ok(new { statusCode = 200, message = "OTP sent successfully. Please check your messages/console." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { statusCode = 400, message = ex.Message });
+            }
+        }
     }
 }

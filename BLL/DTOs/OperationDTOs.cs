@@ -15,6 +15,7 @@ namespace AutoWashPro.BLL.DTOs
         public string ServiceName { get; set; }
         public decimal BasePrice { get; set; }
         public int DurationMinutes { get; set; }
+        public string Description { get; set; }
     }
 
     public class CreateBookingDTO
@@ -46,7 +47,23 @@ namespace AutoWashPro.BLL.DTOs
         [Range(10000, 10000000, ErrorMessage = "Giá tiền tối thiểu là 10.000 VNĐ.")]
         public decimal BasePrice { get; set; }
 
-        [Range(5, 300, ErrorMessage = "Thời gian thực hiện phải từ 5 đến 300 phút.")]
+        [Range(1, 300, ErrorMessage = "Thời gian thực hiện phải lớn hơn 0.")]
         public int DurationMinutes { get; set; }
+
+        public string Description { get; set; }
+    }
+
+    public class UpdateServiceDTO
+    {
+        [Required(ErrorMessage = "Tên dịch vụ không được để trống.")]
+        public string ServiceName { get; set; }
+
+        [Range(10000, 10000000, ErrorMessage = "Giá tiền tối thiểu là 10.000 VNĐ.")]
+        public decimal BasePrice { get; set; }
+
+        [Range(1, 300, ErrorMessage = "Thời gian thực hiện phải lớn hơn 0.")]
+        public int DurationMinutes { get; set; }
+
+        public string Description { get; set; }
     }
 }

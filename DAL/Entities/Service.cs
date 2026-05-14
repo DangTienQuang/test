@@ -18,5 +18,8 @@ namespace AutoWashPro.DAL.Entities
 
         public decimal BasePrice { get; set; }
         public int DurationMinutes { get; set; }
+
+        [MaxLength(500)]
+        public string? Description { get; set; }
     }
 }

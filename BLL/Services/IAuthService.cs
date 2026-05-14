@@ -12,5 +12,8 @@ namespace AutoWashPro.BLL.Services
     {
         Task<AuthResponseDTO> RegisterAsync(RegisterDTO request);
         Task<AuthResponseDTO> LoginAsync(LoginDTO request);
+        Task<AuthResponseDTO> RefreshTokenAsync(RefreshTokenDTO request);
+        Task ChangePasswordAsync(int userId, ChangePasswordDTO request);
+        Task ForgotPasswordAsync(ForgotPasswordDTO request);
     }
 }
