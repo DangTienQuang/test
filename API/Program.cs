@@ -118,10 +118,19 @@ using (var scope = app.Services.CreateScope())
         };
         context.Users.Add(admin);
 
-        var firstTier = context.Tiers.FirstOrDefault() ?? new AutoWashPro.DAL.Entities.Tier { TierName = "AdminTier", PointMultiplier = 1, BookingWindowDays = 30 };
-        if (firstTier.TierId == 0) context.Tiers.Add(firstTier);
-
-        context.SaveChanges();
+        var firstTier = context.Tiers.FirstOrDefault(t => t.MinAccumulatedPoints == 0);
+        if (firstTier == null)
+        {
+            firstTier = new AutoWashPro.DAL.Entities.Tier
+            {
+                TierName = "Standard",
+                PointMultiplier = 1.0,
+                BookingWindowDays = 7,
+                MinAccumulatedPoints = 0
+            };
+            context.Tiers.Add(firstTier);
+            context.SaveChanges();
+        }
 
         context.CustomerProfiles.Add(new AutoWashPro.DAL.Entities.CustomerProfile
         {
@@ -129,6 +138,13 @@ using (var scope = app.Services.CreateScope())
             FullName = "System Admin",
             TierId = firstTier.TierId,
             ChurnScore = 0
+        });
+
+        context.Wallets.Add(new AutoWashPro.DAL.Entities.Wallet
+        {
+            UserId = admin.UserId,
+            MainBalance = 0,
+            TotalLoyaltyPoints = 0
         });
 
         context.SaveChanges();
