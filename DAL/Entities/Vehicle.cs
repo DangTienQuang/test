@@ -21,9 +21,5 @@ namespace AutoWashPro.DAL.Entities
         [Required]
         [MaxLength(20)]
         public string VehicleType { get; set; }
-
-        [Required]
-        [MaxLength(50)]
-        public string Brand { get; set; }
     }
 }

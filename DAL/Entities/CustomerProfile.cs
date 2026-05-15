@@ -22,12 +22,6 @@ namespace AutoWashPro.DAL.Entities
         [MaxLength(100)]
         public string FullName { get; set; }
 
-        [MaxLength(200)]
-        public string? Email { get; set; }
-
-        [MaxLength(500)]
-        public string? AvatarUrl { get; set; }
-
         [ForeignKey("Tier")]
         public int TierId { get; set; }
         public Tier Tier { get; set; }

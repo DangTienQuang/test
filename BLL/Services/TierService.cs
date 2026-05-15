@@ -28,9 +28,7 @@ namespace AutoWashPro.BLL.Services
             {
                 TierName = request.TierName,
                 PointMultiplier = request.PointMultiplier,
-                BookingWindowDays = request.BookingWindowDays,
-                MaxActiveBookings = request.MaxActiveBookings,
-                RequiredPointsToUpgrade = request.RequiredPointsToUpgrade
+                BookingWindowDays = request.BookingWindowDays
             };
 
             _context.Tiers.Add(tier);
@@ -41,9 +39,7 @@ namespace AutoWashPro.BLL.Services
                 TierId = tier.TierId,
                 TierName = tier.TierName,
                 PointMultiplier = tier.PointMultiplier,
-                BookingWindowDays = tier.BookingWindowDays,
-                MaxActiveBookings = tier.MaxActiveBookings,
-                RequiredPointsToUpgrade = tier.RequiredPointsToUpgrade
+                BookingWindowDays = tier.BookingWindowDays
             };
         }
 
@@ -55,38 +51,10 @@ namespace AutoWashPro.BLL.Services
                     TierId = t.TierId,
                     TierName = t.TierName,
                     PointMultiplier = t.PointMultiplier,
-                    BookingWindowDays = t.BookingWindowDays,
-                    MaxActiveBookings = t.MaxActiveBookings,
-                    RequiredPointsToUpgrade = t.RequiredPointsToUpgrade
+                    BookingWindowDays = t.BookingWindowDays
                 }).ToListAsync();
 
             return tiers;
-        }
-
-        public async Task<TierResponseDTO> UpdateTierAsync(int id, UpdateTierDTO request)
-        {
-            var tier = await _context.Tiers.FindAsync(id);
-            if (tier == null)
-            {
-                throw new Exception("Tier not found.");
-            }
-
-            tier.PointMultiplier = request.PointMultiplier;
-            tier.BookingWindowDays = request.BookingWindowDays;
-            tier.MaxActiveBookings = request.MaxActiveBookings;
-            tier.RequiredPointsToUpgrade = request.RequiredPointsToUpgrade;
-
-            await _context.SaveChangesAsync();
-
-            return new TierResponseDTO
-            {
-                TierId = tier.TierId,
-                TierName = tier.TierName,
-                PointMultiplier = tier.PointMultiplier,
-                BookingWindowDays = tier.BookingWindowDays,
-                MaxActiveBookings = tier.MaxActiveBookings,
-                RequiredPointsToUpgrade = tier.RequiredPointsToUpgrade
-            };
         }
     }
 }

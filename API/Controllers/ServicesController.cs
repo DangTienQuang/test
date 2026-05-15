@@ -10,11 +10,11 @@ namespace AutoWashPro.API.Controllers
     [ApiController]
     public class ServicesController : ControllerBase
     {
-        private readonly IServiceService _serviceService;
+        private readonly IOperationService _operationService;
 
-        public ServicesController(IServiceService serviceService)
+        public ServicesController(IOperationService operationService)
         {
-            _serviceService = serviceService;
+            _operationService = operationService;
         }
 
         [HttpGet]
@@ -22,7 +22,7 @@ namespace AutoWashPro.API.Controllers
         {
             try
             {
-                var result = await _serviceService.GetServicesAsync();
+                var result = await _operationService.GetServicesAsync();
                 return Ok(new { statusCode = 200, message = "Success", data = result });
             }
             catch (Exception ex)
@@ -30,28 +30,12 @@ namespace AutoWashPro.API.Controllers
                 return BadRequest(new { statusCode = 400, message = ex.Message });
             }
         }
-
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetServiceById(int id)
-        {
-            try
-            {
-                var result = await _serviceService.GetServiceByIdAsync(id);
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
-        }
-
         [HttpPost]
-        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Manager")]
         public async Task<IActionResult> CreateService([FromBody] CreateServiceDTO request)
         {
             try
             {
-                var result = await _serviceService.CreateServiceAsync(request);
+                var result = await _operationService.CreateServiceAsync(request);
                 return Created("", new { statusCode = 201, message = "Success", data = result });
             }
             catch (Exception ex)
@@ -59,35 +43,6 @@ namespace AutoWashPro.API.Controllers
                 return BadRequest(new { statusCode = 400, message = ex.Message });
             }
         }
-
-        [HttpPut("{id}")]
-        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Manager")]
-        public async Task<IActionResult> UpdateService(int id, [FromBody] UpdateServiceDTO request)
-        {
-            try
-            {
-                var result = await _serviceService.UpdateServiceAsync(id, request);
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
-        }
-
-        [HttpDelete("{id}")]
-        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Manager")]
-        public async Task<IActionResult> DeleteService(int id)
-        {
-            try
-            {
-                await _serviceService.DeleteServiceAsync(id);
-                return Ok(new { statusCode = 200, message = "Success" });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
-        }
     }
+
 }
