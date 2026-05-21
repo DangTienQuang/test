@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -15,12 +15,12 @@ namespace AutoWashPro.DAL.Entities
 
         [Required]
         [MaxLength(20)]
-        public string LicensePlate { get; set; }
+        public required string LicensePlate { get; set; }
 
         [Required]
         public int ServiceId { get; set; }
         [ForeignKey("ServiceId")]
-        public Service Service { get; set; }
+        public Service Service { get; set; } = null!;
 
         [Required]
         public DateTime ScheduledTime { get; set; }

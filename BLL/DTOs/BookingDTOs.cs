@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -7,15 +7,15 @@ namespace AutoWashPro.BLL.DTOs
     public class TimeSlotResponseDTO
     {
         public int SlotId { get; set; }
-        public string TimeRange { get; set; } 
+        public required string TimeRange { get; set; } 
         public bool IsAvailable { get; set; }
-        public string Reason { get; set; }
+        public string? Reason { get; set; }
     }
 
     public class CreateBookingDTO
     {
         [Required(ErrorMessage = "Vui lòng chọn xe.")]
-        public string LicensePlate { get; set; }
+        public required string LicensePlate { get; set; }
 
         [Required]
         public int ServiceId { get; set; }
@@ -34,12 +34,13 @@ namespace AutoWashPro.BLL.DTOs
     public class BookingResponseDTO
     {
         public int BookingId { get; set; }
-        public string LicensePlate { get; set; }
-        public string ServiceName { get; set; }
+        public required string LicensePlate { get; set; }
+        public required string ServiceName { get; set; }
         public DateTime ScheduledTime { get; set; }
-        public string Status { get; set; }
+        public required string Status { get; set; }
         public decimal OriginalPrice { get; set; }
         public decimal PointDiscountAmount { get; set; }
+        public decimal VoucherDiscountAmount { get; set; }
         public decimal FinalAmount { get; set; }
     }
 }

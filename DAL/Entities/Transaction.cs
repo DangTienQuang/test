@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -12,16 +12,18 @@ namespace AutoWashPro.DAL.Entities
         [Required]
         public int WalletId { get; set; }
         [ForeignKey("WalletId")]
-        public Wallet Wallet { get; set; }
+        public Wallet Wallet { get; set; } = null!;
 
         [Required]
         public decimal Amount { get; set; }
 
         [Required]
         [MaxLength(20)]
-        public string TransactionType { get; set; }
+        public required string TransactionType { get; set; }
 
-        public string Description { get; set; }
+        [Required]
+        [MaxLength(200)]
+        public required string Description { get; set; }
 
         public int? ReferenceBookingId { get; set; }
 

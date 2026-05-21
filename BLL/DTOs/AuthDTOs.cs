@@ -8,6 +8,10 @@ namespace AutoWashPro.BLL.DTOs
         [RegularExpression(@"^(0[3|5|7|8|9])+([0-9]{8})$", ErrorMessage = "Số điện thoại không hợp lệ.")]
         public string PhoneNumber { get; set; }
 
+        [Required(ErrorMessage = "Email không được để trống.")]
+        [EmailAddress(ErrorMessage = "Email không đúng định dạng.")]
+        public string Email { get; set; }
+
         [Required(ErrorMessage = "Mật khẩu không được để trống.")]
         [MinLength(6, ErrorMessage = "Mật khẩu phải có ít nhất 6 ký tự.")]
         public string Password { get; set; }
@@ -18,8 +22,8 @@ namespace AutoWashPro.BLL.DTOs
 
     public class LoginDTO
     {
-        [Required(ErrorMessage = "Số điện thoại không được để trống.")]
-        public string PhoneNumber { get; set; }
+        [Required(ErrorMessage = "Số điện thoại hoặc Email không được để trống.")]
+        public string PhoneOrEmail { get; set; }
 
         [Required(ErrorMessage = "Mật khẩu không được để trống.")]
         public string Password { get; set; }

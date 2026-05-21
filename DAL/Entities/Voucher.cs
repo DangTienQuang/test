@@ -21,5 +21,7 @@ namespace AutoWashPro.DAL.Entities
         public int MaxUsages { get; set; }
 
         public DateTime ExpiryDate { get; set; }
+
+        public int PointsRequired { get; set; }
     }
 }

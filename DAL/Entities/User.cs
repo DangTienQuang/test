@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,20 +16,21 @@ namespace AutoWashPro.DAL.Entities
         [Required]
         [MaxLength(20)]
         public string PhoneNumber { get; set; }
-
+        [MaxLength(100)]
+        public string? Email { get; set; }
         [Required]
-        public string PasswordHash { get; set; }
-
-        [Required]
-        [MaxLength(20)]
-        public string Role { get; set; }
+        public required string PasswordHash { get; set; }
 
         [Required]
         [MaxLength(20)]
-        public string Status { get; set; }
+        public required string Role { get; set; }
+
+        [Required]
+        [MaxLength(20)]
+        public required string Status { get; set; }
         public string? RefreshToken { get; set; }
         public DateTime? RefreshTokenExpiryTime { get; set; }
-        public CustomerProfile CustomerProfile { get; set; }
-        public ICollection<Vehicle> Vehicles { get; set; }
+        public CustomerProfile CustomerProfile { get; set; } = null!;
+        public ICollection<Vehicle> Vehicles { get; set; } = new List<Vehicle>();
     }
 }

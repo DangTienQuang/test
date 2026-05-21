@@ -55,6 +55,7 @@ namespace AutoWashPro.BLL.Services
                 var user = new User
                 {
                     PhoneNumber = request.PhoneNumber,
+                    Email = request.Email,
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
                     Role = UserRoles.Customer,
                     Status = UserStatuses.Active 
@@ -81,8 +82,7 @@ namespace AutoWashPro.BLL.Services
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
-
-                return await LoginAsync(new LoginDTO { PhoneNumber = request.PhoneNumber, Password = request.Password });
+                return await LoginAsync(new LoginDTO { PhoneOrEmail = request.PhoneNumber, Password = request.Password });
             }
             catch (Exception)
             {
@@ -92,12 +92,13 @@ namespace AutoWashPro.BLL.Services
         }
         public async Task<AuthResponseDTO> LoginAsync(LoginDTO request)
         {
+            var loginInput = request.PhoneOrEmail.Trim().ToLower();
             var user = await _context.Users
                 .Include(u => u.CustomerProfile)
-                .FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber);
+                .FirstOrDefaultAsync(u => u.PhoneNumber == loginInput || (u.Email != null && u.Email.ToLower() == loginInput));
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-                throw new Exception("Số điện thoại hoặc mật khẩu không chính xác.");
+                throw new Exception("Số điện thoại/Email hoặc mật khẩu không chính xác.");
 
             if (user.Status != "Active")
                 throw new Exception("Tài khoản đã bị khóa hoặc không hoạt động.");

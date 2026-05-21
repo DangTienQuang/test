@@ -42,6 +42,8 @@ namespace AutoWashPro.BLL.DTOs
 
         [RegularExpression(@"^(0[3|5|7|8|9])+([0-9]{8})$", ErrorMessage = "Số điện thoại không hợp lệ.")]
         public string? PhoneNumber { get; set; }
+        [EmailAddress(ErrorMessage = "Email không đúng định dạng.")]
+        public string? Email { get; set; }
     }
 
     public class UpdateUserStatusDTO

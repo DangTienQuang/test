@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -11,15 +11,15 @@ namespace AutoWashPro.DAL.Entities
 
         [ForeignKey("User")]
         public int UserId { get; set; }
-        public User User { get; set; }
+        public User User { get; set; } = null!;
 
         [Required]
         [MaxLength(100)]
-        public string FullName { get; set; }
+        public required string FullName { get; set; }
 
         [ForeignKey("Tier")]
         public int TierId { get; set; }
-        public Tier Tier { get; set; }
+        public Tier Tier { get; set; } = null!;
 
         public double ChurnScore { get; set; }
         public DateTime? LastVisitDate { get; set; }
