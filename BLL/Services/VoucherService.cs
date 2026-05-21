@@ -44,12 +44,13 @@ namespace AutoWashPro.BLL.Services
             if (voucher.ExpiryDate < DateTime.UtcNow) throw new Exception("Voucher đã hết hạn.");
 
             var currentRedeemedCount = await _context.UserVouchers.CountAsync(uv => uv.VoucherId == voucherId);
-            if (currentRedeemedCount >= voucher.MaxUsages)
+            if (voucher.MaxUsages > 0 && currentRedeemedCount >= voucher.MaxUsages)
                 throw new Exception("Rất tiếc, loại Voucher này đã hết số lượng.");
 
             var existingUserVoucher = await _context.UserVouchers
-                .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == voucherId);
-            if (existingUserVoucher != null) throw new Exception("Bạn đã sở hữu voucher này rồi.");
+                .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == voucherId && uv.IsUsed == false);
+            if (existingUserVoucher != null)
+                throw new Exception("Bạn đang có 1 voucher loại này chưa sử dụng. Hãy dùng trước khi đổi thêm.");
 
             await _walletService.DeductPointsFIFOAsync(userId, voucher.PointsRequired, $"Đổi voucher: {voucher.Code}");
 

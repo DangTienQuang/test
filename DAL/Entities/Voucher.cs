@@ -18,10 +18,9 @@ namespace AutoWashPro.DAL.Entities
         public string Code { get; set; }
 
         public decimal DiscountAmount { get; set; }
+        public int PointsRequired { get; set; }
         public int MaxUsages { get; set; }
 
         public DateTime ExpiryDate { get; set; }
-
-        public int PointsRequired { get; set; }
     }
 }

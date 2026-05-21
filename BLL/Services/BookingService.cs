@@ -127,11 +127,11 @@ namespace AutoWashPro.BLL.Services
 
             if (newStatus == "Completed" && booking.Status != "Completed")
             {
-                if (booking.UserId > 0)
+                if (booking.UserId.HasValue)
                 {
                     var userProfile = await _context.CustomerProfiles
                         .Include(cp => cp.Tier)
-                        .FirstOrDefaultAsync(cp => cp.UserId == booking.UserId);
+                        .FirstOrDefaultAsync(cp => cp.UserId == booking.UserId.Value);
 
                     if (userProfile != null && userProfile.Tier != null && booking.FinalAmount > 0)
                     {
@@ -149,21 +149,59 @@ namespace AutoWashPro.BLL.Services
                             };
                             _context.PointLedgers.Add(pointLedger);
 
-                            await _context.SaveChangesAsync();
-
-                            var totalPointsAccumulated = await _context.PointLedgers
-                                .Where(p => p.UserId == booking.UserId.Value)
-                                .SumAsync(p => p.PointsAdded);
+                            int lifetimeAccumulatedPoints = await _context.PointLedgers
+                                .Where(p => p.UserId == booking.UserId.Value && p.PointsAdded > 0)
+                                .SumAsync(p => p.PointsAdded) + pointsEarned;
 
                             var eligibleTier = await _context.Tiers
-                                .Where(t => totalPointsAccumulated >= t.MinAccumulatedPoints)
+                                .Where(t => t.MinAccumulatedPoints <= lifetimeAccumulatedPoints)
                                 .OrderByDescending(t => t.MinAccumulatedPoints)
                                 .FirstOrDefaultAsync();
 
-                            if (eligibleTier != null && userProfile.TierId != eligibleTier.TierId)
+                            if (eligibleTier != null && eligibleTier.MinAccumulatedPoints > userProfile.Tier.MinAccumulatedPoints)
                             {
                                 userProfile.TierId = eligibleTier.TierId;
                             }
+                        }
+                    }
+                }
+            }
+
+            else if (newStatus == "Cancelled" && booking.Status != "Cancelled")
+            {
+                if (booking.UserId.HasValue)
+                {
+                    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == booking.UserId.Value);
+                    if (wallet != null && booking.FinalAmount > 0)
+                    {
+                        wallet.Balance += booking.FinalAmount;
+                        _context.Transactions.Add(new Transaction
+                        {
+                            WalletId = wallet.WalletId,
+                            Amount = booking.FinalAmount,
+                            TransactionType = "Refund",
+                            Description = $"Hoàn tiền do Trạm hủy lịch #{booking.BookingId}",
+                            ReferenceBookingId = booking.BookingId
+                        });
+                    }
+                    if (booking.PointsUsed > 0)
+                    {
+                        _context.PointLedgers.Add(new PointLedger
+                        {
+                            UserId = booking.UserId.Value,
+                            PointsDeducted = -booking.PointsUsed,
+                            Reason = $"Hoàn điểm do Trạm hủy lịch #{booking.BookingId}"
+                        });
+                    }
+
+                    if (booking.AppliedVoucherId.HasValue)
+                    {
+                        var usedVoucher = await _context.UserVouchers
+                            .FirstOrDefaultAsync(uv => uv.UserId == booking.UserId.Value && uv.VoucherId == booking.AppliedVoucherId.Value);
+                        if (usedVoucher != null)
+                        {
+                            usedVoucher.IsUsed = false;
+                            usedVoucher.UsedDate = null;
                         }
                     }
                 }
