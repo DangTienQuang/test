@@ -148,6 +148,22 @@ namespace AutoWashPro.BLL.Services
                                 ReferenceBookingId = booking.BookingId
                             };
                             _context.PointLedgers.Add(pointLedger);
+
+                            await _context.SaveChangesAsync();
+
+                            var totalPointsAccumulated = await _context.PointLedgers
+                                .Where(p => p.UserId == booking.UserId.Value)
+                                .SumAsync(p => p.PointsAdded);
+
+                            var eligibleTier = await _context.Tiers
+                                .Where(t => totalPointsAccumulated >= t.MinAccumulatedPoints)
+                                .OrderByDescending(t => t.MinAccumulatedPoints)
+                                .FirstOrDefaultAsync();
+
+                            if (eligibleTier != null && userProfile.TierId != eligibleTier.TierId)
+                            {
+                                userProfile.TierId = eligibleTier.TierId;
+                            }
                         }
                     }
                 }
@@ -392,10 +408,22 @@ namespace AutoWashPro.BLL.Services
                         var pointLedger = new PointLedger
                         {
                             UserId = userId,
-                            PointsAdded = booking.PointsUsed,
+                            PointsDeducted = -booking.PointsUsed,
                             Reason = $"Hoàn điểm do hủy lịch #{booking.BookingId}"
                         };
                         _context.PointLedgers.Add(pointLedger);
+                    }
+
+                    if (booking.AppliedVoucherId.HasValue)
+                    {
+                        var usedVoucher = await _context.UserVouchers
+                            .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == booking.AppliedVoucherId.Value);
+
+                        if (usedVoucher != null)
+                        {
+                            usedVoucher.IsUsed = false;
+                            usedVoucher.UsedDate = null;
+                        }
                     }
                 }
 

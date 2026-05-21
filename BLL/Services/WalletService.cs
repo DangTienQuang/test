@@ -37,11 +37,11 @@ namespace AutoWashPro.BLL.Services
 
             var now = DateTime.UtcNow;
             var totalAdded = await _context.PointLedgers
-                .Where(p => p.UserId == userId && p.PointsAdded > 0 && (p.ExpiryDate == null || p.ExpiryDate > now))
+                .Where(p => p.UserId == userId && p.PointsAdded > 0)
                 .SumAsync(p => p.PointsAdded);
 
             var totalDeducted = await _context.PointLedgers
-                .Where(p => p.UserId == userId && p.PointsDeducted > 0)
+                .Where(p => p.UserId == userId && p.PointsDeducted != 0)
                 .SumAsync(p => p.PointsDeducted);
 
             var availablePoints = Math.Max(0, totalAdded - totalDeducted);
@@ -173,7 +173,7 @@ namespace AutoWashPro.BLL.Services
                 .ToListAsync();
 
             var totalDeductedSoFar = await _context.PointLedgers
-                .Where(p => p.UserId == userId && p.PointsDeducted > 0)
+                .Where(p => p.UserId == userId && p.PointsDeducted != 0)
                 .SumAsync(p => p.PointsDeducted);
 
             var totalAdded = activePoints.Sum(p => p.PointsAdded);
