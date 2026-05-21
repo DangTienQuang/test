@@ -43,6 +43,10 @@ namespace AutoWashPro.BLL.Services
             if (voucher == null) throw new Exception("Voucher không tồn tại.");
             if (voucher.ExpiryDate < DateTime.UtcNow) throw new Exception("Voucher đã hết hạn.");
 
+            var currentRedeemedCount = await _context.UserVouchers.CountAsync(uv => uv.VoucherId == voucherId);
+            if (currentRedeemedCount >= voucher.MaxUsages)
+                throw new Exception("Rất tiếc, loại Voucher này đã hết số lượng.");
+
             var existingUserVoucher = await _context.UserVouchers
                 .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == voucherId);
             if (existingUserVoucher != null) throw new Exception("Bạn đã sở hữu voucher này rồi.");
