@@ -315,9 +315,7 @@ namespace BLL.Services
             cropped.Encode(ms, SKEncodedImageFormat.Png, 100);
             var bytes = ms.ToArray();
 
-            File.WriteAllBytes(Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                $"debug_yolo_crop_{position}.png"), bytes);
+            // Removed synchronous File.WriteAllBytes for performance
 
             return bytes;
         }
