@@ -62,6 +62,36 @@ namespace AutoWashPro.BLL.Services
             return await GetTierById(tier.TierId);
         }
 
+        public async Task<TierUpgradeResultDTO?> EvaluateAndUpgradeTierAsync(int userId)
+        {
+            var profile = await _context.CustomerProfiles
+                .Include(cp => cp.Tier)
+                .FirstOrDefaultAsync(cp => cp.UserId == userId);
+
+            if (profile?.Tier == null) return null;
+
+            var eligibleTier = await _context.Tiers
+                .Where(t => t.MinAccumulatedPoints <= profile.PromotionPoint)
+                .OrderByDescending(t => t.MinAccumulatedPoints)
+                .FirstOrDefaultAsync();
+
+            if (eligibleTier == null || eligibleTier.TierId == profile.TierId)
+                return null;
+
+            if (eligibleTier.MinAccumulatedPoints <= profile.Tier.MinAccumulatedPoints)
+                return null;
+
+            var oldTierName = profile.Tier.TierName;
+            profile.TierId = eligibleTier.TierId;
+            await _context.SaveChangesAsync();
+
+            return new TierUpgradeResultDTO
+            {
+                OldTierName = oldTierName,
+                NewTierName = eligibleTier.TierName
+            };
+        }
+
         private async Task<TierResponseDTO> GetTierById(int id)
         {
             var t = await _context.Tiers.FindAsync(id);

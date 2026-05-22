@@ -36,6 +36,8 @@ namespace AutoWashPro.BLL.Services
                 FullName = user.CustomerProfile?.FullName,
                 PhoneNumber = user.PhoneNumber,
                 TierName = user.CustomerProfile?.Tier?.TierName,
+                TotalPoint = user.CustomerProfile?.TotalPoint ?? 0,
+                PromotionPoint = user.CustomerProfile?.PromotionPoint ?? 0,
                 ChurnScore = user.CustomerProfile?.ChurnScore ?? 0,
                 Vehicles = user.Vehicles.Select(v => new VehicleDTO
                 {

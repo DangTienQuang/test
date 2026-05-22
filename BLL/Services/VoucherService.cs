@@ -43,16 +43,18 @@ namespace AutoWashPro.BLL.Services
             if (voucher == null) throw new Exception("Voucher không tồn tại.");
             if (voucher.ExpiryDate < DateTime.UtcNow) throw new Exception("Voucher đã hết hạn.");
 
-            var currentRedeemedCount = await _context.UserVouchers.CountAsync(uv => uv.VoucherId == voucherId);
-            if (voucher.MaxUsages > 0 && currentRedeemedCount >= voucher.MaxUsages)
-                throw new Exception("Rất tiếc, loại Voucher này đã hết số lượng.");
+            if (voucher.MaxUsages > 0)
+            {
+                var usageCount = await _context.UserVouchers.CountAsync(uv => uv.VoucherId == voucherId);
+                if (usageCount >= voucher.MaxUsages)
+                    throw new Exception("Voucher đã hết lượt đổi.");
+            }
 
             var existingUserVoucher = await _context.UserVouchers
-                .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == voucherId && uv.IsUsed == false);
-            if (existingUserVoucher != null)
-                throw new Exception("Bạn đang có 1 voucher loại này chưa sử dụng. Hãy dùng trước khi đổi thêm.");
+                .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == voucherId);
+            if (existingUserVoucher != null) throw new Exception("Bạn đã sở hữu voucher này rồi.");
 
-            await _walletService.DeductPointsFIFOAsync(userId, voucher.PointsRequired, $"Đổi voucher: {voucher.Code}");
+            await _walletService.DeductSpendablePointsAsync(userId, voucher.PointsRequired, $"Đổi voucher: {voucher.Code}");
 
             var userVoucher = new UserVoucher
             {
@@ -64,5 +66,90 @@ namespace AutoWashPro.BLL.Services
             _context.UserVouchers.Add(userVoucher);
             await _context.SaveChangesAsync();
         }
+
+        public async Task<List<AdminVoucherDTO>> GetAllVouchersAsync()
+        {
+            var vouchers = await _context.Vouchers.OrderByDescending(v => v.ExpiryDate).ToListAsync();
+            var redeemCounts = await _context.UserVouchers
+                .GroupBy(uv => uv.VoucherId)
+                .Select(g => new { VoucherId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.VoucherId, x => x.Count);
+
+            return vouchers.Select(v => new AdminVoucherDTO
+            {
+                VoucherId = v.VoucherId,
+                Code = v.Code,
+                DiscountAmount = v.DiscountAmount,
+                MaxUsages = v.MaxUsages,
+                ExpiryDate = v.ExpiryDate,
+                PointsRequired = v.PointsRequired,
+                RedeemedCount = redeemCounts.GetValueOrDefault(v.VoucherId, 0)
+            }).ToList();
+        }
+
+        public async Task<AdminVoucherDTO> CreateVoucherAsync(CreateOrUpdateVoucherDTO request)
+        {
+            var codeExists = await _context.Vouchers.AnyAsync(v => v.Code == request.Code.Trim());
+            if (codeExists) throw new Exception("Mã voucher đã tồn tại.");
+
+            var voucher = new Voucher
+            {
+                Code = request.Code.Trim(),
+                DiscountAmount = request.DiscountAmount,
+                MaxUsages = request.MaxUsages,
+                ExpiryDate = request.ExpiryDate.ToUniversalTime(),
+                PointsRequired = request.PointsRequired
+            };
+
+            _context.Vouchers.Add(voucher);
+            await _context.SaveChangesAsync();
+
+            return MapAdminDto(voucher, 0);
+        }
+
+        public async Task<AdminVoucherDTO> UpdateVoucherAsync(int id, CreateOrUpdateVoucherDTO request)
+        {
+            var voucher = await _context.Vouchers.FindAsync(id);
+            if (voucher == null) throw new Exception("Không tìm thấy voucher.");
+
+            var codeExists = await _context.Vouchers.AnyAsync(v => v.Code == request.Code.Trim() && v.VoucherId != id);
+            if (codeExists) throw new Exception("Mã voucher đã tồn tại.");
+
+            voucher.Code = request.Code.Trim();
+            voucher.DiscountAmount = request.DiscountAmount;
+            voucher.MaxUsages = request.MaxUsages;
+            voucher.ExpiryDate = request.ExpiryDate.ToUniversalTime();
+            voucher.PointsRequired = request.PointsRequired;
+
+            await _context.SaveChangesAsync();
+
+            var redeemCount = await _context.UserVouchers.CountAsync(uv => uv.VoucherId == id);
+            return MapAdminDto(voucher, redeemCount);
+        }
+
+        public async Task<bool> DeleteVoucherAsync(int id)
+        {
+            var voucher = await _context.Vouchers.FindAsync(id);
+            if (voucher == null) throw new Exception("Không tìm thấy voucher.");
+
+            var hasOwners = await _context.UserVouchers.AnyAsync(uv => uv.VoucherId == id);
+            if (hasOwners)
+                throw new Exception("Không thể xóa voucher đã có khách đổi. Vui lòng để hết hạn hoặc ngừng phát hành.");
+
+            _context.Vouchers.Remove(voucher);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        private static AdminVoucherDTO MapAdminDto(Voucher v, int redeemedCount) => new()
+        {
+            VoucherId = v.VoucherId,
+            Code = v.Code,
+            DiscountAmount = v.DiscountAmount,
+            MaxUsages = v.MaxUsages,
+            ExpiryDate = v.ExpiryDate,
+            PointsRequired = v.PointsRequired,
+            RedeemedCount = redeemedCount
+        };
     }
 }

@@ -11,6 +11,8 @@ namespace AutoWashPro.BLL.Services
         Task ProcessPaymentWebhookAsync(WebhookTopUpDTO webhookData);
         Task<List<TransactionResponseDTO>> GetTransactionsAsync(int userId);
         Task<List<PointHistoryResponseDTO>> GetPointsHistoryAsync(int userId);
-        Task DeductPointsFIFOAsync(int userId, int pointsToDeduct, string reason);
+        Task DeductSpendablePointsAsync(int userId, int pointsToDeduct, string reason);
+        Task RefundSpendablePointsAsync(int userId, int pointsToRefund, string reason, int? referenceBookingId = null);
+        Task<int> AwardCompletionPointsAsync(int userId, int pointsEarned, int bookingId);
     }
 }

@@ -1,10 +1,11 @@
+﻿using DAL.Entities;
 using System;
 using System.Collections.Generic;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 
 namespace AutoWashPro.DAL.Entities
 {
@@ -32,5 +33,6 @@ namespace AutoWashPro.DAL.Entities
         public DateTime? RefreshTokenExpiryTime { get; set; }
         public CustomerProfile CustomerProfile { get; set; } = null!;
         public ICollection<Vehicle> Vehicles { get; set; } = new List<Vehicle>();
+        public ICollection<AIConversationLog> AIConversationLogs { get; set; }
     }
 }

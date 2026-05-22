@@ -28,5 +28,9 @@ namespace AutoWashPro.DAL.Entities
         public string? ReferralCode { get; set; }
 
         public int? ReferredById { get; set; }
+
+        public int TotalPoint { get; set; } = 0;
+
+        public int PromotionPoint { get; set; } = 0;
     }
 }

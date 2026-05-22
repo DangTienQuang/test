@@ -10,5 +10,6 @@ namespace AutoWashPro.BLL.Services
         Task<TierResponseDTO> CreateTierAsync(CreateTierDTO request);
 
         Task<TierResponseDTO> UpdateTierAsync(int id, UpdateTierDTO request);
+        Task<TierUpgradeResultDTO?> EvaluateAndUpgradeTierAsync(int userId);
     }
 }

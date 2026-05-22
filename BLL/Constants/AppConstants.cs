@@ -17,4 +17,12 @@ namespace AutoWashPro.BLL.Constants
         public const string Admin = "Admin";
         public const string Customer = "Customer";
     }
+
+    public static class PointConstants
+    {
+        public const int VndPerSpendPoint = 100;
+        public const int VndPerEarnedPoint = 1000;
+        public const string CompletionReasonPrefix = "Hoàn thành dịch vụ";
+        public const string RefundPointsReasonPrefix = "Hoàn điểm do hủy lịch";
+    }
 }

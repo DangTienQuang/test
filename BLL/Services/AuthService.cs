@@ -68,7 +68,9 @@ namespace AutoWashPro.BLL.Services
                     UserId = user.UserId,
                     FullName = request.FullName,
                     TierId = defaultTier.TierId,
-                    ChurnScore = 0
+                    ChurnScore = 0,
+                    TotalPoint = 0,
+                    PromotionPoint = 0
                 };
                 _context.CustomerProfiles.Add(profile);
 

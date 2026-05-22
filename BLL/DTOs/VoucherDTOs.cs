@@ -18,4 +18,34 @@ namespace AutoWashPro.BLL.DTOs
         [Required(ErrorMessage = "Voucher ID không được để trống.")]
         public int VoucherId { get; set; }
     }
+
+    public class AdminVoucherDTO
+    {
+        public int VoucherId { get; set; }
+        public required string Code { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public int MaxUsages { get; set; }
+        public DateTime ExpiryDate { get; set; }
+        public int PointsRequired { get; set; }
+        public int RedeemedCount { get; set; }
+    }
+
+    public class CreateOrUpdateVoucherDTO
+    {
+        [Required(ErrorMessage = "Mã voucher không được để trống.")]
+        [MaxLength(50)]
+        public required string Code { get; set; }
+
+        [Range(1, double.MaxValue, ErrorMessage = "Số tiền giảm phải lớn hơn 0.")]
+        public decimal DiscountAmount { get; set; }
+
+        [Range(0, int.MaxValue)]
+        public int MaxUsages { get; set; } = 0;
+
+        [Required]
+        public DateTime ExpiryDate { get; set; }
+
+        [Range(0, int.MaxValue)]
+        public int PointsRequired { get; set; }
+    }
 }

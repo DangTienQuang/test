@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoWashPro.BLL.Constants;
 using AutoWashPro.BLL.DTOs;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
@@ -13,12 +14,18 @@ namespace AutoWashPro.BLL.Services
     {
         private readonly AutoWashDbContext _context;
         private readonly IWalletService _walletService;
+        private readonly ITierService _tierService;
         private readonly IEmailService _emailService;
 
-        public BookingService(AutoWashDbContext context, IWalletService walletService, IEmailService emailService)
+        public BookingService(
+            AutoWashDbContext context,
+            IWalletService walletService,
+            ITierService tierService,
+            IEmailService emailService)
         {
             _context = context;
             _walletService = walletService;
+            _tierService = tierService;
             _emailService = emailService;
         }
 
@@ -127,87 +134,31 @@ namespace AutoWashPro.BLL.Services
 
             if (newStatus == "Completed" && booking.Status != "Completed")
             {
-                if (booking.UserId.HasValue)
+                if (booking.UserId > 0)
                 {
                     var userProfile = await _context.CustomerProfiles
                         .Include(cp => cp.Tier)
-                        .FirstOrDefaultAsync(cp => cp.UserId == booking.UserId.Value);
+                        .FirstOrDefaultAsync(cp => cp.UserId == booking.UserId);
 
-                    if (userProfile != null && userProfile.Tier != null && booking.FinalAmount > 0)
+                    if (userProfile?.Tier != null && booking.FinalAmount > 0)
                     {
-                        int pointsEarned = (int)((booking.FinalAmount / 1000) * (decimal)userProfile.Tier.PointMultiplier);
+                        int pointsEarned = (int)((booking.FinalAmount / PointConstants.VndPerEarnedPoint) * (decimal)userProfile.Tier.PointMultiplier);
 
                         if (pointsEarned > 0)
                         {
-                            var pointLedger = new PointLedger
-                            {
-                                UserId = booking.UserId.Value,
-                                PointsAdded = pointsEarned,
-                                Reason = $"Hoàn thành dịch vụ #{booking.BookingId}",
-                                ExpiryDate = DateTime.UtcNow.AddMonths(12),
-                                ReferenceBookingId = booking.BookingId
-                            };
-                            _context.PointLedgers.Add(pointLedger);
-
-                            int lifetimeAccumulatedPoints = await _context.PointLedgers
-                                .Where(p => p.UserId == booking.UserId.Value && p.PointsAdded > 0)
-                                .SumAsync(p => p.PointsAdded) + pointsEarned;
-
-                            var eligibleTier = await _context.Tiers
-                                .Where(t => t.MinAccumulatedPoints <= lifetimeAccumulatedPoints)
-                                .OrderByDescending(t => t.MinAccumulatedPoints)
-                                .FirstOrDefaultAsync();
-
-                            if (eligibleTier != null && eligibleTier.MinAccumulatedPoints > userProfile.Tier.MinAccumulatedPoints)
-                            {
-                                userProfile.TierId = eligibleTier.TierId;
-                            }
+                            await _walletService.AwardCompletionPointsAsync(
+                                booking.UserId.Value, pointsEarned, booking.BookingId);
+                            await _tierService.EvaluateAndUpgradeTierAsync(booking.UserId.Value);
                         }
                     }
-                }
-            }
 
-            else if (newStatus == "Cancelled" && booking.Status != "Cancelled")
-            {
-                if (booking.UserId.HasValue)
-                {
-                    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == booking.UserId.Value);
-                    if (wallet != null && booking.FinalAmount > 0)
-                    {
-                        wallet.Balance += booking.FinalAmount;
-                        _context.Transactions.Add(new Transaction
-                        {
-                            WalletId = wallet.WalletId,
-                            Amount = booking.FinalAmount,
-                            TransactionType = "Refund",
-                            Description = $"Hoàn tiền do Trạm hủy lịch #{booking.BookingId}",
-                            ReferenceBookingId = booking.BookingId
-                        });
-                    }
-                    if (booking.PointsUsed > 0)
-                    {
-                        _context.PointLedgers.Add(new PointLedger
-                        {
-                            UserId = booking.UserId.Value,
-                            PointsDeducted = -booking.PointsUsed,
-                            Reason = $"Hoàn điểm do Trạm hủy lịch #{booking.BookingId}"
-                        });
-                    }
-
-                    if (booking.AppliedVoucherId.HasValue)
-                    {
-                        var usedVoucher = await _context.UserVouchers
-                            .FirstOrDefaultAsync(uv => uv.UserId == booking.UserId.Value && uv.VoucherId == booking.AppliedVoucherId.Value);
-                        if (usedVoucher != null)
-                        {
-                            usedVoucher.IsUsed = false;
-                            usedVoucher.UsedDate = null;
-                        }
-                    }
+                    if (userProfile != null)
+                        userProfile.LastVisitDate = DateTime.UtcNow;
                 }
             }
 
             booking.Status = newStatus;
+            booking.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
             return true;
         }
@@ -230,45 +181,8 @@ namespace AutoWashPro.BLL.Services
             if (servicePrice == null) throw new Exception("Dịch vụ này chưa hỗ trợ cho loại xe của bạn.");
 
             decimal originalPrice = servicePrice.Price;
-            decimal pointDiscount = 0;
-            decimal voucherDiscount = 0;
-            UserVoucher? userVoucher = null;
-
-            if (request.VoucherId.HasValue)
-            {
-                userVoucher = await _context.UserVouchers
-                    .Include(uv => uv.Voucher)
-                    .FirstOrDefaultAsync(uv => uv.VoucherId == request.VoucherId.Value && uv.UserId == userId);
-
-                if (userVoucher == null) throw new Exception("Bạn không sở hữu Voucher này.");
-                if (userVoucher.IsUsed) throw new Exception("Voucher này đã được sử dụng.");
-                if (userVoucher.Voucher.ExpiryDate < DateTime.UtcNow) throw new Exception("Voucher này đã hết hạn.");
-
-                voucherDiscount = userVoucher.Voucher.DiscountAmount;
-            }
-
-            if (request.PointsToUse > 0)
-            {
-                var walletInfo = await _walletService.GetWalletInfoAsync(userId);
-                int pointsToUse = Math.Min(request.PointsToUse, walletInfo.TotalPoints);
-                pointDiscount = pointsToUse * 100;
-            }
-
-            decimal totalDiscount = pointDiscount + voucherDiscount;
-            if (totalDiscount > originalPrice)
-            {
-                if (voucherDiscount >= originalPrice)
-                {
-                    voucherDiscount = originalPrice;
-                    pointDiscount = 0;
-                }
-                else
-                {
-                    pointDiscount = originalPrice - voucherDiscount;
-                }
-            }
-
-            decimal finalAmount = originalPrice - voucherDiscount - pointDiscount;
+            var (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher) =
+                await CalculateBookingPricingAsync(userId, originalPrice, request.VoucherId, request.PointsToUse);
 
             var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userId);
             if (wallet == null || wallet.Balance < finalAmount) throw new Exception($"Số dư ví không đủ để đặt cọc. Cần: {finalAmount:N0}đ");
@@ -293,10 +207,10 @@ namespace AutoWashPro.BLL.Services
                     userVoucher.UsedDate = DateTime.UtcNow;
                 }
 
-                if (request.PointsToUse > 0)
+                if (pointsUsed > 0)
                 {
-                    int actualPointsToDeduct = (int)(pointDiscount / 100);
-                    await _walletService.DeductPointsFIFOAsync(userId, actualPointsToDeduct, $"Dùng điểm giảm giá đặt lịch #{request.LicensePlate}");
+                    await _walletService.DeductSpendablePointsAsync(
+                        userId, pointsUsed, $"Dùng điểm giảm giá đặt lịch {request.LicensePlate}");
                 }
 
                 var booking = new Booking
@@ -307,7 +221,7 @@ namespace AutoWashPro.BLL.Services
                     ScheduledTime = targetDateTime,
                     Status = "Pending",
                     OriginalPrice = originalPrice,
-                    PointsUsed = (int)(pointDiscount / 100),
+                    PointsUsed = pointsUsed,
                     PointDiscountAmount = pointDiscount,
                     AppliedVoucherId = request.VoucherId,
                     VoucherDiscountAmount = voucherDiscount,
@@ -443,28 +357,26 @@ namespace AutoWashPro.BLL.Services
 
                     if (booking.PointsUsed > 0)
                     {
-                        var pointLedger = new PointLedger
-                        {
-                            UserId = userId,
-                            PointsDeducted = -booking.PointsUsed,
-                            Reason = $"Hoàn điểm do hủy lịch #{booking.BookingId}"
-                        };
-                        _context.PointLedgers.Add(pointLedger);
+                        await _walletService.RefundSpendablePointsAsync(
+                            userId,
+                            booking.PointsUsed,
+                            $"{PointConstants.RefundPointsReasonPrefix} #{booking.BookingId}",
+                            booking.BookingId);
                     }
 
                     if (booking.AppliedVoucherId.HasValue)
                     {
-                        var usedVoucher = await _context.UserVouchers
+                        var userVoucher = await _context.UserVouchers
                             .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == booking.AppliedVoucherId.Value);
-
-                        if (usedVoucher != null)
+                        if (userVoucher != null)
                         {
-                            usedVoucher.IsUsed = false;
-                            usedVoucher.UsedDate = null;
+                            userVoucher.IsUsed = false;
+                            userVoucher.UsedDate = null;
                         }
                     }
                 }
 
+                booking.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
                 return true;
@@ -474,6 +386,51 @@ namespace AutoWashPro.BLL.Services
                 await transaction.RollbackAsync();
                 throw;
             }
+        }
+
+        private async Task<(decimal voucherDiscount, decimal pointDiscount, int pointsUsed, decimal finalAmount, UserVoucher? userVoucher)>
+            CalculateBookingPricingAsync(int userId, decimal originalPrice, int? voucherId, int pointsToUseRequest)
+        {
+            decimal voucherDiscount = 0;
+            UserVoucher? userVoucher = null;
+
+            if (voucherId.HasValue)
+            {
+                userVoucher = await _context.UserVouchers
+                    .Include(uv => uv.Voucher)
+                    .FirstOrDefaultAsync(uv => uv.VoucherId == voucherId.Value && uv.UserId == userId);
+
+                if (userVoucher == null) throw new Exception("Bạn không sở hữu Voucher này.");
+                if (userVoucher.IsUsed) throw new Exception("Voucher này đã được sử dụng.");
+                if (userVoucher.Voucher.ExpiryDate < DateTime.UtcNow) throw new Exception("Voucher này đã hết hạn.");
+
+                voucherDiscount = Math.Min(userVoucher.Voucher.DiscountAmount, originalPrice);
+            }
+
+            decimal remainingAfterVoucher = originalPrice - voucherDiscount;
+            int pointsUsed = 0;
+            decimal pointDiscount = 0;
+
+            if (pointsToUseRequest > 0)
+            {
+                var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
+                if (profile == null) throw new Exception("Không tìm thấy hồ sơ khách hàng.");
+
+                int maxPointsByBalance = profile.TotalPoint;
+                int maxPointsByMoney = (int)(remainingAfterVoucher / PointConstants.VndPerSpendPoint);
+                int pointsToApply = Math.Min(pointsToUseRequest, Math.Min(maxPointsByBalance, maxPointsByMoney));
+
+                if (pointsToApply < pointsToUseRequest && pointsToApply == 0)
+                    throw new Exception("Không đủ điểm hoặc số tiền còn lại không cho phép dùng điểm.");
+
+                pointsUsed = pointsToApply;
+                pointDiscount = pointsUsed * PointConstants.VndPerSpendPoint;
+            }
+
+            decimal finalAmount = remainingAfterVoucher - pointDiscount;
+            if (finalAmount < 0) finalAmount = 0;
+
+            return (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher);
         }
     }
 }

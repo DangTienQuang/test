@@ -7,6 +7,7 @@ namespace AutoWashPro.BLL.DTOs
     {
         public decimal Balance { get; set; }
         public int TotalPoints { get; set; }
+        public int PromotionPoints { get; set; }
     }
 
     public class TopUpRequestDTO

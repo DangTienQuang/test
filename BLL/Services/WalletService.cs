@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoWashPro.BLL.Constants;
 using AutoWashPro.BLL.DTOs;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
@@ -35,21 +36,13 @@ namespace AutoWashPro.BLL.Services
                 await _context.SaveChangesAsync();
             }
 
-            var now = DateTime.UtcNow;
-            var totalAdded = await _context.PointLedgers
-                .Where(p => p.UserId == userId && p.PointsAdded > 0)
-                .SumAsync(p => p.PointsAdded);
-
-            var totalDeducted = await _context.PointLedgers
-                .Where(p => p.UserId == userId && p.PointsDeducted != 0)
-                .SumAsync(p => p.PointsDeducted);
-
-            var availablePoints = Math.Max(0, totalAdded - totalDeducted);
+            var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
 
             return new WalletResponseDTO
             {
                 Balance = wallet.Balance,
-                TotalPoints = availablePoints
+                TotalPoints = profile?.TotalPoint ?? 0,
+                PromotionPoints = profile?.PromotionPoint ?? 0
             };
         }
 
@@ -86,8 +79,8 @@ namespace AutoWashPro.BLL.Services
             var orderCodeStr = data.OrderCode.ToString();
             var alreadyProcessed = await _context.Transactions
                 .AnyAsync(t => t.Description.Contains($"(Mã: {orderCodeStr})") && t.TransactionType == "Topup");
-            
-            if (alreadyProcessed) 
+
+            if (alreadyProcessed)
             {
                 _logger.LogWarning("Giao dịch {OrderCode} đã được xử lý trước đó.", data.OrderCode);
                 return;
@@ -111,7 +104,7 @@ namespace AutoWashPro.BLL.Services
                 }
 
                 wallet.Balance += data.Amount;
-                
+
                 var transaction = new Transaction
                 {
                     WalletId = wallet.WalletId,
@@ -120,10 +113,10 @@ namespace AutoWashPro.BLL.Services
                     Description = $"Nạp tiền thành công (Mã: {data.OrderCode})",
                     CreatedAt = DateTime.UtcNow
                 };
-                
+
                 _context.Transactions.Add(transaction);
                 await _context.SaveChangesAsync();
-                
+
                 _logger.LogInformation("Cập nhật số dư thành công cho User {UserId}. Số tiền: {Amount}", userId, data.Amount);
             }
         }
@@ -161,37 +154,72 @@ namespace AutoWashPro.BLL.Services
                 }).ToListAsync();
         }
 
-        public async Task DeductPointsFIFOAsync(int userId, int pointsToDeduct, string reason)
+        public async Task DeductSpendablePointsAsync(int userId, int pointsToDeduct, string reason)
         {
             if (pointsToDeduct <= 0) return;
 
-            var now = DateTime.UtcNow;
+            var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
+            if (profile == null) throw new Exception("Không tìm thấy hồ sơ khách hàng.");
 
-            var activePoints = await _context.PointLedgers
-                .Where(p => p.UserId == userId && p.PointsAdded > 0 && (p.ExpiryDate == null || p.ExpiryDate > now))
-                .OrderBy(p => p.ExpiryDate)
-                .ToListAsync();
+            if (profile.TotalPoint < pointsToDeduct)
+                throw new Exception($"Không đủ điểm khả dụng. Bạn có {profile.TotalPoint} điểm.");
 
-            var totalDeductedSoFar = await _context.PointLedgers
-                .Where(p => p.UserId == userId && p.PointsDeducted != 0)
-                .SumAsync(p => p.PointsDeducted);
+            profile.TotalPoint -= pointsToDeduct;
 
-            var totalAdded = activePoints.Sum(p => p.PointsAdded);
-            var availablePoints = totalAdded - totalDeductedSoFar;
-
-            if (availablePoints < pointsToDeduct)
-                throw new Exception($"Không đủ điểm khả dụng. Bạn có {availablePoints} điểm (không tính điểm đã hết hạn).");
-
-            var ledger = new PointLedger
+            _context.PointLedgers.Add(new PointLedger
             {
                 UserId = userId,
                 PointsDeducted = pointsToDeduct,
                 Reason = reason,
-                TransactionDate = now
-            };
+                TransactionDate = DateTime.UtcNow
+            });
 
-            _context.PointLedgers.Add(ledger);
             await _context.SaveChangesAsync();
+        }
+
+        public async Task RefundSpendablePointsAsync(int userId, int pointsToRefund, string reason, int? referenceBookingId = null)
+        {
+            if (pointsToRefund <= 0) return;
+
+            var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
+            if (profile == null) throw new Exception("Không tìm thấy hồ sơ khách hàng.");
+
+            profile.TotalPoint += pointsToRefund;
+
+            _context.PointLedgers.Add(new PointLedger
+            {
+                UserId = userId,
+                PointsAdded = pointsToRefund,
+                Reason = reason,
+                ReferenceBookingId = referenceBookingId,
+                TransactionDate = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<int> AwardCompletionPointsAsync(int userId, int pointsEarned, int bookingId)
+        {
+            if (pointsEarned <= 0) return 0;
+
+            var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
+            if (profile == null) throw new Exception("Không tìm thấy hồ sơ khách hàng.");
+
+            profile.TotalPoint += pointsEarned;
+            profile.PromotionPoint += pointsEarned;
+
+            _context.PointLedgers.Add(new PointLedger
+            {
+                UserId = userId,
+                PointsAdded = pointsEarned,
+                Reason = $"{PointConstants.CompletionReasonPrefix} #{bookingId}",
+                ExpiryDate = DateTime.UtcNow.AddMonths(12),
+                ReferenceBookingId = bookingId,
+                TransactionDate = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+            return pointsEarned;
         }
     }
 }

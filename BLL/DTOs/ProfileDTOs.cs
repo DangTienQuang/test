@@ -10,6 +10,8 @@ namespace AutoWashPro.BLL.DTOs
         public string FullName { get; set; }
         public string PhoneNumber { get; set; }
         public string TierName { get; set; }
+        public int TotalPoint { get; set; }
+        public int PromotionPoint { get; set; }
         public double ChurnScore { get; set; }
         public List<VehicleDTO> Vehicles { get; set; }
     }
