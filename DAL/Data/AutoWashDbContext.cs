@@ -24,6 +24,9 @@ namespace AutoWashPro.DAL.Data
         public DbSet<TimeSlot> TimeSlots { get; set; }
         public DbSet<AIConversationLog> AIConversationLogs { get; set; }
         public DbSet<AIKnowledgeBase> AIKnowledgeBases { get; set; }
+        public DbSet<InventoryItem> InventoryItems { get; set; }
+        public DbSet<ServiceInventoryRequirement> ServiceInventoryRequirements { get; set; }
+        public DbSet<BookingQR> BookingQRs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
