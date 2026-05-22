@@ -47,6 +47,10 @@ namespace AutoWashPro.BLL.Services
                 .Where(b => b.ScheduledTime.Date == targetDate.Date && (b.Status == "Pending" || b.Status == "CheckedIn"))
                 .ToListAsync();
 
+            var bookingCountsByTime = existingBookings
+                .GroupBy(b => b.ScheduledTime.TimeOfDay)
+                .ToDictionary(g => g.Key, g => g.Count());
+
             bool isVip = userProfile.Tier.TierName.ToLower() == "gold" || userProfile.Tier.TierName.ToLower() == "platinum";
 
             foreach (var slot in allSlots)
@@ -71,7 +75,7 @@ namespace AutoWashPro.BLL.Services
                     slotDto.Reason = "Đã qua giờ";
                 }
 
-                var bookedCount = existingBookings.Count(b => b.ScheduledTime.TimeOfDay == slot.StartTime);
+                bookingCountsByTime.TryGetValue(slot.StartTime, out var bookedCount);
                 if (bookedCount >= slot.MaxCapacity)
                 {
                     slotDto.IsAvailable = false;
