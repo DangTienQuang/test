@@ -111,12 +111,7 @@ namespace BLL.Services
             var topBytes = ToBytes(topBmp);
             var botBytes = ToBytes(botBmp);
 
-            File.WriteAllBytes(Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                $"debug_{position}_line1.png"), topBytes);
-            File.WriteAllBytes(Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                $"debug_{position}_line2.png"), botBytes);
+            // Removed synchronous File.WriteAllBytes for performance
 
             var line1 = RecognizeText(topBytes);
             var line2 = RecognizeText(botBytes);
@@ -163,9 +158,7 @@ namespace BLL.Services
             padded.Encode(ms, SKEncodedImageFormat.Png, 100);
             var bytes = ms.ToArray();
 
-            File.WriteAllBytes(Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "debug_upscaled.png"), bytes);
+            // Removed synchronous File.WriteAllBytes for performance
 
             return bytes;
         }
@@ -250,9 +243,7 @@ namespace BLL.Services
         {
             var upscaledBytes = UpscalePlate(imageBytes);
 
-            File.WriteAllBytes(Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                $"debug_{position}_long_full.png"), upscaledBytes);
+            // Removed synchronous File.WriteAllBytes for performance
 
             var text = RecognizeText(upscaledBytes);
 
