@@ -1,89 +1,187 @@
 using System;
 using System.Threading.Tasks;
+using AutoWashPro.BLL.DTOs;
 using AutoWashPro.BLL.Services;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
-using AutoWashPro.BLL.Constants;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace AutoWashPro.Tests
 {
-    public class UserServiceTests : IDisposable
+    public class UserServiceTests
     {
-        private readonly AutoWashDbContext _context;
-        private readonly UserService _userService;
-
-        public UserServiceTests()
+        private AutoWashDbContext GetDbContext(string dbName)
         {
             var options = new DbContextOptionsBuilder<AutoWashDbContext>()
-                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .UseInMemoryDatabase(databaseName: dbName)
                 .Options;
-
-            _context = new AutoWashDbContext(options);
-            _userService = new UserService(_context);
+            return new AutoWashDbContext(options);
         }
 
         [Fact]
-        public async Task GetCustomerDetailByAdminAsync_WithAdminRole_ThrowsException()
+        public async Task UpdateProfileAsync_WithDuplicateEmail_ThrowsException()
         {
             // Arrange
-            var adminUser = new User
+            var dbName = Guid.NewGuid().ToString();
+            var dbContext = GetDbContext(dbName);
+
+            var user1 = new User
             {
                 UserId = 1,
-                PhoneNumber = "1234567890",
-                PasswordHash = "hash",
-                Role = UserRoles.Admin,
-                Status = UserStatuses.Active,
-                CustomerProfile = new CustomerProfile { FullName = "Admin User" }
+                PhoneNumber = "0901234567",
+                Email = "user1@example.com",
+                PasswordHash = "hash1",
+                Role = "Customer",
+                Status = "Active",
+                CustomerProfile = new CustomerProfile
+                {
+                    FullName = "User One",
+                    TierId = 1
+                }
             };
 
-            _context.Users.Add(adminUser);
-            await _context.SaveChangesAsync();
-
-            // Act & Assert
-            var exception = await Assert.ThrowsAsync<Exception>(() => _userService.GetCustomerDetailByAdminAsync(1));
-            Assert.Equal("Không tìm thấy khách hàng này.", exception.Message);
-        }
-
-        [Fact]
-        public async Task GetCustomerDetailByAdminAsync_WithNonExistentUser_ThrowsException()
-        {
-            // Act & Assert
-            var exception = await Assert.ThrowsAsync<Exception>(() => _userService.GetCustomerDetailByAdminAsync(999));
-            Assert.Equal("Không tìm thấy khách hàng này.", exception.Message);
-        }
-
-        [Fact]
-        public async Task GetCustomerDetailByAdminAsync_WithCustomerRole_ReturnsProfile()
-        {
-            // Arrange
-            var customerUser = new User
+            var user2 = new User
             {
                 UserId = 2,
-                PhoneNumber = "0987654321",
-                PasswordHash = "hash",
-                Role = UserRoles.Customer,
-                Status = UserStatuses.Active,
-                CustomerProfile = new CustomerProfile { FullName = "Customer User", TotalPoint = 100 }
+                PhoneNumber = "0909876543",
+                Email = "user2@example.com",
+                PasswordHash = "hash2",
+                Role = "Customer",
+                Status = "Active",
+                CustomerProfile = new CustomerProfile
+                {
+                    FullName = "User Two",
+                    TierId = 1
+                }
             };
 
-            _context.Users.Add(customerUser);
-            await _context.SaveChangesAsync();
+            dbContext.Users.Add(user1);
+            dbContext.Users.Add(user2);
+            await dbContext.SaveChangesAsync();
 
-            // Act
-            var result = await _userService.GetCustomerDetailByAdminAsync(2);
+            var service = new UserService(dbContext);
+            var updateDto = new UpdateUserProfileDTO
+            {
+                Email = "user2@example.com" // Attempting to use user2's email
+            };
 
-            // Assert
-            Assert.NotNull(result);
-            Assert.Equal(2, result.UserId);
-            Assert.Equal("Customer User", result.FullName);
+            // Act & Assert
+            var exception = await Assert.ThrowsAsync<Exception>(() => service.UpdateProfileAsync(user1.UserId, updateDto));
+            Assert.Equal("Email này đã được sử dụng bởi tài khoản khác.", exception.Message);
         }
 
-        public void Dispose()
+        [Fact]
+        public async Task UpdateProfileAsync_WithDuplicatePhone_ThrowsException()
         {
-            _context.Database.EnsureDeleted();
-            _context.Dispose();
+            // Arrange
+            var dbName = Guid.NewGuid().ToString();
+            var dbContext = GetDbContext(dbName);
+
+            var user1 = new User
+            {
+                UserId = 1,
+                PhoneNumber = "0901234567",
+                Email = "user1@example.com",
+                PasswordHash = "hash1",
+                Role = "Customer",
+                Status = "Active",
+                CustomerProfile = new CustomerProfile
+                {
+                    FullName = "User One",
+                    TierId = 1
+                }
+            };
+
+            var user2 = new User
+            {
+                UserId = 2,
+                PhoneNumber = "0909876543",
+                Email = "user2@example.com",
+                PasswordHash = "hash2",
+                Role = "Customer",
+                Status = "Active",
+                CustomerProfile = new CustomerProfile
+                {
+                    FullName = "User Two",
+                    TierId = 1
+                }
+            };
+
+            dbContext.Users.Add(user1);
+            dbContext.Users.Add(user2);
+            await dbContext.SaveChangesAsync();
+
+            var service = new UserService(dbContext);
+            var updateDto = new UpdateUserProfileDTO
+            {
+                PhoneNumber = "0909876543" // Attempting to use user2's phone
+            };
+
+            // Act & Assert
+            var exception = await Assert.ThrowsAsync<Exception>(() => service.UpdateProfileAsync(user1.UserId, updateDto));
+            Assert.Equal("Số điện thoại này đã được sử dụng bởi tài khoản khác.", exception.Message);
+        }
+
+        [Fact]
+        public async Task UpdateProfileAsync_WithValidData_UpdatesProfileSuccessfully()
+        {
+            // Arrange
+            var dbName = Guid.NewGuid().ToString();
+            var dbContext = GetDbContext(dbName);
+
+            var user = new User
+            {
+                UserId = 1,
+                PhoneNumber = "0901234567",
+                Email = "old@example.com",
+                PasswordHash = "hash",
+                Role = "Customer",
+                Status = "Active",
+                CustomerProfile = new CustomerProfile
+                {
+                    FullName = "Old Name",
+                    TierId = 1
+                }
+            };
+
+            dbContext.Users.Add(user);
+            await dbContext.SaveChangesAsync();
+
+            var service = new UserService(dbContext);
+            var updateDto = new UpdateUserProfileDTO
+            {
+                FullName = "New Name",
+                PhoneNumber = "0909999999",
+                Email = "new@example.com"
+            };
+
+            // Act
+            var result = await service.UpdateProfileAsync(user.UserId, updateDto);
+
+            // Assert
+            Assert.True(result);
+            var updatedUser = await dbContext.Users.Include(u => u.CustomerProfile).FirstAsync(u => u.UserId == user.UserId);
+            Assert.Equal("New Name", updatedUser.CustomerProfile.FullName);
+            Assert.Equal("0909999999", updatedUser.PhoneNumber);
+            Assert.Equal("new@example.com", updatedUser.Email);
+        }
+
+        [Fact]
+        public async Task UpdateProfileAsync_UserNotFound_ThrowsException()
+        {
+            // Arrange
+            var dbName = Guid.NewGuid().ToString();
+            var dbContext = GetDbContext(dbName);
+            var service = new UserService(dbContext);
+            var updateDto = new UpdateUserProfileDTO
+            {
+                FullName = "New Name"
+            };
+
+            // Act & Assert
+            var exception = await Assert.ThrowsAsync<Exception>(() => service.UpdateProfileAsync(999, updateDto));
+            Assert.Equal("Không tìm thấy dữ liệu người dùng.", exception.Message);
         }
     }
 }
