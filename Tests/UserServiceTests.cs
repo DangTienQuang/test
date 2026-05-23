@@ -72,6 +72,58 @@ namespace AutoWashPro.Tests
         }
 
         [Fact]
+        public async Task UpdateProfileAsync_WithDuplicatePhoneAndWhitespace_ThrowsException()
+        {
+            // Arrange
+            var dbName = Guid.NewGuid().ToString();
+            var dbContext = GetDbContext(dbName);
+
+            var user1 = new User
+            {
+                UserId = 1,
+                PhoneNumber = "0901234567",
+                Email = "user1@example.com",
+                PasswordHash = "hash1",
+                Role = "Customer",
+                Status = "Active",
+                CustomerProfile = new CustomerProfile
+                {
+                    FullName = "User One",
+                    TierId = 1
+                }
+            };
+
+            var user2 = new User
+            {
+                UserId = 2,
+                PhoneNumber = "0909876543",
+                Email = "user2@example.com",
+                PasswordHash = "hash2",
+                Role = "Customer",
+                Status = "Active",
+                CustomerProfile = new CustomerProfile
+                {
+                    FullName = "User Two",
+                    TierId = 1
+                }
+            };
+
+            dbContext.Users.Add(user1);
+            dbContext.Users.Add(user2);
+            await dbContext.SaveChangesAsync();
+
+            var service = new UserService(dbContext);
+            var updateDto = new UpdateUserProfileDTO
+            {
+                PhoneNumber = "  0909876543  " // Attempting to use user2's phone with whitespace
+            };
+
+            // Act & Assert
+            var exception = await Assert.ThrowsAsync<Exception>(() => service.UpdateProfileAsync(user1.UserId, updateDto));
+            Assert.Equal("Số điện thoại này đã được sử dụng bởi tài khoản khác.", exception.Message);
+        }
+
+        [Fact]
         public async Task UpdateProfileAsync_WithDuplicatePhone_ThrowsException()
         {
             // Arrange
@@ -121,6 +173,46 @@ namespace AutoWashPro.Tests
             // Act & Assert
             var exception = await Assert.ThrowsAsync<Exception>(() => service.UpdateProfileAsync(user1.UserId, updateDto));
             Assert.Equal("Số điện thoại này đã được sử dụng bởi tài khoản khác.", exception.Message);
+        }
+
+        [Fact]
+        public async Task UpdateProfileAsync_WithSamePhone_DoesNotThrow()
+        {
+            // Arrange
+            var dbName = Guid.NewGuid().ToString();
+            var dbContext = GetDbContext(dbName);
+
+            var user1 = new User
+            {
+                UserId = 1,
+                PhoneNumber = "0901234567",
+                Email = "user1@example.com",
+                PasswordHash = "hash1",
+                Role = "Customer",
+                Status = "Active",
+                CustomerProfile = new CustomerProfile
+                {
+                    FullName = "User One",
+                    TierId = 1
+                }
+            };
+
+            dbContext.Users.Add(user1);
+            await dbContext.SaveChangesAsync();
+
+            var service = new UserService(dbContext);
+            var updateDto = new UpdateUserProfileDTO
+            {
+                PhoneNumber = "  0901234567  " // Same phone number but with spaces
+            };
+
+            // Act
+            var result = await service.UpdateProfileAsync(user1.UserId, updateDto);
+
+            // Assert
+            Assert.True(result); // Should succeed without modifying or throwing
+            var updatedUser = await dbContext.Users.FirstAsync(u => u.UserId == user1.UserId);
+            Assert.Equal("0901234567", updatedUser.PhoneNumber);
         }
 
         [Fact]
