@@ -141,6 +141,20 @@ builder.Services.AddRateLimiter(options =>
                     QueueProcessingOrder.OldestFirst,
                 QueueLimit = 2
             }));
+
+    options.AddPolicy("AuthPolicy", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey:
+                context.Connection.RemoteIpAddress?.ToString(),
+
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder =
+                    QueueProcessingOrder.OldestFirst,
+                QueueLimit = 2
+            }));
 });
 
 builder.Services.AddScoped<IAuthService, AuthService>();
