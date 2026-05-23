@@ -1,5 +1,0 @@
-## 2024-10-25 - [Rate Limiting for Authentication]
-**Vulnerability:** Missing brute force protection on the Login endpoint (`API/Controllers/AuthController.cs`).
-**Learning:** By default, ASP.NET Core endpoints are vulnerable to credential stuffing. An `AuthPolicy` using `RateLimitPartition.GetFixedWindowLimiter` should be created explicitly.
-**Prevention:** Always define an `AuthPolicy` in `Program.cs` and use the `[EnableRateLimiting("AuthPolicy")]` attribute specifically on high-value authentication endpoints, not necessarily on the whole class to avoid blocking non-auth methods unintentionally.
-## 2026-05-23 - [Insecure JWT Validation] \n **Vulnerability:** [Disabled Audience and Issuer validation in AuthService.cs] \n **Learning:** [It bypassed security checks that restrict JWT acceptance to tokens intended for a specific recipient (Audience) and issued by a trusted entity (Issuer).] \n **Prevention:** [Always set ValidateAudience and ValidateIssuer to true in TokenValidationParameters and verify values correctly match expected settings.]
