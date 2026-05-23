@@ -315,7 +315,6 @@ namespace BLL.Services
             cropped.Encode(ms, SKEncodedImageFormat.Png, 100);
             var bytes = ms.ToArray();
 
-            // Removed synchronous File.WriteAllBytes for performance
 
             return bytes;
         }

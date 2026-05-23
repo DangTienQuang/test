@@ -91,10 +91,8 @@ builder.Services.AddAuthentication(x =>
     {
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(key),
-        ValidateIssuer = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidateAudience = true,
-        ValidAudience = builder.Configuration["Jwt:Audience"]
+        ValidateIssuer = false,
+        ValidateAudience = false
     };
 });
 
@@ -138,20 +136,6 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 20,
-                Window = TimeSpan.FromMinutes(1),
-                QueueProcessingOrder =
-                    QueueProcessingOrder.OldestFirst,
-                QueueLimit = 2
-            }));
-
-    options.AddPolicy("AuthPolicy", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey:
-                context.Connection.RemoteIpAddress?.ToString(),
-
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 5,
                 Window = TimeSpan.FromMinutes(1),
                 QueueProcessingOrder =
                     QueueProcessingOrder.OldestFirst,

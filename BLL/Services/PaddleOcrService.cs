@@ -111,7 +111,6 @@ namespace BLL.Services
             var topBytes = ToBytes(topBmp);
             var botBytes = ToBytes(botBmp);
 
-            // Removed synchronous File.WriteAllBytes for performance
 
             var line1 = RecognizeText(topBytes);
             var line2 = RecognizeText(botBytes);
@@ -158,7 +157,6 @@ namespace BLL.Services
             padded.Encode(ms, SKEncodedImageFormat.Png, 100);
             var bytes = ms.ToArray();
 
-            // Removed synchronous File.WriteAllBytes for performance
 
             return bytes;
         }
@@ -243,7 +241,6 @@ namespace BLL.Services
         {
             var upscaledBytes = UpscalePlate(imageBytes);
 
-            // Removed synchronous File.WriteAllBytes for performance
 
             var text = RecognizeText(upscaledBytes);
 
