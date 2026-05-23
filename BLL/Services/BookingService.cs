@@ -7,6 +7,7 @@ using AutoWashPro.BLL.DTOs;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -16,17 +17,20 @@ namespace AutoWashPro.BLL.Services
         private readonly IWalletService _walletService;
         private readonly ITierService _tierService;
         private readonly IEmailService _emailService;
+        private readonly ILogger<BookingService> _logger;
 
         public BookingService(
             AutoWashDbContext context,
             IWalletService walletService,
             ITierService tierService,
-            IEmailService emailService)
+            IEmailService emailService,
+            ILogger<BookingService> logger)
         {
             _context = context;
             _walletService = walletService;
             _tierService = tierService;
             _emailService = emailService;
+            _logger = logger;
         }
 
         public async Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, DateTime targetDate)
@@ -287,7 +291,7 @@ namespace AutoWashPro.BLL.Services
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Lỗi gửi mail]: {ex.Message}");
+                    _logger.LogError(ex, "[Lỗi gửi mail]: {Message}", ex.Message);
                 }
                 return new BookingResponseDTO
                 {

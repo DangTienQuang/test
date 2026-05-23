@@ -8,6 +8,7 @@ using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -18,12 +19,14 @@ namespace AutoWashPro.BLL.Tests.Services
         private readonly Mock<IWalletService> _walletServiceMock;
         private readonly Mock<ITierService> _tierServiceMock;
         private readonly Mock<IEmailService> _emailServiceMock;
+        private readonly Mock<ILogger<BookingService>> _loggerMock;
 
         public BookingServiceTests()
         {
             _walletServiceMock = new Mock<IWalletService>();
             _tierServiceMock = new Mock<ITierService>();
             _emailServiceMock = new Mock<IEmailService>();
+            _loggerMock = new Mock<ILogger<BookingService>>();
         }
 
         private AutoWashDbContext GetDbContext()
@@ -40,7 +43,7 @@ namespace AutoWashPro.BLL.Tests.Services
         {
             // Arrange
             var context = GetDbContext();
-            var service = new BookingService(context, _walletServiceMock.Object, _tierServiceMock.Object, _emailServiceMock.Object);
+            var service = new BookingService(context, _walletServiceMock.Object, _tierServiceMock.Object, _emailServiceMock.Object, _loggerMock.Object);
 
             var userId = 1;
             var bookingId = 1;
@@ -91,7 +94,7 @@ namespace AutoWashPro.BLL.Tests.Services
         {
             // Arrange
             var context = GetDbContext();
-            var service = new BookingService(context, _walletServiceMock.Object, _tierServiceMock.Object, _emailServiceMock.Object);
+            var service = new BookingService(context, _walletServiceMock.Object, _tierServiceMock.Object, _emailServiceMock.Object, _loggerMock.Object);
 
             var userId = 2;
             var bookingId = 2;
@@ -160,7 +163,7 @@ namespace AutoWashPro.BLL.Tests.Services
         {
             // Arrange
             var context = GetDbContext();
-            var service = new BookingService(context, _walletServiceMock.Object, _tierServiceMock.Object, _emailServiceMock.Object);
+            var service = new BookingService(context, _walletServiceMock.Object, _tierServiceMock.Object, _emailServiceMock.Object, _loggerMock.Object);
 
             // Act & Assert
             var ex = await Assert.ThrowsAsync<Exception>(() => service.CancelBookingAsync(1, 1));
@@ -172,7 +175,7 @@ namespace AutoWashPro.BLL.Tests.Services
         {
             // Arrange
             var context = GetDbContext();
-            var service = new BookingService(context, _walletServiceMock.Object, _tierServiceMock.Object, _emailServiceMock.Object);
+            var service = new BookingService(context, _walletServiceMock.Object, _tierServiceMock.Object, _emailServiceMock.Object, _loggerMock.Object);
 
             var userId = 1;
             var bookingId = 1;
