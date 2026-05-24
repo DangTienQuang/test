@@ -9,6 +9,7 @@ namespace BLL.DTOs
 {
     public class AIChatRequestDTO
     {
+        //public int UserId { get; set; }
         [MaxLength(300)]
         public string Message { get; set; } = string.Empty;
     }

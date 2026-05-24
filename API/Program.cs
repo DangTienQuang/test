@@ -91,10 +91,8 @@ builder.Services.AddAuthentication(x =>
     {
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(key),
-        ValidateIssuer = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidateAudience = true,
-        ValidAudience = builder.Configuration["Jwt:Audience"]
+        ValidateIssuer = false,
+        ValidateAudience = false
     };
 });
 
@@ -143,20 +141,6 @@ builder.Services.AddRateLimiter(options =>
                     QueueProcessingOrder.OldestFirst,
                 QueueLimit = 2
             }));
-
-    options.AddPolicy("AuthPolicy", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey:
-                context.Connection.RemoteIpAddress?.ToString(),
-
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 5,
-                Window = TimeSpan.FromMinutes(1),
-                QueueProcessingOrder =
-                    QueueProcessingOrder.OldestFirst,
-                QueueLimit = 2
-            }));
 });
 
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -200,18 +184,10 @@ using (var scope = app.Services.CreateScope())
 
     if (!context.Users.Any(u => u.Role == "Admin"))
     {
-        var adminPassword = app.Configuration["Admin:DefaultPassword"];
-        if (string.IsNullOrEmpty(adminPassword))
-        {
-            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-            adminPassword = Guid.NewGuid().ToString("N").Substring(0, 12) + "A1@";
-            logger.LogWarning("Admin:DefaultPassword is not set. A random password has been generated for the initial admin account: {AdminPassword}", adminPassword);
-        }
-
         var admin = new AutoWashPro.DAL.Entities.User
         {
             PhoneNumber = "0999999999",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123"),
             Role = "Admin",
             Status = "Active"
         };
@@ -251,18 +227,9 @@ static void SyncCustomerProfilePoints(AutoWashDbContext context)
     const string completionPrefix = "Hoàn thành dịch vụ";
     var now = DateTime.UtcNow;
 
-    var profiles = context.CustomerProfiles.ToList();
-    var userIds = profiles.Select(p => p.UserId).ToList();
-
-    var allLedgers = context.PointLedgers
-        .Where(p => userIds.Contains(p.UserId))
-        .ToList();
-
-    var ledgersByUser = allLedgers.ToLookup(p => p.UserId);
-
-    foreach (var profile in profiles)
+    foreach (var profile in context.CustomerProfiles.ToList())
     {
-        var ledgers = ledgersByUser[profile.UserId];
+        var ledgers = context.PointLedgers.Where(p => p.UserId == profile.UserId).ToList();
         if (!ledgers.Any()) continue;
 
         var totalAdded = ledgers

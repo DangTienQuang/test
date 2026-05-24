@@ -7,7 +7,6 @@ using AutoWashPro.BLL.DTOs;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -17,20 +16,17 @@ namespace AutoWashPro.BLL.Services
         private readonly IWalletService _walletService;
         private readonly ITierService _tierService;
         private readonly IEmailService _emailService;
-        private readonly ILogger<BookingService> _logger;
 
         public BookingService(
             AutoWashDbContext context,
             IWalletService walletService,
             ITierService tierService,
-            IEmailService emailService,
-            ILogger<BookingService> logger)
+            IEmailService emailService)
         {
             _context = context;
             _walletService = walletService;
             _tierService = tierService;
             _emailService = emailService;
-            _logger = logger;
         }
 
         public async Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, DateTime targetDate)
@@ -50,10 +46,6 @@ namespace AutoWashPro.BLL.Services
             var existingBookings = await _context.Bookings
                 .Where(b => b.ScheduledTime.Date == targetDate.Date && (b.Status == "Pending" || b.Status == "CheckedIn"))
                 .ToListAsync();
-
-            var bookingCountsByTime = existingBookings
-                .GroupBy(b => b.ScheduledTime.TimeOfDay)
-                .ToDictionary(g => g.Key, g => g.Count());
 
             bool isVip = userProfile.Tier.TierName.ToLower() == "gold" || userProfile.Tier.TierName.ToLower() == "platinum";
 
@@ -79,7 +71,7 @@ namespace AutoWashPro.BLL.Services
                     slotDto.Reason = "Đã qua giờ";
                 }
 
-                bookingCountsByTime.TryGetValue(slot.StartTime, out var bookedCount);
+                var bookedCount = existingBookings.Count(b => b.ScheduledTime.TimeOfDay == slot.StartTime);
                 if (bookedCount >= slot.MaxCapacity)
                 {
                     slotDto.IsAvailable = false;
@@ -174,9 +166,6 @@ namespace AutoWashPro.BLL.Services
         {
             var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == request.LicensePlate && v.UserId == userId);
             if (vehicle == null) throw new Exception("Xe không tồn tại trong hồ sơ của bạn.");
-
-            var activeBooking = await _context.Bookings.FirstOrDefaultAsync(b => b.LicensePlate == request.LicensePlate && (b.Status == "Pending" || b.Status == "CheckedIn"));
-            if (activeBooking != null) throw new Exception("Xe này đang có lịch hẹn chờ xử lý. Không thể đặt thêm lịch.");
 
             var service = await _context.Services.FindAsync(request.ServiceId);
             if (service == null || !service.IsActive) throw new Exception("Dịch vụ không tồn tại hoặc đã ngừng kinh doanh.");
@@ -294,7 +283,7 @@ namespace AutoWashPro.BLL.Services
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "[Lỗi gửi mail]: {Message}", ex.Message);
+                    Console.WriteLine($"[Lỗi gửi mail]: {ex.Message}");
                 }
                 return new BookingResponseDTO
                 {
