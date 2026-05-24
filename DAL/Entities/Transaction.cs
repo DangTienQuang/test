@@ -27,6 +27,13 @@ namespace AutoWashPro.DAL.Entities
 
         public int? ReferenceBookingId { get; set; }
 
+        [MaxLength(100)]
+        public string? OrderCode { get; set; }
+
+        [Required]
+        [MaxLength(20)]
+        public string Status { get; set; } = "Completed"; // Completed, Pending
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

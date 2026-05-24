@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace AutoWashPro.BLL.DTOs
 {
@@ -12,8 +13,16 @@ namespace AutoWashPro.BLL.DTOs
 
     public class TopUpRequestDTO
     {
+        [Required]
+        [Range(typeof(decimal), "1", "1000000000", ErrorMessage = "Số tiền nạp không hợp lệ.")]
         public decimal Amount { get; set; }
+
+        [Required]
+        [MaxLength(2000)]
         public required string CancelUrl { get; set; }
+
+        [Required]
+        [MaxLength(2000)]
         public required string ReturnUrl { get; set; }
     }
 
