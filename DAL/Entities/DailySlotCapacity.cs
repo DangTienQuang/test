@@ -22,6 +22,6 @@ namespace AutoWashPro.DAL.Entities
         public int BookedCount { get; set; } = 0;
 
         [Timestamp]
-        public byte[]? RowVersion { get; set; }
+        public DateTime? RowVersion { get; set; }
     }
 }

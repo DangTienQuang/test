@@ -1,0 +1,135 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using AutoWashPro.BLL.DTOs;
+using AutoWashPro.BLL.Exceptions;
+using AutoWashPro.DAL.Data;
+using AutoWashPro.DAL.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace AutoWashPro.BLL.Services
+{
+    public class TimeSlotService : ITimeSlotService
+    {
+        private readonly AutoWashDbContext _context;
+
+        public TimeSlotService(AutoWashDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<List<TimeSlotAdminResponseDTO>> GetAllTimeSlotsAsync()
+        {
+            return await _context.TimeSlots
+                .OrderBy(ts => ts.StartTime)
+                .Select(ts => new TimeSlotAdminResponseDTO
+                {
+                    SlotId = ts.SlotId,
+                    StartTime = ts.StartTime,
+                    EndTime = ts.EndTime,
+                    MaxCapacity = ts.MaxCapacity,
+                    IsVipOnly = ts.IsVipOnly
+                }).ToListAsync();
+        }
+
+        public async Task<TimeSlotAdminResponseDTO> CreateTimeSlotAsync(CreateTimeSlotDTO request)
+        {
+            if (request.StartTime >= request.EndTime)
+            {
+                throw new BadRequestException("Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc.");
+            }
+
+            // Kiểm tra trùng lặp thời gian
+            var isOverlap = await _context.TimeSlots.AnyAsync(ts =>
+                (request.StartTime >= ts.StartTime && request.StartTime < ts.EndTime) ||
+                (request.EndTime > ts.StartTime && request.EndTime <= ts.EndTime) ||
+                (request.StartTime <= ts.StartTime && request.EndTime >= ts.EndTime));
+
+            if (isOverlap)
+            {
+                throw new BadRequestException("Khung giờ bị trùng lặp với một khung giờ đã tồn tại.");
+            }
+
+            var timeSlot = new TimeSlot
+            {
+                StartTime = request.StartTime,
+                EndTime = request.EndTime,
+                MaxCapacity = request.MaxCapacity,
+                IsVipOnly = request.IsVipOnly
+            };
+
+            _context.TimeSlots.Add(timeSlot);
+            await _context.SaveChangesAsync();
+
+            return new TimeSlotAdminResponseDTO
+            {
+                SlotId = timeSlot.SlotId,
+                StartTime = timeSlot.StartTime,
+                EndTime = timeSlot.EndTime,
+                MaxCapacity = timeSlot.MaxCapacity,
+                IsVipOnly = timeSlot.IsVipOnly
+            };
+        }
+
+        public async Task<TimeSlotAdminResponseDTO> UpdateTimeSlotAsync(int slotId, UpdateTimeSlotDTO request)
+        {
+            if (request.StartTime >= request.EndTime)
+            {
+                throw new BadRequestException("Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc.");
+            }
+
+            var timeSlot = await _context.TimeSlots.FindAsync(slotId);
+            if (timeSlot == null)
+            {
+                throw new NotFoundException("Không tìm thấy khung giờ.");
+            }
+
+            var isOverlap = await _context.TimeSlots.AnyAsync(ts =>
+                ts.SlotId != slotId &&
+                ((request.StartTime >= ts.StartTime && request.StartTime < ts.EndTime) ||
+                 (request.EndTime > ts.StartTime && request.EndTime <= ts.EndTime) ||
+                 (request.StartTime <= ts.StartTime && request.EndTime >= ts.EndTime)));
+
+            if (isOverlap)
+            {
+                throw new BadRequestException("Khung giờ bị trùng lặp với một khung giờ đã tồn tại.");
+            }
+
+            timeSlot.StartTime = request.StartTime;
+            timeSlot.EndTime = request.EndTime;
+            timeSlot.MaxCapacity = request.MaxCapacity;
+            timeSlot.IsVipOnly = request.IsVipOnly;
+
+            await _context.SaveChangesAsync();
+
+            return new TimeSlotAdminResponseDTO
+            {
+                SlotId = timeSlot.SlotId,
+                StartTime = timeSlot.StartTime,
+                EndTime = timeSlot.EndTime,
+                MaxCapacity = timeSlot.MaxCapacity,
+                IsVipOnly = timeSlot.IsVipOnly
+            };
+        }
+
+        public async Task<bool> DeleteTimeSlotAsync(int slotId)
+        {
+            var timeSlot = await _context.TimeSlots.FindAsync(slotId);
+            if (timeSlot == null)
+            {
+                throw new NotFoundException("Không tìm thấy khung giờ.");
+            }
+
+            var isBooked = await _context.DailySlotCapacities.AnyAsync(dsc => dsc.SlotId == slotId && dsc.BookedCount > 0);
+            if (isBooked)
+            {
+                throw new BadRequestException("Không thể xoá khung giờ này vì đã có người đặt lịch. Vui lòng kiểm tra lại.");
+            }
+
+            _context.TimeSlots.Remove(timeSlot);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+    }
+}
