@@ -175,6 +175,9 @@ namespace AutoWashPro.BLL.Services
             var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == request.LicensePlate && v.UserId == userId);
             if (vehicle == null) throw new Exception("Xe không tồn tại trong hồ sơ của bạn.");
 
+            var activeBooking = await _context.Bookings.FirstOrDefaultAsync(b => b.LicensePlate == request.LicensePlate && (b.Status == "Pending" || b.Status == "CheckedIn"));
+            if (activeBooking != null) throw new Exception("Xe này đang có lịch hẹn chờ xử lý. Không thể đặt thêm lịch.");
+
             var service = await _context.Services.FindAsync(request.ServiceId);
             if (service == null || !service.IsActive) throw new Exception("Dịch vụ không tồn tại hoặc đã ngừng kinh doanh.");
 
