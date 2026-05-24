@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace DAL.Migrations
 {
     /// <inheritdoc />
-    public partial class AddDailySlotCapacity : Migration
+    public partial class AddDailySlotCapacityWithUniqueConstraint : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -21,8 +21,7 @@ namespace DAL.Migrations
                     SlotId = table.Column<int>(type: "int", nullable: false),
                     Date = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     BookedCount = table.Column<int>(type: "int", nullable: false),
-                    RowVersion = table.Column<DateTime>(type: "timestamp(6)", rowVersion: true, nullable: true)
-                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.ComputedColumn)
+                    RowVersion = table.Column<DateTime>(type: "datetime(6)", rowVersion: true, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -37,9 +36,10 @@ namespace DAL.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DailySlotCapacities_SlotId",
+                name: "IX_DailySlotCapacities_SlotId_Date",
                 table: "DailySlotCapacities",
-                column: "SlotId");
+                columns: new[] { "SlotId", "Date" },
+                unique: true);
         }
 
         /// <inheritdoc />
