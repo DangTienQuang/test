@@ -15,6 +15,8 @@ namespace AutoWashPro.BLL.DTOs
     public class CreateBookingDTO
     {
         [Required(ErrorMessage = "Vui lòng chọn xe.")]
+        [MinLength(1, ErrorMessage = "Biển số xe không được để trống.")]
+        [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Biển số xe không hợp lệ (không được chỉ chứa khoảng trắng).")]
         public required string LicensePlate { get; set; }
 
         [Required]

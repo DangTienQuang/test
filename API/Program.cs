@@ -27,7 +27,8 @@ builder.Services.AddControllers()
             return new BadRequestObjectResult(new
             {
                 statusCode = 400,
-                message = errorMessage ?? "Dữ liệu đầu vào không hợp lệ."
+                message = errorMessage ?? "Dữ liệu đầu vào không hợp lệ.",
+                details = (string?)null
             });
         };
     });

@@ -22,6 +22,7 @@ namespace AutoWashPro.DAL.Data
         public DbSet<Voucher> Vouchers { get; set; }
         public DbSet<UserVoucher> UserVouchers { get; set; }
         public DbSet<TimeSlot> TimeSlots { get; set; }
+        public DbSet<DailySlotCapacity> DailySlotCapacities { get; set; }
         public DbSet<AIConversationLog> AIConversationLogs { get; set; }
         public DbSet<AIKnowledgeBase> AIKnowledgeBases { get; set; }
 
@@ -37,6 +38,10 @@ namespace AutoWashPro.DAL.Data
                 .HasOne(u => u.CustomerProfile)
                 .WithOne(c => c.User)
                 .HasForeignKey<CustomerProfile>(c => c.UserId);
+
+            modelBuilder.Entity<DailySlotCapacity>()
+                .HasIndex(d => new { d.SlotId, d.Date })
+                .IsUnique();
         }
     }
 }

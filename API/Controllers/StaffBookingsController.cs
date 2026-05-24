@@ -21,29 +21,15 @@ namespace AutoWashPro.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAllBookingsByDate([FromQuery] DateTime targetDate)
         {
-            try
-            {
-                var result = await _bookingService.GetAllBookingsByDateAsync(targetDate);
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            var result = await _bookingService.GetAllBookingsByDateAsync(targetDate);
+            return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
         [HttpPut("{id}/status")]
         public async Task<IActionResult> UpdateBookingStatus(int id, [FromQuery] string newStatus)
         {
-            try
-            {
-                await _bookingService.UpdateBookingStatusAsync(id, newStatus);
-                return Ok(new { statusCode = 200, message = $"Đã cập nhật trạng thái thành: {newStatus}" });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            await _bookingService.UpdateBookingStatusAsync(id, newStatus);
+            return Ok(new { statusCode = 200, message = $"Đã cập nhật trạng thái thành: {newStatus}" });
         }
     }
 }
