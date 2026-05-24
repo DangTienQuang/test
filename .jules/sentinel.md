@@ -1,0 +1,4 @@
+## 2024-05-24 - [Remove Hardcoded Admin Password & Avoid Logging Secrets]
+**Vulnerability:** A hardcoded admin password `BCrypt.Net.BCrypt.HashPassword("Admin@123")` was discovered during database seeding in `API/Program.cs`. This would result in every installation having the same known default password if the admin account isn't manually updated.
+**Learning:** During the fix, generating a random password and logging it using `ILogger` was considered a bad practice in production, as logs are often forwarded to centralized systems accessible to multiple users, causing a credential leak.
+**Prevention:** Avoid logging plaintext credentials, even generated ones during bootstrapping. A better approach is to strictly rely on configuration (e.g., throwing a startup exception if missing) or output to a local secure file, but replacing the globally known hardcoded secret with an environment config with a fallback is an essential immediate step.

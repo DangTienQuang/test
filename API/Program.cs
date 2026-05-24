@@ -200,10 +200,18 @@ using (var scope = app.Services.CreateScope())
 
     if (!context.Users.Any(u => u.Role == "Admin"))
     {
+        var adminPassword = app.Configuration["Admin:DefaultPassword"];
+        if (string.IsNullOrEmpty(adminPassword))
+        {
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            adminPassword = Guid.NewGuid().ToString("N").Substring(0, 12) + "A1@";
+            logger.LogWarning("Admin:DefaultPassword is not set. A random password has been generated for the initial admin account: {AdminPassword}", adminPassword);
+        }
+
         var admin = new AutoWashPro.DAL.Entities.User
         {
             PhoneNumber = "0999999999",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123"),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
             Role = "Admin",
             Status = "Active"
         };
