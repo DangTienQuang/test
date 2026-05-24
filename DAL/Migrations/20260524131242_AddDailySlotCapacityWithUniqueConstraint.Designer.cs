@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DAL.Migrations
 {
     [DbContext(typeof(AutoWashDbContext))]
-    [Migration("20260524122851_AddUniqueConstraintToDailySlotCapacity")]
-    partial class AddUniqueConstraintToDailySlotCapacity
+    [Migration("20260524131242_AddDailySlotCapacityWithUniqueConstraint")]
+    partial class AddDailySlotCapacityWithUniqueConstraint
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -141,7 +141,7 @@ namespace DAL.Migrations
                     b.Property<DateTime?>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("timestamp(6)");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<int>("SlotId")
                         .HasColumnType("int");
