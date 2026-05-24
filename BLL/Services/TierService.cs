@@ -6,6 +6,7 @@ using AutoWashPro.BLL.DTOs;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
+using AutoWashPro.BLL.Exceptions;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -34,6 +35,9 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<TierResponseDTO> CreateTierAsync(CreateTierDTO request)
         {
+            var isDuplicate = await _context.Tiers.AnyAsync(t => t.TierName == request.TierName || t.MinAccumulatedPoints == request.MinAccumulatedPoints);
+            if (isDuplicate) throw new BadRequestException("Tên hạng hoặc số điểm tối thiểu đã tồn tại.");
+
             var tier = new Tier
             {
                 TierName = request.TierName,
@@ -51,7 +55,10 @@ namespace AutoWashPro.BLL.Services
         public async Task<TierResponseDTO> UpdateTierAsync(int id, UpdateTierDTO request)
         {
             var tier = await _context.Tiers.FindAsync(id);
-            if (tier == null) throw new Exception("Không tìm thấy hạng thành viên.");
+            if (tier == null) throw new NotFoundException("Không tìm thấy hạng thành viên.");
+
+            var isDuplicate = await _context.Tiers.AnyAsync(t => (t.TierName == request.TierName || t.MinAccumulatedPoints == request.MinAccumulatedPoints) && t.TierId != id);
+            if (isDuplicate) throw new BadRequestException("Tên hạng hoặc số điểm tối thiểu đã tồn tại.");
 
             tier.TierName = request.TierName;
             tier.PointMultiplier = request.PointMultiplier;

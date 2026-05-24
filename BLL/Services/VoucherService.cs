@@ -6,6 +6,7 @@ using AutoWashPro.BLL.DTOs;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
+using AutoWashPro.BLL.Exceptions;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -39,32 +40,48 @@ namespace AutoWashPro.BLL.Services
 
         public async Task RedeemVoucherAsync(int userId, int voucherId)
         {
-            var voucher = await _context.Vouchers.FindAsync(voucherId);
-            if (voucher == null) throw new Exception("Voucher không tồn tại.");
-            if (voucher.ExpiryDate < DateTime.UtcNow) throw new Exception("Voucher đã hết hạn.");
-
-            if (voucher.MaxUsages > 0)
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            try
             {
-                var usageCount = await _context.UserVouchers.CountAsync(uv => uv.VoucherId == voucherId);
-                if (usageCount >= voucher.MaxUsages)
-                    throw new Exception("Voucher đã hết lượt đổi.");
+                var voucher = await _context.Vouchers.FindAsync(voucherId);
+                if (voucher == null) throw new NotFoundException("Voucher không tồn tại.");
+                if (voucher.ExpiryDate < DateTime.UtcNow) throw new BadRequestException("Voucher đã hết hạn.");
+
+                if (voucher.MaxUsages > 0)
+                {
+                    var usageCount = await _context.UserVouchers.CountAsync(uv => uv.VoucherId == voucherId);
+                    if (usageCount >= voucher.MaxUsages)
+                        throw new BadRequestException("Voucher đã hết lượt đổi.");
+                }
+
+                var existingUserVoucher = await _context.UserVouchers
+                    .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == voucherId);
+                if (existingUserVoucher != null) throw new BadRequestException("Bạn đã sở hữu voucher này rồi.");
+
+                await _walletService.DeductSpendablePointsAsync(userId, voucher.PointsRequired, $"Đổi voucher: {voucher.Code}");
+
+                var userVoucher = new UserVoucher
+                {
+                    UserId = userId,
+                    VoucherId = voucherId,
+                    IsUsed = false
+                };
+
+                _context.UserVouchers.Add(userVoucher);
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
             }
-
-            var existingUserVoucher = await _context.UserVouchers
-                .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == voucherId);
-            if (existingUserVoucher != null) throw new Exception("Bạn đã sở hữu voucher này rồi.");
-
-            await _walletService.DeductSpendablePointsAsync(userId, voucher.PointsRequired, $"Đổi voucher: {voucher.Code}");
-
-            var userVoucher = new UserVoucher
+            catch (DbUpdateException)
             {
-                UserId = userId,
-                VoucherId = voucherId,
-                IsUsed = false
-            };
-
-            _context.UserVouchers.Add(userVoucher);
-            await _context.SaveChangesAsync();
+                await transaction.RollbackAsync();
+                throw new BadRequestException("Bạn đã sở hữu voucher này rồi, không thể thao tác quá nhanh.");
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<List<AdminVoucherDTO>> GetAllVouchersAsync()
@@ -89,8 +106,10 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<AdminVoucherDTO> CreateVoucherAsync(CreateOrUpdateVoucherDTO request)
         {
+            if (request.ExpiryDate.ToUniversalTime() <= DateTime.UtcNow) throw new BadRequestException("Ngày hết hạn phải lớn hơn hiện tại.");
+
             var codeExists = await _context.Vouchers.AnyAsync(v => v.Code == request.Code.Trim());
-            if (codeExists) throw new Exception("Mã voucher đã tồn tại.");
+            if (codeExists) throw new BadRequestException("Mã voucher đã tồn tại.");
 
             var voucher = new Voucher
             {
@@ -109,11 +128,13 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<AdminVoucherDTO> UpdateVoucherAsync(int id, CreateOrUpdateVoucherDTO request)
         {
+            if (request.ExpiryDate.ToUniversalTime() <= DateTime.UtcNow) throw new BadRequestException("Ngày hết hạn phải lớn hơn hiện tại.");
+
             var voucher = await _context.Vouchers.FindAsync(id);
-            if (voucher == null) throw new Exception("Không tìm thấy voucher.");
+            if (voucher == null) throw new NotFoundException("Không tìm thấy voucher.");
 
             var codeExists = await _context.Vouchers.AnyAsync(v => v.Code == request.Code.Trim() && v.VoucherId != id);
-            if (codeExists) throw new Exception("Mã voucher đã tồn tại.");
+            if (codeExists) throw new BadRequestException("Mã voucher đã tồn tại.");
 
             voucher.Code = request.Code.Trim();
             voucher.DiscountAmount = request.DiscountAmount;
@@ -130,11 +151,11 @@ namespace AutoWashPro.BLL.Services
         public async Task<bool> DeleteVoucherAsync(int id)
         {
             var voucher = await _context.Vouchers.FindAsync(id);
-            if (voucher == null) throw new Exception("Không tìm thấy voucher.");
+            if (voucher == null) throw new NotFoundException("Không tìm thấy voucher.");
 
             var hasOwners = await _context.UserVouchers.AnyAsync(uv => uv.VoucherId == id);
             if (hasOwners)
-                throw new Exception("Không thể xóa voucher đã có khách đổi. Vui lòng để hết hạn hoặc ngừng phát hành.");
+                throw new BadRequestException("Không thể xóa voucher đã có khách đổi. Vui lòng để hết hạn hoặc ngừng phát hành.");
 
             _context.Vouchers.Remove(voucher);
             await _context.SaveChangesAsync();

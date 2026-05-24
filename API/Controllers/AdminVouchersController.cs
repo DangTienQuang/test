@@ -22,57 +22,29 @@ namespace AutoWashPro.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            try
-            {
-                var result = await _voucherService.GetAllVouchersAsync();
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            var result = await _voucherService.GetAllVouchersAsync();
+            return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateOrUpdateVoucherDTO request)
         {
-            try
-            {
-                var result = await _voucherService.CreateVoucherAsync(request);
-                return Created("", new { statusCode = 201, message = "Tạo voucher thành công.", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            var result = await _voucherService.CreateVoucherAsync(request);
+            return Created("", new { statusCode = 201, message = "Tạo voucher thành công.", data = result });
         }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] CreateOrUpdateVoucherDTO request)
         {
-            try
-            {
-                var result = await _voucherService.UpdateVoucherAsync(id, request);
-                return Ok(new { statusCode = 200, message = "Cập nhật voucher thành công.", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            var result = await _voucherService.UpdateVoucherAsync(id, request);
+            return Ok(new { statusCode = 200, message = "Cập nhật voucher thành công.", data = result });
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            try
-            {
-                await _voucherService.DeleteVoucherAsync(id);
-                return Ok(new { statusCode = 200, message = "Xóa voucher thành công." });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            await _voucherService.DeleteVoucherAsync(id);
+            return Ok(new { statusCode = 200, message = "Xóa voucher thành công." });
         }
     }
 }

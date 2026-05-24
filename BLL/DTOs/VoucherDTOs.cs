@@ -34,9 +34,10 @@ namespace AutoWashPro.BLL.DTOs
     {
         [Required(ErrorMessage = "Mã voucher không được để trống.")]
         [MaxLength(50)]
+        [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Mã voucher không được chỉ chứa khoảng trắng.")]
         public required string Code { get; set; }
 
-        [Range(1, double.MaxValue, ErrorMessage = "Số tiền giảm phải lớn hơn 0.")]
+        [Range(typeof(decimal), "1", "1000000000", ErrorMessage = "Số tiền giảm không hợp lệ.")]
         public decimal DiscountAmount { get; set; }
 
         [Range(0, int.MaxValue)]
