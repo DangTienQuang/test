@@ -21,6 +21,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<List<VehicleTypeDTO>> GetAllAsync()
         {
             return await _context.VehicleTypes
+                .AsNoTracking()
                 .Select(t => new VehicleTypeDTO
                 {
                     Id = t.Id,
