@@ -179,6 +179,31 @@ namespace AutoWashPro.BLL.Services
 
             var targetDateTime = request.ScheduledDate.Date.Add(slot.StartTime);
 
+            // Xử lý tạo dòng DailyCapacity trước transaction để tránh lỗi REPEATABLE READ snapshot của MySQL
+            var dailyCapacity = await _context.DailySlotCapacities
+                .FirstOrDefaultAsync(dc => dc.SlotId == slot.SlotId && dc.Date == targetDateTime.Date);
+
+            if (dailyCapacity == null)
+            {
+                dailyCapacity = new DailySlotCapacity
+                {
+                    SlotId = slot.SlotId,
+                    Date = targetDateTime.Date,
+                    BookedCount = 0
+                };
+                _context.DailySlotCapacities.Add(dailyCapacity);
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("Duplicate entry") == true)
+                {
+                    _context.Entry(dailyCapacity).State = EntityState.Detached;
+                    dailyCapacity = await _context.DailySlotCapacities
+                        .FirstAsync(dc => dc.SlotId == slot.SlotId && dc.Date == targetDateTime.Date);
+                }
+            }
+
             var servicePrice = await _context.ServicePrices.FirstOrDefaultAsync(sp => sp.ServiceId == request.ServiceId && sp.VehicleTypeId == vehicle.VehicleTypeId);
             if (servicePrice == null) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Dịch vụ này chưa hỗ trợ cho loại xe của bạn.");
 
@@ -192,30 +217,9 @@ namespace AutoWashPro.BLL.Services
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var dailyCapacity = await _context.DailySlotCapacities
-                    .FirstOrDefaultAsync(dc => dc.SlotId == slot.SlotId && dc.Date == targetDateTime.Date);
-
-                if (dailyCapacity == null)
-                {
-                    dailyCapacity = new DailySlotCapacity
-                    {
-                        SlotId = slot.SlotId,
-                        Date = targetDateTime.Date,
-                        BookedCount = 0
-                    };
-                    _context.DailySlotCapacities.Add(dailyCapacity);
-                    try
-                    {
-                        await _context.SaveChangesAsync();
-                    }
-                    catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("Duplicate entry") == true)
-                    {
-                         // Nếu ai đó đã thêm, lấy lại capacity vừa được tạo
-                        _context.Entry(dailyCapacity).State = EntityState.Detached;
-                        dailyCapacity = await _context.DailySlotCapacities
-                            .FirstAsync(dc => dc.SlotId == slot.SlotId && dc.Date == targetDateTime.Date);
-                    }
-                }
+                // Re-fetch để chắc chắn có version mới nhất trong transaction
+                dailyCapacity = await _context.DailySlotCapacities
+                    .FirstAsync(dc => dc.SlotId == slot.SlotId && dc.Date == targetDateTime.Date);
 
                 if (dailyCapacity.BookedCount >= slot.MaxCapacity)
                 {
@@ -390,15 +394,6 @@ namespace AutoWashPro.BLL.Services
                     if (dailyCapacity != null && dailyCapacity.BookedCount > 0)
                     {
                         dailyCapacity.BookedCount--;
-
-                        try
-                        {
-                            await _context.SaveChangesAsync();
-                        }
-                        catch (DbUpdateConcurrencyException)
-                        {
-                            throw new AutoWashPro.BLL.Exceptions.BadRequestException("Có lỗi xảy ra khi hủy lịch. Vui lòng thử lại.");
-                        }
                     }
                 }
 
@@ -442,7 +437,16 @@ namespace AutoWashPro.BLL.Services
                 }
 
                 booking.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
+
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Có lỗi xảy ra khi hủy lịch (xung đột dữ liệu). Vui lòng thử lại.");
+                }
+
                 await transaction.CommitAsync();
                 return true;
             }

@@ -154,6 +154,7 @@ builder.Services.AddScoped<IBookingService, AutoWashPro.BLL.Services.BookingServ
 builder.Services.AddScoped<IWalletService, WalletService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
 builder.Services.AddScoped<IAIChatbotService,AIChatbotService>();
 builder.Services.AddScoped<IAIModerationService, AIModerationService>();
 builder.Services.AddHttpClient<ILLMService, GeminiAIService>();
