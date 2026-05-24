@@ -20,79 +20,54 @@ namespace AutoWashPro.API.Controllers
             _bookingService = bookingService;
         }
 
+        private int GetUserId()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            {
+                throw new AutoWashPro.BLL.Exceptions.UnauthorizedException("Không tìm thấy thông tin xác thực (UserId). Vui lòng đăng nhập lại.");
+            }
+            return userId;
+        }
+
         [HttpGet("slots")]
         public async Task<IActionResult> GetAvailableSlots([FromQuery] DateTime targetDate)
         {
-            try
-            {
-                int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
-                var result = await _bookingService.GetAvailableSlotsAsync(userId, targetDate);
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            int userId = GetUserId();
+            var result = await _bookingService.GetAvailableSlotsAsync(userId, targetDate);
+            return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
         [HttpPost]
         public async Task<IActionResult> CreateBooking([FromBody] CreateBookingDTO request)
         {
-            try
-            {
-                int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
-                var result = await _bookingService.CreateBookingAsync(userId, request);
-                return Created("", new { statusCode = 201, message = "Đặt lịch và thanh toán cọc thành công.", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            int userId = GetUserId();
+            var result = await _bookingService.CreateBookingAsync(userId, request);
+            return Created("", new { statusCode = 201, message = "Đặt lịch và thanh toán cọc thành công.", data = result });
         }
 
         [HttpGet("me")]
         public async Task<IActionResult> GetMyBookings()
         {
-            try
-            {
-                int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
-                var result = await _bookingService.GetMyBookingsAsync(userId);
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            int userId = GetUserId();
+            var result = await _bookingService.GetMyBookingsAsync(userId);
+            return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetBookingById(int id)
         {
-            try
-            {
-                int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
-                var result = await _bookingService.GetBookingByIdAsync(userId, id);
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            int userId = GetUserId();
+            var result = await _bookingService.GetBookingByIdAsync(userId, id);
+            return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
         [HttpPut("{id}/cancel")]
         public async Task<IActionResult> CancelBooking(int id)
         {
-            try
-            {
-                int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
-                await _bookingService.CancelBookingAsync(userId, id);
-                return Ok(new { statusCode = 200, message = "Đã hủy lịch thành công." });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            int userId = GetUserId();
+            await _bookingService.CancelBookingAsync(userId, id);
+            return Ok(new { statusCode = 200, message = "Đã hủy lịch thành công." });
         }
     }
 }

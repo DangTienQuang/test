@@ -32,12 +32,12 @@ namespace AutoWashPro.BLL.Services
         public async Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, DateTime targetDate)
         {
             var userProfile = await _context.CustomerProfiles.Include(cp => cp.Tier).FirstOrDefaultAsync(cp => cp.UserId == userId);
-            if (userProfile == null || userProfile.Tier == null) throw new Exception("Không tìm thấy thông tin hạng thành viên.");
+            if (userProfile == null || userProfile.Tier == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy thông tin hạng thành viên.");
 
             var maxDate = DateTime.UtcNow.Date.AddDays(userProfile.Tier.BookingWindowDays);
             if (targetDate.Date < DateTime.UtcNow.Date || targetDate.Date > maxDate)
             {
-                throw new Exception($"Hạng {userProfile.Tier.TierName} chỉ được đặt trước từ hôm nay đến ngày {maxDate:dd/MM/yyyy}.");
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Hạng {userProfile.Tier.TierName} chỉ được đặt trước từ hôm nay đến ngày {maxDate:dd/MM/yyyy}.");
             }
 
             var allSlots = await _context.TimeSlots.OrderBy(s => s.StartTime).ToListAsync();
@@ -109,7 +109,7 @@ namespace AutoWashPro.BLL.Services
                 .FirstOrDefaultAsync(b => b.BookingId == bookingId && b.UserId == userId);
 
             if (booking == null)
-                throw new Exception("Không tìm thấy chi tiết lịch hẹn hoặc bạn không có quyền xem.");
+                throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy chi tiết lịch hẹn hoặc bạn không có quyền xem.");
 
             return new BookingResponseDTO
             {
@@ -127,10 +127,10 @@ namespace AutoWashPro.BLL.Services
         public async Task<bool> UpdateBookingStatusAsync(int bookingId, string newStatus)
         {
             var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.BookingId == bookingId);
-            if (booking == null) throw new Exception("Không tìm thấy lịch hẹn.");
+            if (booking == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy lịch hẹn.");
 
             var allowedStatuses = new[] { "Pending", "CheckedIn", "Completed", "Cancelled", "Delayed" };
-            if (!allowedStatuses.Contains(newStatus)) throw new Exception("Trạng thái không hợp lệ.");
+            if (!allowedStatuses.Contains(newStatus)) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Trạng thái không hợp lệ.");
 
             if (newStatus == "Completed" && booking.Status != "Completed")
             {
@@ -165,31 +165,74 @@ namespace AutoWashPro.BLL.Services
         public async Task<BookingResponseDTO> CreateBookingAsync(int userId, CreateBookingDTO request)
         {
             var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == request.LicensePlate && v.UserId == userId);
-            if (vehicle == null) throw new Exception("Xe không tồn tại trong hồ sơ của bạn.");
+            if (vehicle == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Xe không tồn tại trong hồ sơ của bạn.");
+
+            // Thêm Anti-hoarding Rule: Block việc đặt lịch mới nếu xe đã có lịch Pending/CheckedIn
+            bool hasActiveBooking = await _context.Bookings.AnyAsync(b => b.LicensePlate == request.LicensePlate && (b.Status == "Pending" || b.Status == "CheckedIn"));
+            if (hasActiveBooking) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Xe này đang có lịch hẹn chờ xử lý hoặc đã check-in. Không thể đặt thêm.");
 
             var service = await _context.Services.FindAsync(request.ServiceId);
-            if (service == null || !service.IsActive) throw new Exception("Dịch vụ không tồn tại hoặc đã ngừng kinh doanh.");
+            if (service == null || !service.IsActive) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Dịch vụ không tồn tại hoặc đã ngừng kinh doanh.");
 
             var slot = await _context.TimeSlots.FindAsync(request.SlotId);
-            if (slot == null) throw new Exception("Khung giờ không hợp lệ.");
+            if (slot == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Khung giờ không hợp lệ.");
 
             var targetDateTime = request.ScheduledDate.Date.Add(slot.StartTime);
-            var bookedCount = await _context.Bookings.CountAsync(b => b.ScheduledTime == targetDateTime && (b.Status == "Pending" || b.Status == "CheckedIn"));
-            if (bookedCount >= slot.MaxCapacity) throw new Exception("Khung giờ này vừa mới hết chỗ, vui lòng chọn giờ khác.");
 
             var servicePrice = await _context.ServicePrices.FirstOrDefaultAsync(sp => sp.ServiceId == request.ServiceId && sp.VehicleTypeId == vehicle.VehicleTypeId);
-            if (servicePrice == null) throw new Exception("Dịch vụ này chưa hỗ trợ cho loại xe của bạn.");
+            if (servicePrice == null) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Dịch vụ này chưa hỗ trợ cho loại xe của bạn.");
 
             decimal originalPrice = servicePrice.Price;
             var (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher) =
                 await CalculateBookingPricingAsync(userId, originalPrice, request.VoucherId, request.PointsToUse);
 
             var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userId);
-            if (wallet == null || wallet.Balance < finalAmount) throw new Exception($"Số dư ví không đủ để đặt cọc. Cần: {finalAmount:N0}đ");
+            if (wallet == null || wallet.Balance < finalAmount) throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Số dư ví không đủ để đặt cọc. Cần: {finalAmount:N0}đ");
             
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                var dailyCapacity = await _context.DailySlotCapacities
+                    .FirstOrDefaultAsync(dc => dc.SlotId == slot.SlotId && dc.Date == targetDateTime.Date);
+
+                if (dailyCapacity == null)
+                {
+                    dailyCapacity = new DailySlotCapacity
+                    {
+                        SlotId = slot.SlotId,
+                        Date = targetDateTime.Date,
+                        BookedCount = 0
+                    };
+                    _context.DailySlotCapacities.Add(dailyCapacity);
+                    try
+                    {
+                        await _context.SaveChangesAsync();
+                    }
+                    catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("Duplicate entry") == true)
+                    {
+                         // Nếu ai đó đã thêm, lấy lại capacity vừa được tạo
+                        _context.Entry(dailyCapacity).State = EntityState.Detached;
+                        dailyCapacity = await _context.DailySlotCapacities
+                            .FirstAsync(dc => dc.SlotId == slot.SlotId && dc.Date == targetDateTime.Date);
+                    }
+                }
+
+                if (dailyCapacity.BookedCount >= slot.MaxCapacity)
+                {
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Khung giờ này vừa mới hết chỗ, vui lòng chọn giờ khác.");
+                }
+
+                dailyCapacity.BookedCount++;
+
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Có người khác vừa đặt lịch. Vui lòng thử lại.");
+                }
+
                 wallet.Balance -= finalAmount;
 
                 var paymentTx = new Transaction
@@ -230,6 +273,7 @@ namespace AutoWashPro.BLL.Services
                 _context.Bookings.Add(booking);
 
                 await _context.SaveChangesAsync();
+
                 paymentTx.ReferenceBookingId = booking.BookingId;
                 await _context.SaveChangesAsync();
 
@@ -327,8 +371,8 @@ namespace AutoWashPro.BLL.Services
         public async Task<bool> CancelBookingAsync(int userId, int bookingId)
         {
             var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.BookingId == bookingId && b.UserId == userId);
-            if (booking == null) throw new Exception("Không tìm thấy lịch hẹn.");
-            if (booking.Status != "Pending") throw new Exception("Chỉ có thể hủy lịch ở trạng thái đang chờ (Pending).");
+            if (booking == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy lịch hẹn.");
+            if (booking.Status != "Pending") throw new AutoWashPro.BLL.Exceptions.BadRequestException("Chỉ có thể hủy lịch ở trạng thái đang chờ (Pending).");
 
             bool isRefundable = (booking.ScheduledTime - DateTime.UtcNow).TotalHours >= 4;
 
@@ -336,6 +380,27 @@ namespace AutoWashPro.BLL.Services
             try
             {
                 booking.Status = "Cancelled";
+
+                var slot = await _context.TimeSlots.FirstOrDefaultAsync(s => s.StartTime == booking.ScheduledTime.TimeOfDay);
+                if (slot != null)
+                {
+                    var dailyCapacity = await _context.DailySlotCapacities
+                        .FirstOrDefaultAsync(dc => dc.SlotId == slot.SlotId && dc.Date == booking.ScheduledTime.Date);
+
+                    if (dailyCapacity != null && dailyCapacity.BookedCount > 0)
+                    {
+                        dailyCapacity.BookedCount--;
+
+                        try
+                        {
+                            await _context.SaveChangesAsync();
+                        }
+                        catch (DbUpdateConcurrencyException)
+                        {
+                            throw new AutoWashPro.BLL.Exceptions.BadRequestException("Có lỗi xảy ra khi hủy lịch. Vui lòng thử lại.");
+                        }
+                    }
+                }
 
                 if (isRefundable)
                 {
@@ -400,9 +465,9 @@ namespace AutoWashPro.BLL.Services
                     .Include(uv => uv.Voucher)
                     .FirstOrDefaultAsync(uv => uv.VoucherId == voucherId.Value && uv.UserId == userId);
 
-                if (userVoucher == null) throw new Exception("Bạn không sở hữu Voucher này.");
-                if (userVoucher.IsUsed) throw new Exception("Voucher này đã được sử dụng.");
-                if (userVoucher.Voucher.ExpiryDate < DateTime.UtcNow) throw new Exception("Voucher này đã hết hạn.");
+                if (userVoucher == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Bạn không sở hữu Voucher này.");
+                if (userVoucher.IsUsed) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Voucher này đã được sử dụng.");
+                if (userVoucher.Voucher.ExpiryDate < DateTime.UtcNow) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Voucher này đã hết hạn.");
 
                 voucherDiscount = Math.Min(userVoucher.Voucher.DiscountAmount, originalPrice);
             }
@@ -414,14 +479,14 @@ namespace AutoWashPro.BLL.Services
             if (pointsToUseRequest > 0)
             {
                 var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
-                if (profile == null) throw new Exception("Không tìm thấy hồ sơ khách hàng.");
+                if (profile == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy hồ sơ khách hàng.");
 
                 int maxPointsByBalance = profile.TotalPoint;
                 int maxPointsByMoney = (int)(remainingAfterVoucher / PointConstants.VndPerSpendPoint);
                 int pointsToApply = Math.Min(pointsToUseRequest, Math.Min(maxPointsByBalance, maxPointsByMoney));
 
                 if (pointsToApply < pointsToUseRequest && pointsToApply == 0)
-                    throw new Exception("Không đủ điểm hoặc số tiền còn lại không cho phép dùng điểm.");
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Không đủ điểm hoặc số tiền còn lại không cho phép dùng điểm.");
 
                 pointsUsed = pointsToApply;
                 pointDiscount = pointsUsed * PointConstants.VndPerSpendPoint;

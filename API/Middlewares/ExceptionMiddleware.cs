@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Http;
 using System;
+using AutoWashPro.BLL.Exceptions;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace AutoWashPro.API.Middlewares
 {
@@ -26,11 +28,42 @@ namespace AutoWashPro.API.Middlewares
 
                 int statusCode = 500;
                 string message = "Lỗi hệ thống nội bộ. Vui lòng thử lại sau.";
+                string? details = null;
 
-                if (ex.Message.Contains("not found") || ex.Message.Contains("already exists") || ex.Message.Contains("allowed") || ex.Message.Contains("must be"))
+                switch (ex)
                 {
-                    statusCode = 400;
-                    message = ex.Message;
+                    case BadRequestException badRequestEx:
+                        statusCode = 400;
+                        message = badRequestEx.Message;
+                        break;
+                    case NotFoundException notFoundEx:
+                        statusCode = 404;
+                        message = notFoundEx.Message;
+                        break;
+                    case ForbiddenException forbiddenEx:
+                        statusCode = 403;
+                        message = forbiddenEx.Message;
+                        break;
+                    case UnauthorizedException unauthorizedEx:
+                        statusCode = 401;
+                        message = unauthorizedEx.Message;
+                        break;
+                    case DbUpdateConcurrencyException concurrencyEx:
+                        statusCode = 409;
+                        message = "Dữ liệu đã bị thay đổi bởi một giao dịch khác. Vui lòng tải lại và thử lại.";
+                        break;
+                    default:
+                        // Fallback cho các ngoại lệ chưa định nghĩa rõ
+                        if (ex.Message.Contains("not found") || ex.Message.Contains("already exists") || ex.Message.Contains("allowed") || ex.Message.Contains("must be"))
+                        {
+                            statusCode = 400;
+                            message = ex.Message;
+                        }
+                        else
+                        {
+                            details = ex.Message; // Tuỳ chọn ẩn trên Product nhưng hiện log tạm
+                        }
+                        break;
                 }
 
                 context.Response.StatusCode = statusCode;
@@ -38,10 +71,12 @@ namespace AutoWashPro.API.Middlewares
                 var response = new
                 {
                     statusCode = statusCode,
-                    message = message
+                    message = message,
+                    details = details
                 };
 
-                var json = JsonSerializer.Serialize(response);
+                var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+                var json = JsonSerializer.Serialize(response, options);
                 await context.Response.WriteAsync(json);
             }
         }
