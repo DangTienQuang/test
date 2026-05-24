@@ -24,32 +24,18 @@ namespace AutoWashPro.API.Controllers
         [HttpGet("me")]
         public async Task<IActionResult> GetMyVouchers()
         {
-            try
-            {
-                var userId = ClaimHelper.GetUserId(User);
-                var result = await _voucherService.GetMyVouchersAsync(userId);
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            var userId = ClaimHelper.GetUserId(User);
+            var result = await _voucherService.GetMyVouchersAsync(userId);
+            return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
         [Authorize]
         [HttpPost("redeem")]
         public async Task<IActionResult> RedeemVoucher([FromBody] RedeemVoucherRequestDTO request)
         {
-            try
-            {
-                var userId = ClaimHelper.GetUserId(User);
-                await _voucherService.RedeemVoucherAsync(userId, request.VoucherId);
-                return Ok(new { statusCode = 200, message = "Đổi voucher thành công." });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            var userId = ClaimHelper.GetUserId(User);
+            await _voucherService.RedeemVoucherAsync(userId, request.VoucherId);
+            return Ok(new { statusCode = 200, message = "Đổi voucher thành công." });
         }
     }
 }

@@ -14,6 +14,7 @@ namespace AutoWashPro.BLL.DTOs
     public class CreateTierDTO
     {
         [Required(ErrorMessage = "Tên hạng không được để trống.")]
+        [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Tên hạng không được chỉ chứa khoảng trắng.")]
         public string TierName { get; set; }
 
         [Range(1.0, 5.0, ErrorMessage = "Hệ số nhân điểm phải từ 1.0 đến 5.0.")]
