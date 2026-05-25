@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using PayOS;
 using PayOS.Models.V2.PaymentRequests;
 using Microsoft.Extensions.Logging;
+using AutoWashPro.BLL.Exceptions;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -48,12 +49,34 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<TopUpResponseDTO> CreateTopUpLinkAsync(int userId, TopUpRequestDTO request)
         {
+            var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userId);
+            if (wallet == null)
+            {
+                wallet = new Wallet { UserId = userId, Balance = 0, Status = "Active" };
+                _context.Wallets.Add(wallet);
+                await _context.SaveChangesAsync();
+            }
+
             var orderCode = DateTimeOffset.Now.ToUnixTimeSeconds();
+
+            var transaction = new Transaction
+            {
+                WalletId = wallet.WalletId,
+                Amount = request.Amount,
+                TransactionType = "Topup",
+                Description = "Yêu cầu nạp tiền",
+                OrderCode = orderCode.ToString(),
+                Status = "Pending",
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Transactions.Add(transaction);
+            await _context.SaveChangesAsync();
+
             var paymentRequest = new CreatePaymentLinkRequest
             {
                 OrderCode = orderCode,
                 Amount = (int)request.Amount,
-                Description = $"Topup wallet {userId}",
+                Description = $"Topup wallet",
                 CancelUrl = request.CancelUrl,
                 ReturnUrl = request.ReturnUrl
             };
@@ -77,47 +100,42 @@ namespace AutoWashPro.BLL.Services
 
             var data = webhookData.Data;
             var orderCodeStr = data.OrderCode.ToString();
-            var alreadyProcessed = await _context.Transactions
-                .AnyAsync(t => t.Description.Contains($"(Mã: {orderCodeStr})") && t.TransactionType == "Topup");
 
-            if (alreadyProcessed)
+            using var dbTransaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            try
             {
-                _logger.LogWarning("Giao dịch {OrderCode} đã được xử lý trước đó.", data.OrderCode);
-                return;
-            }
+                var transaction = await _context.Transactions
+                    .Include(t => t.Wallet)
+                    .FirstOrDefaultAsync(t => t.OrderCode == orderCodeStr && t.TransactionType == "Topup");
 
-            int userId = 0;
-            var desc = data.Description ?? "";
-            var match = System.Text.RegularExpressions.Regex.Match(desc, @"\d+$");
-            if (match.Success)
-            {
-                int.TryParse(match.Value, out userId);
-            }
-
-            if (userId > 0)
-            {
-                var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userId);
-                if (wallet == null)
+                if (transaction == null)
                 {
-                    wallet = new Wallet { UserId = userId, Balance = 0, Status = "Active" };
-                    _context.Wallets.Add(wallet);
+                    _logger.LogWarning("Không tìm thấy giao dịch với OrderCode: {OrderCode}", data.OrderCode);
+                    return;
                 }
 
-                wallet.Balance += data.Amount;
-
-                var transaction = new Transaction
+                if (transaction.Status == "Completed")
                 {
-                    WalletId = wallet.WalletId,
-                    Amount = data.Amount,
-                    TransactionType = "Topup",
-                    Description = $"Nạp tiền thành công (Mã: {data.OrderCode})",
-                    CreatedAt = DateTime.UtcNow
-                };
+                    _logger.LogInformation("Giao dịch {OrderCode} đã được xử lý trước đó.", data.OrderCode);
+                    return;
+                }
 
-                _context.Transactions.Add(transaction);
+                transaction.Status = "Completed";
+                transaction.Description = $"Nạp tiền thành công (Mã: {data.OrderCode})";
+                transaction.Amount = data.Amount; // Ensure amount matches webhook data
+
+                transaction.Wallet.Balance += data.Amount;
+
                 await _context.SaveChangesAsync();
+                await dbTransaction.CommitAsync();
 
-                _logger.LogInformation("Cập nhật số dư thành công cho User {UserId}. Số tiền: {Amount}", userId, data.Amount);
+                _logger.LogInformation("Cập nhật số dư thành công cho Wallet {WalletId}. Số tiền: {Amount}", transaction.WalletId, data.Amount);
+            }
+            catch (Exception ex)
+            {
+                await dbTransaction.RollbackAsync();
+                _logger.LogError(ex, "Lỗi khi xử lý webhook thanh toán cho OrderCode: {OrderCode}", data.OrderCode);
+                throw;
             }
         }
 
@@ -159,10 +177,10 @@ namespace AutoWashPro.BLL.Services
             if (pointsToDeduct <= 0) return;
 
             var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
-            if (profile == null) throw new Exception("Không tìm thấy hồ sơ khách hàng.");
+            if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
 
             if (profile.TotalPoint < pointsToDeduct)
-                throw new Exception($"Không đủ điểm khả dụng. Bạn có {profile.TotalPoint} điểm.");
+                throw new BadRequestException($"Không đủ điểm khả dụng. Bạn có {profile.TotalPoint} điểm.");
 
             profile.TotalPoint -= pointsToDeduct;
 
@@ -182,7 +200,7 @@ namespace AutoWashPro.BLL.Services
             if (pointsToRefund <= 0) return;
 
             var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
-            if (profile == null) throw new Exception("Không tìm thấy hồ sơ khách hàng.");
+            if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
 
             profile.TotalPoint += pointsToRefund;
 
@@ -203,7 +221,7 @@ namespace AutoWashPro.BLL.Services
             if (pointsEarned <= 0) return 0;
 
             var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
-            if (profile == null) throw new Exception("Không tìm thấy hồ sơ khách hàng.");
+            if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
 
             profile.TotalPoint += pointsEarned;
             profile.PromotionPoint += pointsEarned;
