@@ -22,6 +22,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<List<TimeSlotAdminResponseDTO>> GetAllTimeSlotsAsync()
         {
             return await _context.TimeSlots
+                .AsNoTracking()
                 .OrderBy(ts => ts.StartTime)
                 .Select(ts => new TimeSlotAdminResponseDTO
                 {

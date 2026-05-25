@@ -24,6 +24,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<List<VoucherResponseDTO>> GetMyVouchersAsync(int userId)
         {
             return await _context.UserVouchers
+                .AsNoTracking()
                 .Include(uv => uv.Voucher)
                 .Where(uv => uv.UserId == userId)
                 .Select(uv => new VoucherResponseDTO
@@ -86,8 +87,9 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<List<AdminVoucherDTO>> GetAllVouchersAsync()
         {
-            var vouchers = await _context.Vouchers.OrderByDescending(v => v.ExpiryDate).ToListAsync();
+            var vouchers = await _context.Vouchers.AsNoTracking().OrderByDescending(v => v.ExpiryDate).ToListAsync();
             var redeemCounts = await _context.UserVouchers
+                .AsNoTracking()
                 .GroupBy(uv => uv.VoucherId)
                 .Select(g => new { VoucherId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.VoucherId, x => x.Count);

@@ -21,6 +21,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<List<VehicleDTO>> GetMyVehiclesAsync(int userId)
         {
             return await _context.Vehicles
+                .AsNoTracking()
                 .Include(v => v.VehicleType)
                 .Where(v => v.UserId == userId)
                 .Select(v => new VehicleDTO
@@ -88,6 +89,7 @@ namespace AutoWashPro.BLL.Services
             licensePlate = Uri.UnescapeDataString(licensePlate);
 
             var vehicle = await _context.Vehicles
+                .AsNoTracking()
                 .Include(v => v.VehicleType)
                 .Include(v => v.User)
                     .ThenInclude(u => u.CustomerProfile)

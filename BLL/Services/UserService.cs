@@ -22,6 +22,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<UserProfileDTO> GetProfileAsync(int userId)
         {
             var user = await _context.Users
+                .AsNoTracking()
                 .Include(u => u.CustomerProfile)
                     .ThenInclude(cp => cp.Tier)
                 .Include(u => u.Vehicles)
@@ -95,6 +96,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<PagedResultDTO<UserAdminSummaryDTO>> GetAllCustomersAsync(int page, int pageSize, string? searchKeyword, string? statusFilter)
         {
             var query = _context.Users
+                .AsNoTracking()
                 .Include(u => u.CustomerProfile)
                     .ThenInclude(cp => cp.Tier)
                 .Where(u => u.Role == UserRoles.Customer)

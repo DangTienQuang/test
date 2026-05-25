@@ -21,6 +21,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<List<ServiceDTO>> GetActiveServicesAsync()
         {
             var services = await _context.Services
+                .AsNoTracking()
                 .Include(s => s.ServicePrices)
                     .ThenInclude(sp => sp.VehicleType)
                 .Where(s => s.IsActive) 
@@ -32,6 +33,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<List<ServiceDTO>> GetAllServicesAsync()
         {
             var services = await _context.Services
+                .AsNoTracking()
                 .Include(s => s.ServicePrices)
                     .ThenInclude(sp => sp.VehicleType)
                 .ToListAsync();
@@ -42,6 +44,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<ServiceDTO> GetServiceByIdAsync(int id)
         {
             var service = await _context.Services
+                .AsNoTracking()
                 .Include(s => s.ServicePrices)
                     .ThenInclude(sp => sp.VehicleType)
                 .FirstOrDefaultAsync(s => s.ServiceId == id);

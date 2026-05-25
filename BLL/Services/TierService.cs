@@ -22,6 +22,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<List<TierResponseDTO>> GetTiersAsync()
         {
             return await _context.Tiers
+                .AsNoTracking()
                 .OrderBy(t => t.MinAccumulatedPoints)
                 .Select(t => new TierResponseDTO
                 {
