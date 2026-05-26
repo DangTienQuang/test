@@ -19,12 +19,14 @@ namespace AutoWashPro.BLL.Services
         private readonly AutoWashDbContext _context;
         private readonly PayOSClient _payOSClient;
         private readonly ILogger<WalletService> _logger;
+        private readonly ITierService _tierService;
 
-        public WalletService(AutoWashDbContext context, PayOSClient payOSClient, ILogger<WalletService> logger)
+        public WalletService(AutoWashDbContext context, PayOSClient payOSClient, ILogger<WalletService> logger, ITierService tierService)
         {
             _context = context;
             _payOSClient = payOSClient;
             _logger = logger;
+            _tierService = tierService;
         }
 
         public async Task<WalletResponseDTO> GetWalletInfoAsync(int userId)
@@ -236,7 +238,10 @@ namespace AutoWashPro.BLL.Services
 
             try
             {
-                var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
+                var profile = await _context.CustomerProfiles
+                    .Include(cp => cp.Tier)
+                    .FirstOrDefaultAsync(cp => cp.UserId == userId);
+
                 if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
 
                 profile.TotalPoint += pointsEarned;
@@ -251,6 +256,8 @@ namespace AutoWashPro.BLL.Services
                     ReferenceBookingId = bookingId,
                     TransactionDate = DateTime.UtcNow
                 });
+
+                await _tierService.EvaluateTierForProfileAsync(profile);
 
                 await _context.SaveChangesAsync();
                 return pointsEarned;

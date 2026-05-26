@@ -148,7 +148,6 @@ namespace AutoWashPro.BLL.Services
                         {
                             await _walletService.AwardCompletionPointsAsync(
                                 booking.UserId.Value, pointsEarned, booking.BookingId);
-                            await _tierService.EvaluateAndUpgradeTierAsync(booking.UserId.Value);
                         }
                     }
 
