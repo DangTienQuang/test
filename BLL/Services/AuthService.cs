@@ -6,16 +6,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System;
-using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text;
 using System.Threading.Tasks;
-using System.Threading.Tasks;
+using AutoWashPro.BLL.Exceptions;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -31,12 +29,12 @@ namespace AutoWashPro.BLL.Services
         }
         public async Task<AuthResponseDTO> RegisterAsync(RegisterDTO request)
         {
-            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber);
-            if (existingUser != null) throw new Exception("Số điện thoại này đã được đăng ký.");
-
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             try
             {
+                var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber);
+                if (existingUser != null) throw new BadRequestException("Số điện thoại này đã được đăng ký.");
+
                 var defaultTier = await _context.Tiers.FirstOrDefaultAsync(t => t.MinAccumulatedPoints == 0);
 
                 if (defaultTier == null)
@@ -86,7 +84,12 @@ namespace AutoWashPro.BLL.Services
                 await transaction.CommitAsync();
                 return await LoginAsync(new LoginDTO { PhoneOrEmail = request.PhoneNumber, Password = request.Password });
             }
-            catch (Exception)
+            catch (DbUpdateException)
+            {
+                await transaction.RollbackAsync();
+                throw new BadRequestException("Số điện thoại này đã được đăng ký.");
+            }
+            catch
             {
                 await transaction.RollbackAsync();
                 throw;
@@ -100,10 +103,10 @@ namespace AutoWashPro.BLL.Services
                 .FirstOrDefaultAsync(u => u.PhoneNumber == loginInput || (u.Email != null && u.Email.ToLower() == loginInput));
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-                throw new Exception("Số điện thoại/Email hoặc mật khẩu không chính xác.");
+                throw new UnauthorizedException("Số điện thoại/Email hoặc mật khẩu không chính xác.");
 
             if (user.Status != "Active")
-                throw new Exception("Tài khoản đã bị khóa hoặc không hoạt động.");
+                throw new UnauthorizedException("Tài khoản đã bị khóa hoặc không hoạt động.");
 
             var token = CreateJwtToken(user);
             var refreshToken = GenerateRefreshToken();
@@ -126,10 +129,10 @@ namespace AutoWashPro.BLL.Services
         public async Task<AuthResponseDTO> RefreshTokenAsync(RefreshTokenDTO request)
         {
             var principal = GetPrincipalFromExpiredToken(request.AccessToken);
-            if (principal == null) throw new Exception("Access token không hợp lệ.");
+            if (principal == null) throw new UnauthorizedException("Access token không hợp lệ.");
 
             var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userIdClaim)) throw new Exception("Token không chứa thông tin User.");
+            if (string.IsNullOrEmpty(userIdClaim)) throw new UnauthorizedException("Token không chứa thông tin User.");
 
             int userId = int.Parse(userIdClaim);
             var user = await _context.Users
@@ -137,7 +140,7 @@ namespace AutoWashPro.BLL.Services
                 .FirstOrDefaultAsync(u => u.UserId == userId);
 
             if (user == null || user.RefreshToken != request.RefreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
-                throw new Exception("Refresh token không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.");
+                throw new UnauthorizedException("Refresh token không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.");
 
             var newAccessToken = CreateJwtToken(user);
             var newRefreshToken = GenerateRefreshToken();
@@ -159,10 +162,10 @@ namespace AutoWashPro.BLL.Services
         public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDTO request)
         {
             var user = await _context.Users.FindAsync(userId);
-            if (user == null) throw new Exception("Không tìm thấy người dùng.");
+            if (user == null) throw new NotFoundException("Không tìm thấy người dùng.");
 
             if (!BCrypt.Net.BCrypt.Verify(request.OldPassword, user.PasswordHash))
-                throw new Exception("Mật khẩu cũ không chính xác.");
+                throw new BadRequestException("Mật khẩu cũ không chính xác.");
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
             await _context.SaveChangesAsync();

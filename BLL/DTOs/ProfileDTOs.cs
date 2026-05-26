@@ -40,6 +40,7 @@ namespace AutoWashPro.BLL.DTOs
 
     public class UpdateUserProfileDTO
     {
+        [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Họ tên không được chỉ chứa khoảng trắng.")]
         public string? FullName { get; set; }
 
         [RegularExpression(@"^(0[3|5|7|8|9])+([0-9]{8})$", ErrorMessage = "Số điện thoại không hợp lệ.")]

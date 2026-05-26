@@ -22,62 +22,35 @@ namespace AutoWashPro.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDTO request)
         {
-            try
-            {
-                var result = await _authService.RegisterAsync(request);
-                return Created("", new { statusCode = 201, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            var result = await _authService.RegisterAsync(request);
+            return Created("", new { statusCode = 201, message = "Success", data = result });
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDTO request)
         {
-            try
-            {
-                var result = await _authService.LoginAsync(request);
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return Unauthorized(new { statusCode = 401, message = ex.Message });
-            }
+            var result = await _authService.LoginAsync(request);
+            return Ok(new { statusCode = 200, message = "Success", data = result });
         }
+
         [HttpPost("refresh-token")]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDTO request)
         {
-            try
-            {
-                var result = await _authService.RefreshTokenAsync(request);
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return Unauthorized(new { statusCode = 401, message = ex.Message });
-            }
+            var result = await _authService.RefreshTokenAsync(request);
+            return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
         [Authorize] 
         [HttpPost("change-password")]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDTO request)
         {
-            try
-            {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (userIdClaim == null) return Unauthorized(new { statusCode = 401, message = "Unauthorized" });
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userIdClaim == null) return Unauthorized(new { statusCode = 401, message = "Unauthorized" });
 
-                int userId = int.Parse(userIdClaim);
-                await _authService.ChangePasswordAsync(userId, request);
+            int userId = int.Parse(userIdClaim);
+            await _authService.ChangePasswordAsync(userId, request);
 
-                return Ok(new { statusCode = 200, message = "Đổi mật khẩu thành công." });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            return Ok(new { statusCode = 200, message = "Đổi mật khẩu thành công." });
         }
     }
 }

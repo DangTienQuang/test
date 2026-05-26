@@ -13,10 +13,11 @@ namespace AutoWashPro.BLL.DTOs
         public string Email { get; set; }
 
         [Required(ErrorMessage = "Mật khẩu không được để trống.")]
-        [MinLength(6, ErrorMessage = "Mật khẩu phải có ít nhất 6 ký tự.")]
+        [RegularExpression(@"^(?=.*[A-Z])(?=.*\d).{8,}$", ErrorMessage = "Mật khẩu phải có ít nhất 8 ký tự, gồm 1 chữ hoa và 1 chữ số.")]
         public string Password { get; set; }
 
         [Required(ErrorMessage = "Họ tên không được để trống.")]
+        [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Họ tên không được chỉ chứa khoảng trắng.")]
         public string FullName { get; set; }
     }
 
@@ -53,7 +54,7 @@ namespace AutoWashPro.BLL.DTOs
         public string OldPassword { get; set; }
 
         [Required(ErrorMessage = "Mật khẩu mới không được để trống.")]
-        [MinLength(6, ErrorMessage = "Mật khẩu mới phải có ít nhất 6 ký tự.")]
+        [RegularExpression(@"^(?=.*[A-Z])(?=.*\d).{8,}$", ErrorMessage = "Mật khẩu mới phải có ít nhất 8 ký tự, gồm 1 chữ hoa và 1 chữ số.")]
         public string NewPassword { get; set; }
     }
 }
