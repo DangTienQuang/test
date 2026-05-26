@@ -174,70 +174,91 @@ namespace AutoWashPro.BLL.Services
 
         public async Task DeductSpendablePointsAsync(int userId, int pointsToDeduct, string reason)
         {
-            if (pointsToDeduct <= 0) return;
+            if (pointsToDeduct <= 0) throw new BadRequestException("Điểm trừ phải lớn hơn 0.");
 
-            var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
-            if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
-
-            if (profile.TotalPoint < pointsToDeduct)
-                throw new BadRequestException($"Không đủ điểm khả dụng. Bạn có {profile.TotalPoint} điểm.");
-
-            profile.TotalPoint -= pointsToDeduct;
-
-            _context.PointLedgers.Add(new PointLedger
+            try
             {
-                UserId = userId,
-                PointsDeducted = pointsToDeduct,
-                Reason = reason,
-                TransactionDate = DateTime.UtcNow
-            });
+                var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
+                if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
 
-            await _context.SaveChangesAsync();
+                if (profile.TotalPoint < pointsToDeduct)
+                    throw new BadRequestException($"Không đủ điểm khả dụng. Bạn có {profile.TotalPoint} điểm.");
+
+                profile.TotalPoint -= pointsToDeduct;
+
+                _context.PointLedgers.Add(new PointLedger
+                {
+                    UserId = userId,
+                    PointsDeducted = pointsToDeduct,
+                    Reason = reason,
+                    TransactionDate = DateTime.UtcNow
+                });
+
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new BadRequestException("Dữ liệu đã bị thay đổi bởi giao dịch khác. Vui lòng thử lại.");
+            }
         }
 
         public async Task RefundSpendablePointsAsync(int userId, int pointsToRefund, string reason, int? referenceBookingId = null)
         {
-            if (pointsToRefund <= 0) return;
+            if (pointsToRefund <= 0) throw new BadRequestException("Điểm hoàn phải lớn hơn 0.");
 
-            var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
-            if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
-
-            profile.TotalPoint += pointsToRefund;
-
-            _context.PointLedgers.Add(new PointLedger
+            try
             {
-                UserId = userId,
-                PointsAdded = pointsToRefund,
-                Reason = reason,
-                ReferenceBookingId = referenceBookingId,
-                TransactionDate = DateTime.UtcNow
-            });
+                var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
+                if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
 
-            await _context.SaveChangesAsync();
+                profile.TotalPoint += pointsToRefund;
+
+                _context.PointLedgers.Add(new PointLedger
+                {
+                    UserId = userId,
+                    PointsAdded = pointsToRefund,
+                    Reason = reason,
+                    ReferenceBookingId = referenceBookingId,
+                    TransactionDate = DateTime.UtcNow
+                });
+
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new BadRequestException("Dữ liệu đã bị thay đổi bởi giao dịch khác. Vui lòng thử lại.");
+            }
         }
 
         public async Task<int> AwardCompletionPointsAsync(int userId, int pointsEarned, int bookingId)
         {
-            if (pointsEarned <= 0) return 0;
+            if (pointsEarned <= 0) throw new BadRequestException("Điểm thưởng phải lớn hơn 0.");
 
-            var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
-            if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
-
-            profile.TotalPoint += pointsEarned;
-            profile.PromotionPoint += pointsEarned;
-
-            _context.PointLedgers.Add(new PointLedger
+            try
             {
-                UserId = userId,
-                PointsAdded = pointsEarned,
-                Reason = $"{PointConstants.CompletionReasonPrefix} #{bookingId}",
-                ExpiryDate = DateTime.UtcNow.AddMonths(12),
-                ReferenceBookingId = bookingId,
-                TransactionDate = DateTime.UtcNow
-            });
+                var profile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
+                if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
 
-            await _context.SaveChangesAsync();
-            return pointsEarned;
+                profile.TotalPoint += pointsEarned;
+                profile.PromotionPoint += pointsEarned;
+
+                _context.PointLedgers.Add(new PointLedger
+                {
+                    UserId = userId,
+                    PointsAdded = pointsEarned,
+                    Reason = $"{PointConstants.CompletionReasonPrefix} #{bookingId}",
+                    ExpiryDate = DateTime.UtcNow.AddMonths(12),
+                    ReferenceBookingId = bookingId,
+                    TransactionDate = DateTime.UtcNow
+                });
+
+                await _context.SaveChangesAsync();
+                return pointsEarned;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new BadRequestException("Dữ liệu đã bị thay đổi bởi giao dịch khác. Vui lòng thử lại.");
+            }
         }
     }
 }

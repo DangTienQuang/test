@@ -22,58 +22,30 @@ namespace AutoWashPro.API.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateVehicleTypeDTO request)
         {
-            try
-            {
-                var result = await _typeService.CreateAsync(request);
-                return Created("", new { statusCode = 201, message = "Thêm loại xe thành công.", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            var result = await _typeService.CreateAsync(request);
+            return Created("", new { statusCode = 201, message = "Thêm loại xe thành công.", data = result });
         }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] CreateVehicleTypeDTO request)
         {
-            try
-            {
-                await _typeService.UpdateAsync(id, request);
-                return Ok(new { statusCode = 200, message = "Cập nhật loại xe thành công." });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            await _typeService.UpdateAsync(id, request);
+            return Ok(new { statusCode = 200, message = "Cập nhật loại xe thành công." });
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            try
-            {
-                await _typeService.DeleteAsync(id);
-                return Ok(new { statusCode = 200, message = "Xóa loại xe thành công." });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            await _typeService.DeleteAsync(id);
+            return Ok(new { statusCode = 200, message = "Xóa loại xe thành công." });
         }
 
         [AllowAnonymous]
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            try
-            {
-                var result = await _typeService.GetAllAsync();
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            var result = await _typeService.GetAllAsync();
+            return Ok(new { statusCode = 200, message = "Success", data = result });
         }
     }
 }

@@ -75,7 +75,8 @@ namespace AutoWashPro.BLL.Services
                 .Include(cp => cp.Tier)
                 .FirstOrDefaultAsync(cp => cp.UserId == userId);
 
-            if (profile?.Tier == null) return null;
+            if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
+            if (profile.Tier == null) throw new NotFoundException("Khách hàng chưa có hạng thành viên hợp lệ.");
 
             var eligibleTier = await _context.Tiers
                 .Where(t => t.MinAccumulatedPoints <= profile.PromotionPoint)

@@ -6,6 +6,7 @@ using AutoWashPro.BLL.DTOs;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
+using AutoWashPro.BLL.Exceptions;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -31,12 +32,13 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<VehicleTypeDTO> CreateAsync(CreateVehicleTypeDTO request)
         {
-            var typeExists = await _context.VehicleTypes.AnyAsync(t => t.Name.ToLower() == request.Name.ToLower());
-            if (typeExists) throw new Exception("Loại xe này đã tồn tại.");
+            var typeName = request.Name.Trim();
+            var typeExists = await _context.VehicleTypes.AnyAsync(t => t.Name.ToLower() == typeName.ToLower());
+            if (typeExists) throw new BadRequestException("Loại xe này đã tồn tại.");
 
             var type = new VehicleType
             {
-                Name = request.Name,
+                Name = typeName,
                 Description = request.Description
             };
 
@@ -49,12 +51,13 @@ namespace AutoWashPro.BLL.Services
         public async Task<bool> UpdateAsync(int id, CreateVehicleTypeDTO request)
         {
             var type = await _context.VehicleTypes.FindAsync(id);
-            if (type == null) throw new Exception("Không tìm thấy loại xe.");
+            if (type == null) throw new NotFoundException("Không tìm thấy loại xe.");
 
-            var typeExists = await _context.VehicleTypes.AnyAsync(t => t.Id != id && t.Name.ToLower() == request.Name.ToLower());
-            if (typeExists) throw new Exception("Tên loại xe đã bị trùng.");
+            var typeName = request.Name.Trim();
+            var typeExists = await _context.VehicleTypes.AnyAsync(t => t.Id != id && t.Name.ToLower() == typeName.ToLower());
+            if (typeExists) throw new BadRequestException("Tên loại xe đã bị trùng.");
 
-            type.Name = request.Name;
+            type.Name = typeName;
             type.Description = request.Description;
             await _context.SaveChangesAsync();
 
@@ -64,9 +67,9 @@ namespace AutoWashPro.BLL.Services
         public async Task<bool> DeleteAsync(int id)
         {
             var type = await _context.VehicleTypes.Include(t => t.Vehicles).FirstOrDefaultAsync(t => t.Id == id);
-            if (type == null) throw new Exception("Không tìm thấy loại xe.");
+            if (type == null) throw new NotFoundException("Không tìm thấy loại xe.");
 
-            if (type.Vehicles.Any()) throw new Exception("Không thể xóa loại xe này vì đã có phương tiện của khách hàng đang sử dụng.");
+            if (type.Vehicles.Any()) throw new BadRequestException("Không thể xóa loại xe này vì đã có phương tiện của khách hàng đang sử dụng.");
 
             _context.VehicleTypes.Remove(type);
             await _context.SaveChangesAsync();
