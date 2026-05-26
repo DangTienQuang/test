@@ -23,39 +23,25 @@ namespace AutoWashPro.API.Controllers
         [HttpGet("me")]
         public async Task<IActionResult> GetMyProfile()
         {
-            try
-            {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (userIdClaim == null) return Unauthorized(new { statusCode = 401, message = "Unauthorized" });
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userIdClaim == null) return Unauthorized(new { statusCode = 401, message = "Unauthorized" });
 
-                int userId = int.Parse(userIdClaim);
-                var result = await _userService.GetProfileAsync(userId);
+            int userId = int.Parse(userIdClaim);
+            var result = await _userService.GetProfileAsync(userId);
 
-                return Ok(new { statusCode = 200, message = "Success", data = result });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
         [HttpPut("me")]
         public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateUserProfileDTO request)
         {
-            try
-            {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (userIdClaim == null) return Unauthorized(new { statusCode = 401, message = "Unauthorized" });
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userIdClaim == null) return Unauthorized(new { statusCode = 401, message = "Unauthorized" });
 
-                int userId = int.Parse(userIdClaim);
-                await _userService.UpdateProfileAsync(userId, request);
+            int userId = int.Parse(userIdClaim);
+            await _userService.UpdateProfileAsync(userId, request);
 
-                return Ok(new { statusCode = 200, message = "Cập nhật thông tin cá nhân thành công." });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { statusCode = 400, message = ex.Message });
-            }
+            return Ok(new { statusCode = 200, message = "Cập nhật thông tin cá nhân thành công." });
         }
     }
 }

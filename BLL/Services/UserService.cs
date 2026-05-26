@@ -7,6 +7,7 @@ using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 using AutoWashPro.BLL.Constants;
+using AutoWashPro.BLL.Exceptions;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -28,7 +29,7 @@ namespace AutoWashPro.BLL.Services
                     .ThenInclude(v => v.VehicleType) 
                 .FirstOrDefaultAsync(u => u.UserId == userId);
 
-            if (user == null) throw new Exception("Không tìm thấy người dùng.");
+            if (user == null) throw new NotFoundException("Không tìm thấy người dùng.");
 
             return new UserProfileDTO
             {
@@ -54,7 +55,7 @@ namespace AutoWashPro.BLL.Services
                 .FirstOrDefaultAsync(u => u.UserId == userId);
 
             if (user == null || user.CustomerProfile == null)
-                throw new Exception("Không tìm thấy dữ liệu người dùng.");
+                throw new NotFoundException("Không tìm thấy dữ liệu người dùng.");
 
             bool isUpdated = false;
             if (!string.IsNullOrWhiteSpace(request.FullName) && user.CustomerProfile.FullName != request.FullName.Trim())
@@ -67,7 +68,7 @@ namespace AutoWashPro.BLL.Services
                 string newPhone = request.PhoneNumber.Trim();
                 bool phoneExists = await _context.Users.AnyAsync(u => u.PhoneNumber == newPhone && u.UserId != userId);
                 if (phoneExists)
-                    throw new Exception("Số điện thoại này đã được sử dụng bởi tài khoản khác.");
+                    throw new BadRequestException("Số điện thoại này đã được sử dụng bởi tài khoản khác.");
 
                 user.PhoneNumber = newPhone;
                 isUpdated = true;
@@ -79,7 +80,7 @@ namespace AutoWashPro.BLL.Services
 
                 bool emailExists = await _context.Users.AnyAsync(u => u.Email == newEmail && u.UserId != userId);
                 if (emailExists)
-                    throw new Exception("Email này đã được sử dụng bởi tài khoản khác.");
+                    throw new BadRequestException("Email này đã được sử dụng bởi tài khoản khác.");
 
                 user.Email = newEmail;
                 isUpdated = true;
@@ -141,7 +142,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<UserProfileDTO> GetCustomerDetailByAdminAsync(int customerId)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == customerId);
-            if (user == null || user.Role != UserRoles.Customer) throw new Exception("Không tìm thấy khách hàng này.");
+            if (user == null || user.Role != UserRoles.Customer) throw new NotFoundException("Không tìm thấy khách hàng này.");
 
             return await GetProfileAsync(customerId);
         }
@@ -149,9 +150,9 @@ namespace AutoWashPro.BLL.Services
         public async Task<bool> UpdateCustomerStatusAsync(int customerId, string newStatus)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == customerId);
-            if (user == null || user.Role != UserRoles.Customer) throw new Exception("Không tìm thấy khách hàng này.");
+            if (user == null || user.Role != UserRoles.Customer) throw new NotFoundException("Không tìm thấy khách hàng này.");
 
-            if (user.Status == newStatus) throw new Exception($"Tài khoản đã ở trạng thái {newStatus} từ trước.");
+            if (user.Status == newStatus) throw new BadRequestException($"Tài khoản đã ở trạng thái {newStatus} từ trước.");
 
             user.Status = newStatus;
             await _context.SaveChangesAsync();
