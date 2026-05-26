@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoWashPro.BLL.Exceptions;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -33,17 +34,19 @@ namespace AutoWashPro.BLL.Services
         public async Task<bool> AddVehicleAsync(int userId, CreateVehicleDTO request)
         {
             var vehicleCount = await _context.Vehicles.CountAsync(v => v.UserId == userId);
-            if (vehicleCount >= 5) throw new Exception("Bạn chỉ được thêm tối đa 5 xe.");
+            if (vehicleCount >= 5) throw new BadRequestException("Bạn chỉ được thêm tối đa 5 xe.");
 
-            var existingVehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == request.LicensePlate);
-            if (existingVehicle != null) throw new Exception("Biển số xe này đã tồn tại trong hệ thống.");
+            var normalizedPlate = request.LicensePlate.Trim().ToUpper();
+
+            var existingVehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == normalizedPlate);
+            if (existingVehicle != null) throw new BadRequestException("Biển số xe này đã tồn tại trong hệ thống.");
 
             var typeExists = await _context.VehicleTypes.AnyAsync(t => t.Id == request.VehicleTypeId);
-            if (!typeExists) throw new Exception("Loại xe không hợp lệ.");
+            if (!typeExists) throw new BadRequestException("Loại xe không hợp lệ.");
 
             var vehicle = new Vehicle
             {
-                LicensePlate = request.LicensePlate,
+                LicensePlate = normalizedPlate,
                 VehicleTypeId = request.VehicleTypeId,
                 UserId = userId
             };
@@ -56,13 +59,13 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<bool> UpdateVehicleAsync(int userId, string licensePlate, UpdateVehicleDTO request)
         {
-            licensePlate = Uri.UnescapeDataString(licensePlate);
+            licensePlate = Uri.UnescapeDataString(licensePlate).Trim().ToUpper();
 
             var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && v.UserId == userId);
-            if (vehicle == null) throw new Exception("Không tìm thấy phương tiện hoặc bạn không có quyền thao tác trên xe này.");
+            if (vehicle == null) throw new NotFoundException("Không tìm thấy phương tiện hoặc bạn không có quyền thao tác trên xe này.");
 
             var typeExists = await _context.VehicleTypes.AnyAsync(t => t.Id == request.VehicleTypeId);
-            if (!typeExists) throw new Exception("Loại xe không hợp lệ.");
+            if (!typeExists) throw new BadRequestException("Loại xe không hợp lệ.");
 
             vehicle.VehicleTypeId = request.VehicleTypeId;
             await _context.SaveChangesAsync();
@@ -72,10 +75,10 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<bool> DeleteVehicleAsync(int userId, string licensePlate)
         {
-            licensePlate = Uri.UnescapeDataString(licensePlate);
+            licensePlate = Uri.UnescapeDataString(licensePlate).Trim().ToUpper();
 
             var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && v.UserId == userId);
-            if (vehicle == null) throw new Exception("Không tìm thấy phương tiện hoặc bạn không có quyền xóa xe này.");
+            if (vehicle == null) throw new NotFoundException("Không tìm thấy phương tiện hoặc bạn không có quyền xóa xe này.");
 
             _context.Vehicles.Remove(vehicle);
             await _context.SaveChangesAsync();
@@ -85,7 +88,7 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<VehicleRecognitionDTO> RecognizeVehicleAsync(string licensePlate)
         {
-            licensePlate = Uri.UnescapeDataString(licensePlate);
+            licensePlate = Uri.UnescapeDataString(licensePlate).Trim().ToUpper();
 
             var vehicle = await _context.Vehicles
                 .Include(v => v.VehicleType)
@@ -95,10 +98,10 @@ namespace AutoWashPro.BLL.Services
                 .FirstOrDefaultAsync(v => v.LicensePlate == licensePlate);
 
             if (vehicle == null)
-                throw new Exception("Biển số xe chưa được đăng ký trên hệ thống.");
+                throw new NotFoundException("Biển số xe chưa được đăng ký trên hệ thống.");
 
             if (vehicle.User == null || vehicle.User.CustomerProfile == null)
-                throw new Exception("Lỗi dữ liệu: Xe không có thông tin chủ sở hữu.");
+                throw new BadRequestException("Lỗi dữ liệu: Xe không có thông tin chủ sở hữu.");
 
             var today = DateTime.UtcNow.Date;
             var activeBooking = await _context.Bookings
