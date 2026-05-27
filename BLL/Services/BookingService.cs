@@ -31,7 +31,11 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, DateTime targetDate)
         {
-            var userProfile = await _context.CustomerProfiles.Include(cp => cp.Tier).FirstOrDefaultAsync(cp => cp.UserId == userId);
+            var userProfile = await _context.CustomerProfiles
+                .AsNoTracking()
+                .Include(cp => cp.Tier)
+                .FirstOrDefaultAsync(cp => cp.UserId == userId);
+
             if (userProfile == null || userProfile.Tier == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy thông tin hạng thành viên.");
 
             var maxDate = DateTime.UtcNow.Date.AddDays(userProfile.Tier.BookingWindowDays);
@@ -40,12 +44,23 @@ namespace AutoWashPro.BLL.Services
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Hạng {userProfile.Tier.TierName} chỉ được đặt trước từ hôm nay đến ngày {maxDate:dd/MM/yyyy}.");
             }
 
-            var allSlots = await _context.TimeSlots.OrderBy(s => s.StartTime).ToListAsync();
+            var allSlots = await _context.TimeSlots
+                .AsNoTracking()
+                .OrderBy(s => s.StartTime)
+                .ToListAsync();
             var response = new List<TimeSlotResponseDTO>();
 
-            var existingBookings = await _context.Bookings
+            // Optimize: Instead of fetching full booking entities and doing O(n*m) count,
+            // project only ScheduledTime and group them into an O(1) dictionary lookup.
+            var existingBookingTimes = await _context.Bookings
+                .AsNoTracking()
                 .Where(b => b.ScheduledTime.Date == targetDate.Date && (b.Status == "Pending" || b.Status == "CheckedIn"))
+                .Select(b => b.ScheduledTime)
                 .ToListAsync();
+
+            var bookedCountsDict = existingBookingTimes
+                .GroupBy(t => t.TimeOfDay)
+                .ToDictionary(g => g.Key, g => g.Count());
 
             bool isVip = userProfile.Tier.TierName.ToLower() == "gold" || userProfile.Tier.TierName.ToLower() == "platinum";
 
@@ -71,7 +86,7 @@ namespace AutoWashPro.BLL.Services
                     slotDto.Reason = "Đã qua giờ";
                 }
 
-                var bookedCount = existingBookings.Count(b => b.ScheduledTime.TimeOfDay == slot.StartTime);
+                var bookedCount = bookedCountsDict.GetValueOrDefault(slot.StartTime, 0);
                 if (bookedCount >= slot.MaxCapacity)
                 {
                     slotDto.IsAvailable = false;
