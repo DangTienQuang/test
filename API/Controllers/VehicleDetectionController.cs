@@ -1,4 +1,5 @@
-﻿using BLL.Services;
+﻿using AutoWashPro.BLL.Exceptions;
+using BLL.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers
@@ -14,13 +15,12 @@ namespace API.Controllers
             _plateService = plateService;
         }
 
-        // ── Single image ─────────────────────────────────────────────────────
         [HttpPost("detect-plate")]
         [RequestSizeLimit(10 * 1024 * 1024)]
         public async Task<IActionResult> DetectPlate(IFormFile image)
         {
             if (image == null || image.Length == 0)
-                return BadRequest(new { statusCode = 400, message = "No image provided." });
+                throw new BadRequestException("No image provided.");
 
             using var ms = new MemoryStream();
             await image.CopyToAsync(ms);
@@ -28,7 +28,7 @@ namespace API.Controllers
             var result = await _plateService.DetectPlateAsync(ms.ToArray());
 
             if (!result.Detected)
-                return NotFound(new { statusCode = 404, message = "No license plate detected." });
+                throw new NotFoundException("No license plate detected.");
 
             return Ok(new
             {
@@ -42,7 +42,6 @@ namespace API.Controllers
             });
         }
 
-        // ── Dual camera ──────────────────────────────────────────────────────
         [HttpPost("detect-dual-plate")]
         [RequestSizeLimit(20 * 1024 * 1024)]
         public async Task<IActionResult> DetectDualPlate(
@@ -50,7 +49,7 @@ namespace API.Controllers
             IFormFile? backImage)
         {
             if (frontImage == null && backImage == null)
-                return BadRequest(new { statusCode = 400, message = "At least one image required." });
+                throw new BadRequestException("At least one image required.");
 
             byte[]? frontBytes = null;
             byte[]? backBytes = null;
@@ -72,7 +71,7 @@ namespace API.Controllers
             var result = await _plateService.DetectDualPlateAsync(frontBytes, backBytes);
 
             if (!result.Detected)
-                return NotFound(new { statusCode = 404, message = "No license plate detected." });
+                throw new NotFoundException("No license plate detected.");
 
             return Ok(new
             {
