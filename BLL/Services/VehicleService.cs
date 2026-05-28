@@ -31,12 +31,18 @@ namespace AutoWashPro.BLL.Services
                 }).ToListAsync();
         }
 
+        private string NormalizeLicensePlate(string plate)
+        {
+            if (string.IsNullOrWhiteSpace(plate)) return string.Empty;
+            return new string(plate.Where(char.IsLetterOrDigit).ToArray()).ToUpper();
+        }
+
         public async Task<bool> AddVehicleAsync(int userId, CreateVehicleDTO request)
         {
             var vehicleCount = await _context.Vehicles.CountAsync(v => v.UserId == userId);
             if (vehicleCount >= 5) throw new BadRequestException("Bạn chỉ được thêm tối đa 5 xe.");
 
-            var normalizedPlate = request.LicensePlate.Trim().ToUpper();
+            var normalizedPlate = NormalizeLicensePlate(request.LicensePlate);
 
             var existingVehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == normalizedPlate);
             if (existingVehicle != null) throw new BadRequestException("Biển số xe này đã tồn tại trong hệ thống.");
@@ -59,7 +65,7 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<bool> UpdateVehicleAsync(int userId, string licensePlate, UpdateVehicleDTO request)
         {
-            licensePlate = Uri.UnescapeDataString(licensePlate).Trim().ToUpper();
+            licensePlate = NormalizeLicensePlate(Uri.UnescapeDataString(licensePlate));
 
             var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && v.UserId == userId);
             if (vehicle == null) throw new NotFoundException("Không tìm thấy phương tiện hoặc bạn không có quyền thao tác trên xe này.");
@@ -75,7 +81,7 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<bool> DeleteVehicleAsync(int userId, string licensePlate)
         {
-            licensePlate = Uri.UnescapeDataString(licensePlate).Trim().ToUpper();
+            licensePlate = NormalizeLicensePlate(Uri.UnescapeDataString(licensePlate));
 
             var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && v.UserId == userId);
             if (vehicle == null) throw new NotFoundException("Không tìm thấy phương tiện hoặc bạn không có quyền xóa xe này.");
@@ -88,7 +94,7 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<VehicleRecognitionDTO> RecognizeVehicleAsync(string licensePlate)
         {
-            licensePlate = Uri.UnescapeDataString(licensePlate).Trim().ToUpper();
+            licensePlate = NormalizeLicensePlate(Uri.UnescapeDataString(licensePlate));
 
             var vehicle = await _context.Vehicles
                 .Include(v => v.VehicleType)
