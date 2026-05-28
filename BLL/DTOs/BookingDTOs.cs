@@ -38,6 +38,18 @@ namespace AutoWashPro.BLL.DTOs
         public int? VoucherId { get; set; }
     }
 
+    public class CreateWalkInBookingDTO
+    {
+        [Required(ErrorMessage = "Vui lòng chọn ít nhất 1 xe.")]
+        public required List<VehicleBookingItemDTO> Vehicles { get; set; }
+
+        public int UserId { get; set; } // Walk-ins might have user ID provided by Staff
+
+        public int PointsToUse { get; set; } = 0;
+
+        public int? VoucherId { get; set; }
+    }
+
     public class BookingResponseDTO
     {
         public int BookingId { get; set; }
@@ -49,5 +61,14 @@ namespace AutoWashPro.BLL.DTOs
         public decimal PointDiscountAmount { get; set; }
         public decimal VoucherDiscountAmount { get; set; }
         public decimal FinalAmount { get; set; }
+    }
+
+    public class UpdateVehicleConditionDTO
+    {
+        [Required]
+        public int DetailId { get; set; }
+
+        [Required]
+        public DAL.Entities.VehicleCondition Condition { get; set; }
     }
 }
