@@ -571,25 +571,47 @@ namespace AutoWashPro.BLL.Services
                 booking.OriginalPrice += surchargeDiff;
                 booking.FinalAmount += surchargeDiff;
 
-                if (surchargeDiff > 0 && booking.UserId.HasValue)
+                if (surchargeDiff != 0 && booking.UserId.HasValue)
                 {
                     var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == booking.UserId.Value);
-                    if (wallet == null || wallet.Balance < surchargeDiff)
+                    if (wallet != null)
                     {
-                        throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Khách hàng không đủ số dư để thanh toán phụ phí. Cần thêm: {surchargeDiff:N0}đ");
+                        if (surchargeDiff > 0)
+                        {
+                            if (wallet.Balance < surchargeDiff)
+                            {
+                                throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Khách hàng không đủ số dư để thanh toán phụ phí. Cần thêm: {surchargeDiff:N0}đ");
+                            }
+
+                            wallet.Balance -= surchargeDiff;
+
+                            var paymentTx = new Transaction
+                            {
+                                WalletId = wallet.WalletId,
+                                Amount = -surchargeDiff,
+                                TransactionType = "Payment",
+                                Description = $"Thanh toán phụ phí do xe dơ cho lịch #{booking.BookingId}",
+                                ReferenceBookingId = booking.BookingId
+                            };
+                            _context.Transactions.Add(paymentTx);
+                        }
+                        else if (surchargeDiff < 0)
+                        {
+                            // Refund for downgrading condition
+                            decimal refundAmount = Math.Abs(surchargeDiff);
+                            wallet.Balance += refundAmount;
+
+                            var refundTx = new Transaction
+                            {
+                                WalletId = wallet.WalletId,
+                                Amount = refundAmount,
+                                TransactionType = "Refund",
+                                Description = $"Hoàn tiền phụ phí do thay đổi tình trạng xe cho lịch #{booking.BookingId}",
+                                ReferenceBookingId = booking.BookingId
+                            };
+                            _context.Transactions.Add(refundTx);
+                        }
                     }
-
-                    wallet.Balance -= surchargeDiff;
-
-                    var paymentTx = new Transaction
-                    {
-                        WalletId = wallet.WalletId,
-                        Amount = -surchargeDiff,
-                        TransactionType = "Payment",
-                        Description = $"Thanh toán phụ phí do xe dơ cho lịch #{booking.BookingId}",
-                        ReferenceBookingId = booking.BookingId
-                    };
-                    _context.Transactions.Add(paymentTx);
                 }
 
                 await _context.SaveChangesAsync();
