@@ -17,7 +17,7 @@ namespace AutoWashPro.BLL.DTOs
         public int VehicleTypeId { get; set; }
         public string VehicleTypeName { get; set; }
         public decimal Price { get; set; }
-        public int DurationMinutes { get; set; }
+        public int EstimatedDurationMinutes { get; set; }
     }
     public class CreateOrUpdateServiceDTO
     {
@@ -42,6 +42,6 @@ namespace AutoWashPro.BLL.DTOs
 
         [Required]
         [Range(5, 600, ErrorMessage = "Thời gian thực hiện (phút) phải từ 5 đến 600.")]
-        public int DurationMinutes { get; set; }
+        public int EstimatedDurationMinutes { get; set; }
     }
 }

@@ -65,7 +65,7 @@ namespace AutoWashPro.BLL.Services
                 {
                     VehicleTypeId = p.VehicleTypeId,
                     Price = p.Price,
-                    DurationMinutes = p.DurationMinutes
+                    EstimatedDurationMinutes = p.EstimatedDurationMinutes
                 }).ToList()
             };
 
@@ -96,7 +96,7 @@ namespace AutoWashPro.BLL.Services
             {
                 VehicleTypeId = p.VehicleTypeId,
                 Price = p.Price,
-                DurationMinutes = p.DurationMinutes
+                EstimatedDurationMinutes = p.EstimatedDurationMinutes
             }).ToList();
 
             await _context.SaveChangesAsync();
@@ -125,7 +125,7 @@ namespace AutoWashPro.BLL.Services
                     VehicleTypeId = sp.VehicleTypeId,
                     VehicleTypeName = sp.VehicleType?.Name ?? "N/A",
                     Price = sp.Price,
-                    DurationMinutes = sp.DurationMinutes
+                    EstimatedDurationMinutes = sp.EstimatedDurationMinutes
                 }).ToList()
             };
         }
