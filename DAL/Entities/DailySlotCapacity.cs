@@ -19,7 +19,7 @@ namespace AutoWashPro.DAL.Entities
         public DateTime Date { get; set; }
 
         [Required]
-        public int BookedCount { get; set; } = 0;
+        public int BookedWeight { get; set; } = 0;
 
         [Timestamp]
         public DateTime? RowVersion { get; set; }

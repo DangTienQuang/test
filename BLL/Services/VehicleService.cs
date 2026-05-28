@@ -110,9 +110,11 @@ namespace AutoWashPro.BLL.Services
                 throw new BadRequestException("Lỗi dữ liệu: Xe không có thông tin chủ sở hữu.");
 
             var today = DateTime.UtcNow.Date;
+
             var activeBooking = await _context.Bookings
-                .Where(b => b.LicensePlate == licensePlate
-                         && b.Status == "Pending"
+                .Include(b => b.BookingDetails)
+                .Where(b => b.BookingDetails.Any(bd => bd.LicensePlate == licensePlate)
+                         && (b.Status == "Pending" || b.Status == "CheckedIn")
                          && b.ScheduledTime.Date == today)
                 .OrderBy(b => b.ScheduledTime)
                 .FirstOrDefaultAsync();

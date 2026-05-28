@@ -12,15 +12,20 @@ namespace AutoWashPro.BLL.DTOs
         public string? Reason { get; set; }
     }
 
-    public class CreateBookingDTO
+    public class VehicleBookingItemDTO
     {
-        [Required(ErrorMessage = "Vui lòng chọn xe.")]
-        [MinLength(1, ErrorMessage = "Biển số xe không được để trống.")]
-        [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Biển số xe không hợp lệ (không được chỉ chứa khoảng trắng).")]
+        [Required]
+        [MaxLength(20)]
         public required string LicensePlate { get; set; }
 
         [Required]
         public int ServiceId { get; set; }
+    }
+
+    public class CreateBookingDTO
+    {
+        [Required(ErrorMessage = "Vui lòng chọn ít nhất 1 xe.")]
+        public required List<VehicleBookingItemDTO> Vehicles { get; set; }
 
         [Required]
         public DateTime ScheduledDate { get; set; }
