@@ -87,23 +87,25 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<List<BookingResponseDTO>> GetAllBookingsByDateAsync(DateTime targetDate)
         {
-            return await _context.Bookings
+            var bookings = await _context.Bookings
                 .Include(b => b.BookingDetails)
                 .ThenInclude(bd => bd.Service)
                 .Where(b => b.ScheduledTime.Date == targetDate.Date)
                 .OrderBy(b => b.ScheduledTime)
-                .Select(b => new BookingResponseDTO
-                {
-                    BookingId = b.BookingId,
-                    LicensePlate = string.Join(", ", b.BookingDetails.Select(d => d.LicensePlate)),
-                    ServiceName = string.Join(", ", b.BookingDetails.Select(d => d.Service.ServiceName)),
-                    ScheduledTime = b.ScheduledTime,
-                    Status = b.Status,
-                    OriginalPrice = b.OriginalPrice,
-                    PointDiscountAmount = b.PointDiscountAmount,
-                    VoucherDiscountAmount = b.VoucherDiscountAmount,
-                    FinalAmount = b.FinalAmount
-                }).ToListAsync();
+                .ToListAsync();
+
+            return bookings.Select(b => new BookingResponseDTO
+            {
+                BookingId = b.BookingId,
+                LicensePlate = string.Join(", ", b.BookingDetails.Select(d => d.LicensePlate)),
+                ServiceName = string.Join(", ", b.BookingDetails.Select(d => d.Service.ServiceName)),
+                ScheduledTime = b.ScheduledTime,
+                Status = b.Status,
+                OriginalPrice = b.OriginalPrice,
+                PointDiscountAmount = b.PointDiscountAmount,
+                VoucherDiscountAmount = b.VoucherDiscountAmount,
+                FinalAmount = b.FinalAmount
+            }).ToList();
         }
 
         public async Task<BookingResponseDTO> GetBookingByIdAsync(int userId, int bookingId)
@@ -173,6 +175,10 @@ namespace AutoWashPro.BLL.Services
             // PHASE 1: Basic Validation
             if (request.Vehicles == null || request.Vehicles.Count == 0)
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException("Giỏ hàng không có xe nào.");
+
+            var duplicatePlates = request.Vehicles.GroupBy(v => v.LicensePlate).Where(g => g.Count() > 1).Any();
+            if (duplicatePlates)
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Danh sách xe có chứa biển số bị trùng lặp.");
 
             var slot = await _context.TimeSlots.FindAsync(request.SlotId);
             if (slot == null)
@@ -247,14 +253,7 @@ namespace AutoWashPro.BLL.Services
                dailyCapacity = await _context.DailySlotCapacities.FirstAsync(dc => dc.SlotId == slot.SlotId && dc.Date == targetDateTime.Date);
             }
 
-            int currentBookedWeight = await _context.Bookings
-                .Where(b => b.ScheduledTime == targetDateTime && (b.Status == "Pending" || b.Status == "CheckedIn"))
-                .SelectMany(b => b.BookingDetails)
-                .Join(_context.Vehicles, bd => bd.LicensePlate, v => v.LicensePlate, (bd, v) => new { bd, v })
-                .Join(_context.ServicePrices, temp => new { ServiceId = temp.bd.ServiceId, VehicleTypeId = temp.v.VehicleTypeId }, sp => new { ServiceId = sp.ServiceId, VehicleTypeId = sp.VehicleTypeId }, (temp, sp) => sp)
-                .SumAsync(sp => (int?)sp.CapacityWeight) ?? 0;
-
-            if (currentBookedWeight + totalCapacityWeight > slot.MaxCapacity)
+            if (dailyCapacity.BookedWeight + totalCapacityWeight > slot.MaxCapacity)
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException("Xưởng không đủ sức chứa cho số lượng xe này. Vui lòng giảm bớt xe hoặc chọn khung giờ khác.");
 
             // PHASE 4: Financial Math
@@ -364,22 +363,24 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<List<BookingResponseDTO>> GetMyBookingsAsync(int userId)
         {
-            return await _context.Bookings
+            var bookings = await _context.Bookings
                 .Include(b => b.BookingDetails)
                 .ThenInclude(bd => bd.Service)
                 .Where(b => b.UserId == userId)
                 .OrderByDescending(b => b.ScheduledTime)
-                .Select(b => new BookingResponseDTO
-                {
-                    BookingId = b.BookingId,
-                    LicensePlate = string.Join(", ", b.BookingDetails.Select(d => d.LicensePlate)),
-                    ServiceName = string.Join(", ", b.BookingDetails.Select(d => d.Service.ServiceName)),
-                    ScheduledTime = b.ScheduledTime,
-                    Status = b.Status,
-                    OriginalPrice = b.OriginalPrice,
-                    PointDiscountAmount = b.PointDiscountAmount,
-                    FinalAmount = b.FinalAmount
-                }).ToListAsync();
+                .ToListAsync();
+
+            return bookings.Select(b => new BookingResponseDTO
+            {
+                BookingId = b.BookingId,
+                LicensePlate = string.Join(", ", b.BookingDetails.Select(d => d.LicensePlate)),
+                ServiceName = string.Join(", ", b.BookingDetails.Select(d => d.Service.ServiceName)),
+                ScheduledTime = b.ScheduledTime,
+                Status = b.Status,
+                OriginalPrice = b.OriginalPrice,
+                PointDiscountAmount = b.PointDiscountAmount,
+                FinalAmount = b.FinalAmount
+            }).ToList();
         }
 
         public async Task<bool> CancelBookingAsync(int userId, int bookingId)

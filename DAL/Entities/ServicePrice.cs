@@ -24,8 +24,5 @@ namespace AutoWashPro.DAL.Entities
         public int CapacityWeight { get; set; } = 1;
 
         public int EstimatedDurationMinutes { get; set; } = 30;
-
-        [Required]
-        public int DurationMinutes { get; set; }
     }
 }
