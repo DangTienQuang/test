@@ -46,6 +46,15 @@ namespace AutoWashPro.API.Controllers
             return Created("", new { statusCode = 201, message = "Đặt lịch và thanh toán cọc thành công.", data = result });
         }
 
+        [Authorize(Roles = "Staff,Manager,Admin")]
+        [HttpPost("walk-in")]
+        public async Task<IActionResult> CreateWalkInBooking([FromBody] CreateWalkInBookingDTO request)
+        {
+            int staffId = GetUserId();
+            var result = await _bookingService.CreateWalkInBookingAsync(staffId, request);
+            return Created("", new { statusCode = 201, message = "Tạo lịch vãng lai thành công.", data = result });
+        }
+
         [HttpGet("me")]
         public async Task<IActionResult> GetMyBookings()
         {
@@ -68,6 +77,15 @@ namespace AutoWashPro.API.Controllers
             int userId = GetUserId();
             await _bookingService.CancelBookingAsync(userId, id);
             return Ok(new { statusCode = 200, message = "Đã hủy lịch thành công." });
+        }
+
+        [Authorize(Roles = "Staff,Manager,Admin")]
+        [HttpPut("{id}/condition")]
+        public async Task<IActionResult> UpdateVehicleCondition(int id, [FromBody] UpdateVehicleConditionDTO request)
+        {
+            int staffId = GetUserId();
+            await _bookingService.UpdateVehicleConditionAsync(staffId, id, request);
+            return Ok(new { statusCode = 200, message = "Đã cập nhật tình trạng xe và áp dụng phụ phí thành công." });
         }
     }
 }
