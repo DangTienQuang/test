@@ -18,6 +18,7 @@ namespace AutoWashPro.DAL.Data
         public DbSet<Wallet> Wallets { get; set; }
         public DbSet<PointLedger> PointLedgers { get; set; }
         public DbSet<Booking> Bookings { get; set; }
+        public DbSet<BookingDetail> BookingDetails { get; set; }
         public DbSet<Transaction> Transactions { get; set; }
         public DbSet<Voucher> Vouchers { get; set; }
         public DbSet<UserVoucher> UserVouchers { get; set; }
@@ -42,6 +43,24 @@ namespace AutoWashPro.DAL.Data
             modelBuilder.Entity<DailySlotCapacity>()
                 .HasIndex(d => new { d.SlotId, d.Date })
                 .IsUnique();
+
+            modelBuilder.Entity<BookingDetail>()
+                .HasOne(bd => bd.Booking)
+                .WithMany(b => b.BookingDetails)
+                .HasForeignKey(bd => bd.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<BookingDetail>()
+                .HasOne(bd => bd.Service)
+                .WithMany()
+                .HasForeignKey(bd => bd.ServiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<BookingDetail>()
+                .HasOne(bd => bd.ActualVehicleType)
+                .WithMany()
+                .HasForeignKey(bd => bd.ActualVehicleTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

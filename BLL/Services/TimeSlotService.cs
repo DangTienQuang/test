@@ -121,7 +121,7 @@ namespace AutoWashPro.BLL.Services
                 throw new NotFoundException("Không tìm thấy khung giờ.");
             }
 
-            var isBooked = await _context.DailySlotCapacities.AnyAsync(dsc => dsc.SlotId == slotId && dsc.BookedCount > 0);
+            var isBooked = await _context.DailySlotCapacities.AnyAsync(dsc => dsc.SlotId == slotId && dsc.BookedWeight > 0);
             if (isBooked)
             {
                 throw new BadRequestException("Không thể xoá khung giờ này vì đã có người đặt lịch. Vui lòng kiểm tra lại.");

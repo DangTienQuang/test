@@ -13,14 +13,10 @@ namespace AutoWashPro.DAL.Entities
         public int? UserId { get; set; }
         public User? User { get; set; }
 
-        [Required]
-        [MaxLength(20)]
-        public required string LicensePlate { get; set; }
+        [MaxLength(255)]
+        public string? FallbackQrCode { get; set; }
 
-        [Required]
-        public int ServiceId { get; set; }
-        [ForeignKey("ServiceId")]
-        public Service Service { get; set; } = null!;
+        public int TrustScorePenalty { get; set; } = 0;
 
         [Required]
         public DateTime ScheduledTime { get; set; }
@@ -28,6 +24,8 @@ namespace AutoWashPro.DAL.Entities
         [Required]
         [MaxLength(20)]
         public string Status { get; set; } = "Pending";
+
+        public ICollection<BookingDetail> BookingDetails { get; set; } = new List<BookingDetail>();
 
         [Required]
         public decimal OriginalPrice { get; set; }
