@@ -543,33 +543,64 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<bool> UpdateVehicleConditionAsync(int staffId, int bookingId, UpdateVehicleConditionDTO request)
         {
-            var booking = await _context.Bookings
-                .Include(b => b.BookingDetails)
-                .FirstOrDefaultAsync(b => b.BookingId == bookingId);
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var booking = await _context.Bookings
+                    .Include(b => b.BookingDetails)
+                    .FirstOrDefaultAsync(b => b.BookingId == bookingId);
 
-            if (booking == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy lịch hẹn.");
-            if (booking.Status == "Completed" || booking.Status == "Cancelled")
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Không thể cập nhật xe cho lịch đã hoàn thành hoặc hủy.");
+                if (booking == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy lịch hẹn.");
+                if (booking.Status != "CheckedIn")
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Chỉ có thể cập nhật tình trạng xe khi xe đã Check-in tại trạm.");
 
-            var detail = booking.BookingDetails.FirstOrDefault(d => d.DetailId == request.DetailId);
-            if (detail == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy thông tin xe trong lịch hẹn này.");
+                var detail = booking.BookingDetails.FirstOrDefault(d => d.DetailId == request.DetailId);
+                if (detail == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy thông tin xe trong lịch hẹn này.");
 
-            detail.VehicleCondition = request.Condition;
+                detail.VehicleCondition = request.Condition;
 
-            decimal newSurcharge = 0;
-            if (request.Condition == VehicleCondition.Dirty)
-                newSurcharge = detail.Price * 0.2m; // 20% Upsell
-            else if (request.Condition == VehicleCondition.VeryDirty)
-                newSurcharge = detail.Price * 0.5m; // 50% Upsell
+                decimal newSurcharge = 0;
+                if (request.Condition == VehicleCondition.Dirty)
+                    newSurcharge = detail.Price * 0.2m; // 20% Upsell
+                else if (request.Condition == VehicleCondition.VeryDirty)
+                    newSurcharge = detail.Price * 0.5m; // 50% Upsell
 
-            decimal surchargeDiff = newSurcharge - detail.MismatchSurcharge;
-            detail.MismatchSurcharge = newSurcharge;
+                decimal surchargeDiff = newSurcharge - detail.MismatchSurcharge;
+                detail.MismatchSurcharge = newSurcharge;
 
-            booking.OriginalPrice += surchargeDiff;
-            booking.FinalAmount += surchargeDiff;
+                booking.OriginalPrice += surchargeDiff;
+                booking.FinalAmount += surchargeDiff;
 
-            await _context.SaveChangesAsync();
-            return true;
+                if (surchargeDiff > 0 && booking.UserId.HasValue)
+                {
+                    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == booking.UserId.Value);
+                    if (wallet == null || wallet.Balance < surchargeDiff)
+                    {
+                        throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Khách hàng không đủ số dư để thanh toán phụ phí. Cần thêm: {surchargeDiff:N0}đ");
+                    }
+
+                    wallet.Balance -= surchargeDiff;
+
+                    var paymentTx = new Transaction
+                    {
+                        WalletId = wallet.WalletId,
+                        Amount = -surchargeDiff,
+                        TransactionType = "Payment",
+                        Description = $"Thanh toán phụ phí do xe dơ cho lịch #{booking.BookingId}",
+                        ReferenceBookingId = booking.BookingId
+                    };
+                    _context.Transactions.Add(paymentTx);
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return true;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<BookingResponseDTO> CreateWalkInBookingAsync(int staffId, CreateWalkInBookingDTO request)
