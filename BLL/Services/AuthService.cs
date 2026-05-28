@@ -161,6 +161,9 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDTO request)
         {
+            if (request.OldPassword == request.NewPassword)
+                throw new BadRequestException("Mật khẩu mới không được trùng với mật khẩu cũ.");
+
             var user = await _context.Users.FindAsync(userId);
             if (user == null) throw new NotFoundException("Không tìm thấy người dùng.");
 
