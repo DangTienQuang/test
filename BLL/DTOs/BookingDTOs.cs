@@ -70,5 +70,7 @@ namespace AutoWashPro.BLL.DTOs
 
         [Required]
         public DAL.Entities.VehicleCondition Condition { get; set; }
+
+        public int? ActualVehicleTypeId { get; set; }
     }
 }

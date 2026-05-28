@@ -557,13 +557,38 @@ namespace AutoWashPro.BLL.Services
                 var detail = booking.BookingDetails.FirstOrDefault(d => d.DetailId == request.DetailId);
                 if (detail == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy thông tin xe trong lịch hẹn này.");
 
+                // Calculate old penalty before modifying state
+                int oldPenalty = 0;
+                if (detail.VehicleCondition == VehicleCondition.Dirty) oldPenalty += 5;
+                else if (detail.VehicleCondition == VehicleCondition.VeryDirty) oldPenalty += 10;
+                if (detail.ActualVehicleTypeId.HasValue) oldPenalty += 10;
+
                 detail.VehicleCondition = request.Condition;
 
                 decimal newSurcharge = 0;
+                int newPenalty = 0;
+
                 if (request.Condition == VehicleCondition.Dirty)
-                    newSurcharge = detail.Price * 0.2m; // 20% Upsell
+                {
+                    newSurcharge += detail.Price * 0.2m; // 20% Upsell
+                    newPenalty += 5;
+                }
                 else if (request.Condition == VehicleCondition.VeryDirty)
-                    newSurcharge = detail.Price * 0.5m; // 50% Upsell
+                {
+                    newSurcharge += detail.Price * 0.5m; // 50% Upsell
+                    newPenalty += 10;
+                }
+
+                if (request.ActualVehicleTypeId.HasValue)
+                {
+                    detail.ActualVehicleTypeId = request.ActualVehicleTypeId.Value;
+                    // In a real scenario, we might look up the price difference between booked VehicleType and ActualVehicleType.
+                    // For now, we apply a flat mismatch surcharge (e.g., 30% of base price) and additional penalty if wrong vehicle type.
+                    newSurcharge += detail.Price * 0.3m;
+                    newPenalty += 10;
+                }
+
+                int penaltyDiff = newPenalty - oldPenalty;
 
                 decimal surchargeDiff = newSurcharge - detail.MismatchSurcharge;
                 detail.MismatchSurcharge = newSurcharge;
@@ -611,6 +636,19 @@ namespace AutoWashPro.BLL.Services
                             };
                             _context.Transactions.Add(refundTx);
                         }
+                    }
+                }
+
+                if (penaltyDiff != 0 && booking.UserId.HasValue)
+                {
+                    var userProfile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == booking.UserId.Value);
+                    if (userProfile != null)
+                    {
+                        userProfile.TrustScore -= penaltyDiff;
+                        if (userProfile.TrustScore < 0) userProfile.TrustScore = 0;
+                        // For simplicity, we just adjust the booking's tracked penalty
+                        booking.TrustScorePenalty += penaltyDiff;
+                        if (booking.TrustScorePenalty < 0) booking.TrustScorePenalty = 0;
                     }
                 }
 
