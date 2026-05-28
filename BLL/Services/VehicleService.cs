@@ -39,8 +39,19 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<bool> AddVehicleAsync(int userId, CreateVehicleDTO request)
         {
-            var vehicleCount = await _context.Vehicles.CountAsync(v => v.UserId == userId);
-            if (vehicleCount >= 5) throw new BadRequestException("Bạn chỉ được thêm tối đa 5 xe.");
+            var user = await _context.Users.FindAsync(userId);
+            if (user != null && user.Role == "Customer")
+            {
+                // In the future, B2B logic (e.g. AccountType == "Business") would bypass this completely.
+                // For now, we removed the strict 5 vehicle limit for B2B requests and let them add freely,
+                // but kept it as an example for basic customers. If the user wants it totally gone:
+                // We just remove the check. Given the request: "Bỏ giới hạn 5 chiếc xe, giải quyết bài toán khách hàng Công ty",
+                // we will disable the strict hardcoded limit entirely to support B2B.
+            }
+
+            // Allow unlimited vehicles to solve B2B/Fleet management pain point
+            // var vehicleCount = await _context.Vehicles.CountAsync(v => v.UserId == userId);
+            // if (vehicleCount >= 5 && user?.Role == "Customer") throw new BadRequestException("Bạn chỉ được thêm tối đa 5 xe.");
 
             var normalizedPlate = NormalizeLicensePlate(request.LicensePlate);
 
