@@ -179,7 +179,7 @@ namespace AutoWashPro.BLL.Services
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException("Giỏ hàng không có xe nào.");
 
             if (request.Vehicles.Count > 5)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Mỗi lần đặt lịch chỉ được chọn tối đa 5 xe.");
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Tài khoản cá nhân chỉ được phép đặt tối đa 5 xe trong một lần đặt lịch.");
 
             var userProfile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
 
@@ -219,7 +219,7 @@ namespace AutoWashPro.BLL.Services
 
             foreach (var item in request.Vehicles)
             {
-                var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == item.LicensePlate && v.UserId == userId);
+                var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == item.LicensePlate && v.UserId == userId && !v.IsDeleted);
                 if (vehicle == null)
                     throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Xe với biển số {item.LicensePlate} không tồn tại trong hồ sơ của bạn.");
 
@@ -701,7 +701,7 @@ namespace AutoWashPro.BLL.Services
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException("Giỏ hàng không có xe nào.");
 
             if (request.Vehicles.Count > 5)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Mỗi lần đặt lịch chỉ được chọn tối đa 5 xe.");
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Tài khoản cá nhân chỉ được phép đặt tối đa 5 xe trong một lần đặt lịch.");
 
             int customerUserId = request.UserId;
             // Similar validation but skips specific time slot and uses immediate current time
@@ -717,7 +717,7 @@ namespace AutoWashPro.BLL.Services
 
             foreach (var item in request.Vehicles)
             {
-                var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == item.LicensePlate);
+                var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == item.LicensePlate && !v.IsDeleted);
                 if (vehicle == null)
                     throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Xe với biển số {item.LicensePlate} không tồn tại trong hệ thống.");
 
