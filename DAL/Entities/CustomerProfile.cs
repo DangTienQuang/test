@@ -33,7 +33,7 @@ namespace AutoWashPro.DAL.Entities
 
         public int PromotionPoint { get; set; } = 0;
 
-        public int TrustScore { get; set; } = 100;
+        public int CurrentYearTierPoints { get; set; } = 0;
 
         [Timestamp]
         public DateTime? RowVersion { get; set; }

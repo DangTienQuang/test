@@ -16,8 +16,6 @@ namespace AutoWashPro.DAL.Entities
         [MaxLength(255)]
         public string? FallbackQrCode { get; set; }
 
-        public int TrustScorePenalty { get; set; } = 0;
-
         [Required]
         public DateTime ScheduledTime { get; set; }
 

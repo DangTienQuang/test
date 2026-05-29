@@ -96,7 +96,7 @@ namespace AutoWashPro.BLL.Services
             if (profile.Tier == null) return null;
 
             var eligibleTier = await _context.Tiers
-                .Where(t => t.MinAccumulatedPoints <= profile.PromotionPoint)
+                .Where(t => t.MinAccumulatedPoints <= profile.CurrentYearTierPoints)
                 .OrderByDescending(t => t.MinAccumulatedPoints)
                 .FirstOrDefaultAsync();
 
