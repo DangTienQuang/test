@@ -13,6 +13,7 @@ namespace AutoWashPro.BLL.Services
         Task<List<PointHistoryResponseDTO>> GetPointsHistoryAsync(int userId);
         Task DeductSpendablePointsAsync(int userId, int pointsToDeduct, string reason);
         Task RefundSpendablePointsAsync(int userId, int pointsToRefund, string reason, int? referenceBookingId = null);
+        Task RefundBalanceAsync(int userId, decimal amount, string reason);
         Task<int> AwardCompletionPointsAsync(int userId, int pointsEarned, int bookingId);
     }
 }

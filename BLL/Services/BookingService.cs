@@ -16,17 +16,19 @@ namespace AutoWashPro.BLL.Services
         private readonly IWalletService _walletService;
         private readonly ITierService _tierService;
         private readonly IEmailService _emailService;
+        private readonly IVoucherService _voucherService;
 
         public BookingService(
             AutoWashDbContext context,
             IWalletService walletService,
             ITierService tierService,
-            IEmailService emailService)
+            IEmailService emailService, IVoucherService voucherService)
         {
             _context = context;
             _walletService = walletService;
             _tierService = tierService;
             _emailService = emailService;
+            _voucherService = voucherService;
         }
 
         public async Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, DateTime targetDate)
@@ -137,7 +139,7 @@ namespace AutoWashPro.BLL.Services
             var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.BookingId == bookingId);
             if (booking == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy lịch hẹn.");
 
-            var allowedStatuses = new[] { "Pending", "CheckedIn", "Completed", "Cancelled", "Delayed" };
+            var allowedStatuses = new[] { "Pending", "CheckedIn", "Completed", "Cancelled", "Delayed", "CancelledBySystem" };
             if (!allowedStatuses.Contains(newStatus)) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Trạng thái không hợp lệ.");
 
             if (newStatus == "Completed" && booking.Status != "Completed")
@@ -850,6 +852,73 @@ namespace AutoWashPro.BLL.Services
                 };
             }
             catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+        public async Task ForceCancelBookingsAsync(ForceCancelRequestDTO request)
+        {
+            if (!request.TimeSlotId.HasValue && !request.AffectedDate.HasValue)
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Vui lòng chọn ngày hoặc khung giờ để hủy lịch.");
+
+            var query = _context.Bookings
+                .Include(b => b.User)
+                .Where(b => b.Status == "Pending");
+
+            if (request.AffectedDate.HasValue)
+            {
+                var targetDate = request.AffectedDate.Value.Date;
+                query = query.Where(b => b.ScheduledTime.Date == targetDate);
+            }
+
+            if (request.TimeSlotId.HasValue)
+            {
+                var slot = await _context.TimeSlots.FindAsync(request.TimeSlotId.Value);
+                if (slot != null)
+                {
+                    query = query.Where(b => b.ScheduledTime.TimeOfDay >= slot.StartTime && b.ScheduledTime.TimeOfDay <= slot.EndTime);
+                }
+            }
+
+            var bookings = await query.ToListAsync();
+            if (!bookings.Any()) return;
+
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            try
+            {
+                foreach (var booking in bookings)
+                {
+                    booking.Status = "CancelledBySystem";
+
+                    if (booking.UserId.HasValue)
+                    {
+                        var userId = booking.UserId.Value;
+
+                        if (booking.FinalAmount > 0) { await _walletService.RefundBalanceAsync(userId, booking.FinalAmount, $"Hoàn tiền hủy lịch tự động: {request.Reason}"); }
+
+                        if (booking.PointsUsed > 0)
+                        {
+                            await _walletService.RefundSpendablePointsAsync(userId, booking.PointsUsed, $"Hoàn điểm hủy lịch tự động: {request.Reason}", booking.BookingId);
+                        }
+
+                        await _voucherService.GenerateCompensationVoucherAsync(userId);
+
+                        if (booking.User != null && !string.IsNullOrEmpty(booking.User.Email))
+                        {
+                            _ = _emailService.SendEmailAsync(
+                                booking.User.Email,
+                                "AutoWashPro - Thông báo hủy lịch do sự cố",
+                                $"Kính chào quý khách,<br/><br/>Chúng tôi rất tiếc phải thông báo lịch hẹn của quý khách vào lúc {booking.ScheduledTime:dd/MM/yyyy HH:mm} đã bị hủy do sự cố bất khả kháng.<br/>Lý do: {request.Reason}<br/><br/>Chúng tôi đã hoàn lại toàn bộ số tiền <b>{booking.FinalAmount:N0}đ</b> và điểm tích lũy (nếu có) vào ví của quý khách.<br/>Đồng thời, để tạ lỗi, chúng tôi đã gửi tặng quý khách 1 Voucher giảm giá 30,000đ (có hạn 7 ngày) vào tài khoản.<br/><br/>Trân trọng,<br/>AutoWashPro"
+                            );
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch
             {
                 await transaction.RollbackAsync();
                 throw;

@@ -271,5 +271,27 @@ namespace AutoWashPro.BLL.Services
                 throw new BadRequestException("Dữ liệu đã bị thay đổi bởi giao dịch khác. Vui lòng thử lại.");
             }
         }
+        public async Task RefundBalanceAsync(int userId, decimal amount, string reason)
+        {
+            if (amount <= 0) throw new BadRequestException("Số tiền hoàn phải lớn hơn 0.");
+
+            var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userId);
+            if (wallet == null) throw new NotFoundException("Không tìm thấy ví của người dùng.");
+
+            wallet.Balance += amount;
+
+            var transaction = new Transaction
+            {
+                WalletId = wallet.WalletId,
+                Amount = amount,
+                TransactionType = "Refund",
+                Description = reason,
+                Status = "Completed",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Transactions.Add(transaction);
+            await _context.SaveChangesAsync();
+        }
     }
 }

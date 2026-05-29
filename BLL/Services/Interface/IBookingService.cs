@@ -18,5 +18,6 @@ namespace AutoWashPro.BLL.Services
         Task<bool> UpdateVehicleConditionAsync(int staffId, int bookingId, UpdateVehicleConditionDTO request);
         Task MarkAsNoShowAsync(int bookingId);
         Task ReportMismatchAsync(int detailId, AutoWashPro.DAL.Entities.VehicleCondition condition, int actualTypeId);
+        Task ForceCancelBookingsAsync(ForceCancelRequestDTO request);
     }
 }

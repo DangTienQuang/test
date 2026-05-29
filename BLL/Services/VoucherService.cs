@@ -172,5 +172,31 @@ namespace AutoWashPro.BLL.Services
             PointsRequired = v.PointsRequired,
             RedeemedCount = redeemedCount
         };
+        public async Task GenerateCompensationVoucherAsync(int userId)
+        {
+            var code = $"SORRY-{Guid.NewGuid().ToString("N").Substring(0, 6).ToUpper()}";
+
+            var voucher = new Voucher
+            {
+                Code = code,
+                DiscountAmount = 30000, // 30,000 VND discount
+                MaxUsages = 1,
+                ExpiryDate = DateTime.UtcNow.AddDays(7),
+                PointsRequired = 0
+            };
+
+            _context.Vouchers.Add(voucher);
+            await _context.SaveChangesAsync();
+
+            var userVoucher = new UserVoucher
+            {
+                UserId = userId,
+                VoucherId = voucher.VoucherId,
+                IsUsed = false
+            };
+
+            _context.UserVouchers.Add(userVoucher);
+            await _context.SaveChangesAsync();
+        }
     }
 }
