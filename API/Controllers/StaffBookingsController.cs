@@ -31,5 +31,19 @@ namespace AutoWashPro.API.Controllers
             await _bookingService.UpdateBookingStatusAsync(id, newStatus);
             return Ok(new { statusCode = 200, message = $"Đã cập nhật trạng thái thành: {newStatus}" });
         }
+
+        [HttpPut("{id}/no-show")]
+        public async Task<IActionResult> MarkAsNoShow(int id)
+        {
+            await _bookingService.MarkAsNoShowAsync(id);
+            return Ok(new { statusCode = 200, message = "Đã đánh dấu khách No-Show thành công." });
+        }
+
+        [HttpPut("{detailId}/report-mismatch")]
+        public async Task<IActionResult> ReportMismatch(int detailId, [FromQuery] AutoWashPro.DAL.Entities.VehicleCondition condition, [FromQuery] int actualTypeId)
+        {
+            await _bookingService.ReportMismatchAsync(detailId, condition, actualTypeId);
+            return Ok(new { statusCode = 200, message = "Đã cập nhật tình trạng xe và tính lại phụ phí thành công." });
+        }
     }
 }

@@ -161,6 +161,8 @@ builder.Services.AddHttpClient<ILLMService, GeminiAIService>();
 builder.Services.AddScoped<IAIIntentService, AIIntentService>();
 builder.Services.AddScoped<ILicensePlateService, LicensePlateService>();
 
+builder.Services.AddHostedService<AutoWashPro.API.Workers.AnnualTierResetWorker>();
+
 var app = builder.Build();
 app.UseMiddleware<AutoWashPro.API.Middlewares.ExceptionMiddleware>();
 if (app.Environment.IsDevelopment())

@@ -245,6 +245,7 @@ namespace AutoWashPro.BLL.Services
                 if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
 
                 profile.TotalPoint += pointsEarned;
+                // LUỒNG 1: Tiền tệ (Đưa vào ví và sổ cái, hạn 1 năm)
                 profile.PromotionPoint += pointsEarned;
 
                 _context.PointLedgers.Add(new PointLedger
@@ -252,10 +253,13 @@ namespace AutoWashPro.BLL.Services
                     UserId = userId,
                     PointsAdded = pointsEarned,
                     Reason = $"{PointConstants.CompletionReasonPrefix} #{bookingId}",
-                    ExpiryDate = DateTime.UtcNow.AddMonths(12),
+                    ExpiryDate = DateTime.UtcNow.AddYears(1),
                     ReferenceBookingId = bookingId,
                     TransactionDate = DateTime.UtcNow
                 });
+
+                // LUỒNG 2: Danh vọng (Cộng thẳng vào điểm xét hạng năm nay)
+                profile.CurrentYearTierPoints += pointsEarned;
 
                 await _tierService.EvaluateTierForProfileAsync(profile);
 
