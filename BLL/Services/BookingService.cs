@@ -176,6 +176,9 @@ namespace AutoWashPro.BLL.Services
             if (request.Vehicles == null || request.Vehicles.Count == 0)
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException("Giỏ hàng không có xe nào.");
 
+            if (request.Vehicles.Count > 5)
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Mỗi lần đặt lịch chỉ được chọn tối đa 5 xe.");
+
             var userProfile = await _context.CustomerProfiles.FirstOrDefaultAsync(cp => cp.UserId == userId);
 
             var duplicatePlates = request.Vehicles.GroupBy(v => v.LicensePlate).Where(g => g.Count() > 1).Any();
@@ -694,6 +697,9 @@ namespace AutoWashPro.BLL.Services
         {
             if (request.Vehicles == null || request.Vehicles.Count == 0)
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException("Giỏ hàng không có xe nào.");
+
+            if (request.Vehicles.Count > 5)
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Mỗi lần đặt lịch chỉ được chọn tối đa 5 xe.");
 
             int customerUserId = request.UserId;
             // Similar validation but skips specific time slot and uses immediate current time
