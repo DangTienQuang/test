@@ -12,5 +12,6 @@ namespace AutoWashPro.BLL.Services
         Task<AdminVoucherDTO> CreateVoucherAsync(CreateOrUpdateVoucherDTO request);
         Task<AdminVoucherDTO> UpdateVoucherAsync(int id, CreateOrUpdateVoucherDTO request);
         Task<bool> DeleteVoucherAsync(int id);
+        Task GenerateCompensationVoucherAsync(int userId);
     }
 }

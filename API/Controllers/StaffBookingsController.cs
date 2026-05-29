@@ -1,3 +1,4 @@
+using AutoWashPro.BLL.DTOs;
 using AutoWashPro.BLL.Services;    
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -44,6 +45,13 @@ namespace AutoWashPro.API.Controllers
         {
             await _bookingService.ReportMismatchAsync(detailId, condition, actualTypeId);
             return Ok(new { statusCode = 200, message = "Đã cập nhật tình trạng xe và tính lại phụ phí thành công." });
+        }
+        [HttpPost("force-cancel")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> ForceCancelBookings([FromBody] ForceCancelRequestDTO request)
+        {
+            await _bookingService.ForceCancelBookingsAsync(request);
+            return Ok(new { statusCode = 200, message = "Đã hủy các lịch hẹn thành công, hoàn tiền và gửi email thông báo tới khách hàng." });
         }
     }
 }

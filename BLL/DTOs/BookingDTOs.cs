@@ -74,3 +74,16 @@ namespace AutoWashPro.BLL.DTOs
         public int? ActualVehicleTypeId { get; set; }
     }
 }
+
+namespace AutoWashPro.BLL.DTOs
+{
+    public class ForceCancelRequestDTO
+    {
+        public int? TimeSlotId { get; set; }
+
+        public DateTime? AffectedDate { get; set; }
+
+        [Required(ErrorMessage = "Reason is required to notify customers.")]
+        public required string Reason { get; set; }
+    }
+}
