@@ -39,6 +39,23 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<bool> AddVehicleAsync(int userId, CreateVehicleDTO request)
         {
+            var vehicleType = await _context.VehicleTypes.FirstOrDefaultAsync(t => t.Id == request.VehicleTypeId);
+            if (vehicleType == null) throw new BadRequestException("Loại xe không hợp lệ.");
+
+            if (vehicleType.Name.Contains("Khác", StringComparison.OrdinalIgnoreCase) ||
+                vehicleType.Name.Contains("Other", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(request.RegistrationPhotoUrl))
+                {
+                    throw new BadRequestException("Bạn bắt buộc phải tải lên hình ảnh thực tế của xe khi chọn loại xe Khác.");
+                }
+
+                if (string.IsNullOrWhiteSpace(request.UserNote))
+                {
+                    throw new BadRequestException("Vui lòng để lại ghi chú tên dòng xe của bạn để chúng tôi hỗ trợ cập nhật.");
+                }
+            }
+
             var user = await _context.Users.FindAsync(userId);
             if (user != null && user.Role == "Customer")
             {
@@ -58,17 +75,56 @@ namespace AutoWashPro.BLL.Services
             var existingVehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == normalizedPlate);
             if (existingVehicle != null) throw new BadRequestException("Biển số xe này đã tồn tại trong hệ thống.");
 
-            var typeExists = await _context.VehicleTypes.AnyAsync(t => t.Id == request.VehicleTypeId);
-            if (!typeExists) throw new BadRequestException("Loại xe không hợp lệ.");
-
             var vehicle = new Vehicle
             {
                 LicensePlate = normalizedPlate,
                 VehicleTypeId = request.VehicleTypeId,
-                UserId = userId
+                UserId = userId,
+                RegistrationPhotoUrl = request.RegistrationPhotoUrl,
+                UserNote = request.UserNote
             };
 
             _context.Vehicles.Add(vehicle);
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<List<AdminOtherVehicleDTO>> GetOtherVehiclesAsync()
+        {
+            return await _context.Vehicles
+                .Include(v => v.VehicleType)
+                .Include(v => v.User)
+                    .ThenInclude(u => u.CustomerProfile)
+                .Where(v => v.VehicleType.Name.Contains("Khác") || v.VehicleType.Name.Contains("Other"))
+                .Select(v => new AdminOtherVehicleDTO
+                {
+                    LicensePlate = v.LicensePlate,
+                    VehicleTypeId = v.VehicleTypeId,
+                    VehicleTypeName = v.VehicleType.Name,
+                    UserId = v.UserId,
+                    OwnerName = v.User.CustomerProfile != null ? v.User.CustomerProfile.FullName : null,
+                    OwnerPhone = v.User != null ? v.User.PhoneNumber : null,
+                    RegistrationPhotoUrl = v.RegistrationPhotoUrl,
+                    UserNote = v.UserNote
+                }).ToListAsync();
+        }
+
+        public async Task<bool> UpdateVehicleTypeByAdminAsync(string licensePlate, int newVehicleTypeId)
+        {
+            licensePlate = NormalizeLicensePlate(Uri.UnescapeDataString(licensePlate));
+
+            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate);
+            if (vehicle == null) throw new NotFoundException("Không tìm thấy phương tiện.");
+
+            var typeExists = await _context.VehicleTypes.AnyAsync(t => t.Id == newVehicleTypeId);
+            if (!typeExists) throw new BadRequestException("Loại xe mới không hợp lệ.");
+
+            vehicle.VehicleTypeId = newVehicleTypeId;
+            // Optionally clear the RegistrationPhotoUrl and UserNote if they are no longer "Other"
+            // vehicle.RegistrationPhotoUrl = null;
+            // vehicle.UserNote = null;
+
             await _context.SaveChangesAsync();
 
             return true;
