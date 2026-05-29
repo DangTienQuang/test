@@ -22,5 +22,7 @@ namespace AutoWashPro.DAL.Entities
         public string? RegistrationPhotoUrl { get; set; }
 
         public string? UserNote { get; set; }
+
+        public bool IsDeleted { get; set; } = false;
     }
 }

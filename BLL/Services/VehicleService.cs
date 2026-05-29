@@ -23,7 +23,7 @@ namespace AutoWashPro.BLL.Services
         {
             return await _context.Vehicles
                 .Include(v => v.VehicleType)
-                .Where(v => v.UserId == userId)
+                .Where(v => v.UserId == userId && !v.IsDeleted)
                 .Select(v => new VehicleDTO
                 {
                     LicensePlate = v.LicensePlate,
@@ -56,35 +56,43 @@ namespace AutoWashPro.BLL.Services
                 }
             }
 
-            var user = await _context.Users.FindAsync(userId);
-            if (user != null && user.Role == "Customer")
+            var vehicleCount = await _context.Vehicles.CountAsync(v => v.UserId == userId && !v.IsDeleted);
+            if (vehicleCount >= 5)
             {
-                // In the future, B2B logic (e.g. AccountType == "Business") would bypass this completely.
-                // For now, we removed the strict 5 vehicle limit for B2B requests and let them add freely,
-                // but kept it as an example for basic customers. If the user wants it totally gone:
-                // We just remove the check. Given the request: "Bỏ giới hạn 5 chiếc xe, giải quyết bài toán khách hàng Công ty",
-                // we will disable the strict hardcoded limit entirely to support B2B.
+                throw new BadRequestException("Hồ sơ cá nhân chỉ được liên kết tối đa 5 xe. Vui lòng liên hệ bộ phận CSKH nếu bạn có nhu cầu rửa đội xe lớn.");
             }
-
-            // Allow unlimited vehicles to solve B2B/Fleet management pain point
-            // var vehicleCount = await _context.Vehicles.CountAsync(v => v.UserId == userId);
-            // if (vehicleCount >= 5 && user?.Role == "Customer") throw new BadRequestException("Bạn chỉ được thêm tối đa 5 xe.");
 
             var normalizedPlate = NormalizeLicensePlate(request.LicensePlate);
 
             var existingVehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == normalizedPlate);
-            if (existingVehicle != null) throw new BadRequestException("Biển số xe này đã tồn tại trong hệ thống.");
-
-            var vehicle = new Vehicle
+            if (existingVehicle != null)
             {
-                LicensePlate = normalizedPlate,
-                VehicleTypeId = request.VehicleTypeId,
-                UserId = userId,
-                RegistrationPhotoUrl = request.RegistrationPhotoUrl,
-                UserNote = request.UserNote
-            };
+                if (!existingVehicle.IsDeleted)
+                {
+                    throw new BadRequestException("Biển số xe này đã tồn tại trong hệ thống.");
+                }
 
-            _context.Vehicles.Add(vehicle);
+                // If it is deleted, restore it and update ownership/details
+                existingVehicle.IsDeleted = false;
+                existingVehicle.UserId = userId;
+                existingVehicle.VehicleTypeId = request.VehicleTypeId;
+                existingVehicle.RegistrationPhotoUrl = request.RegistrationPhotoUrl;
+                existingVehicle.UserNote = request.UserNote;
+            }
+            else
+            {
+                var vehicle = new Vehicle
+                {
+                    LicensePlate = normalizedPlate,
+                    VehicleTypeId = request.VehicleTypeId,
+                    UserId = userId,
+                    RegistrationPhotoUrl = request.RegistrationPhotoUrl,
+                    UserNote = request.UserNote
+                };
+
+                _context.Vehicles.Add(vehicle);
+            }
+
             await _context.SaveChangesAsync();
 
             return true;
@@ -96,7 +104,7 @@ namespace AutoWashPro.BLL.Services
                 .Include(v => v.VehicleType)
                 .Include(v => v.User)
                     .ThenInclude(u => u.CustomerProfile)
-                .Where(v => v.VehicleType.Name.Contains("Khác") || v.VehicleType.Name.Contains("Other"))
+                .Where(v => (!v.IsDeleted) && (v.VehicleType.Name.Contains("Khác") || v.VehicleType.Name.Contains("Other")))
                 .Select(v => new AdminOtherVehicleDTO
                 {
                     LicensePlate = v.LicensePlate,
@@ -114,7 +122,7 @@ namespace AutoWashPro.BLL.Services
         {
             licensePlate = NormalizeLicensePlate(Uri.UnescapeDataString(licensePlate));
 
-            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate);
+            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && !v.IsDeleted);
             if (vehicle == null) throw new NotFoundException("Không tìm thấy phương tiện.");
 
             var typeExists = await _context.VehicleTypes.AnyAsync(t => t.Id == newVehicleTypeId);
@@ -134,7 +142,7 @@ namespace AutoWashPro.BLL.Services
         {
             licensePlate = NormalizeLicensePlate(Uri.UnescapeDataString(licensePlate));
 
-            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && v.UserId == userId);
+            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && v.UserId == userId && !v.IsDeleted);
             if (vehicle == null) throw new NotFoundException("Không tìm thấy phương tiện hoặc bạn không có quyền thao tác trên xe này.");
 
             var typeExists = await _context.VehicleTypes.AnyAsync(t => t.Id == request.VehicleTypeId);
@@ -150,10 +158,10 @@ namespace AutoWashPro.BLL.Services
         {
             licensePlate = NormalizeLicensePlate(Uri.UnescapeDataString(licensePlate));
 
-            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && v.UserId == userId);
+            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && v.UserId == userId && !v.IsDeleted);
             if (vehicle == null) throw new NotFoundException("Không tìm thấy phương tiện hoặc bạn không có quyền xóa xe này.");
 
-            _context.Vehicles.Remove(vehicle);
+            vehicle.IsDeleted = true;
             await _context.SaveChangesAsync();
 
             return true;
@@ -168,7 +176,7 @@ namespace AutoWashPro.BLL.Services
                 .Include(v => v.User)
                     .ThenInclude(u => u.CustomerProfile)
                         .ThenInclude(cp => cp.Tier)
-                .FirstOrDefaultAsync(v => v.LicensePlate == licensePlate);
+                .FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && !v.IsDeleted);
 
             if (vehicle == null)
                 throw new NotFoundException("Biển số xe chưa được đăng ký trên hệ thống.");
