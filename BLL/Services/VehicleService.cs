@@ -14,9 +14,12 @@ namespace AutoWashPro.BLL.Services
     {
         private readonly AutoWashDbContext _context;
 
-        public VehicleService(AutoWashDbContext context)
+        private readonly IEmailService _emailService;
+
+        public VehicleService(AutoWashDbContext context, IEmailService emailService)
         {
             _context = context;
+            _emailService = emailService;
         }
 
         public async Task<List<VehicleDTO>> GetMyVehiclesAsync(int userId)
@@ -116,6 +119,117 @@ namespace AutoWashPro.BLL.Services
                     RegistrationPhotoUrl = v.RegistrationPhotoUrl,
                     UserNote = v.UserNote
                 }).ToListAsync();
+        }
+
+        public async Task<bool> ApproveNewVehicleTypeAsync(string licensePlate, ApproveVehicleTypeRequestDTO request)
+        {
+            licensePlate = NormalizeLicensePlate(Uri.UnescapeDataString(licensePlate));
+
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            try
+            {
+                var vehicle = await _context.Vehicles
+                    .Include(v => v.VehicleType)
+                    .Include(v => v.User)
+                    .FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && !v.IsDeleted);
+
+                if (vehicle == null) throw new NotFoundException("Không tìm thấy phương tiện.");
+
+                if (!vehicle.VehicleType.Name.Contains("Khác", StringComparison.OrdinalIgnoreCase) &&
+                    !vehicle.VehicleType.Name.Contains("Other", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new BadRequestException("Phương tiện này không nằm trong danh sách yêu cầu chờ duyệt loại xe.");
+                }
+
+                var finalTypeName = string.IsNullOrWhiteSpace(request.CustomizedTypeName)
+                    ? vehicle.UserNote
+                    : request.CustomizedTypeName;
+
+                if (string.IsNullOrWhiteSpace(finalTypeName))
+                {
+                     throw new BadRequestException("Tên loại xe không được để trống. Vui lòng cung cấp tên loại xe.");
+                }
+
+                finalTypeName = finalTypeName.Trim();
+                if (finalTypeName.Length > 50)
+                {
+                    throw new BadRequestException("Tên loại xe không được vượt quá 50 ký tự.");
+                }
+                var description = string.IsNullOrWhiteSpace(request.Description)
+                    ? "Approved from user request"
+                    : request.Description.Trim();
+
+                var existingType = await _context.VehicleTypes
+                    .FirstOrDefaultAsync(t => t.Name.ToLower() == finalTypeName.ToLower());
+
+                int finalTypeId;
+
+                if (existingType != null)
+                {
+                    finalTypeId = existingType.Id;
+                }
+                else
+                {
+                    var newType = new VehicleType
+                    {
+                        Name = finalTypeName,
+                        Description = description
+                    };
+                    _context.VehicleTypes.Add(newType);
+                    await _context.SaveChangesAsync();
+                    finalTypeId = newType.Id;
+                }
+
+                vehicle.VehicleTypeId = finalTypeId;
+                vehicle.UserNote = null;
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                if (vehicle.User != null && !string.IsNullOrWhiteSpace(vehicle.User.Email))
+                {
+                    var subject = "Yêu cầu thêm loại xe mới đã được duyệt";
+                    var message = $"Chào bạn,<br/><br/>Yêu cầu thêm loại xe cho phương tiện mang biển số <b>{vehicle.LicensePlate}</b> của bạn đã được quản trị viên duyệt thành công. Loại xe của bạn hiện tại là <b>{finalTypeName}</b>.<br/><br/>Trân trọng,<br/>Đội ngũ AutoWashPro.";
+                    _ = _emailService.SendEmailAsync(vehicle.User.Email, subject, message);
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task<bool> RejectNewVehicleTypeAsync(string licensePlate)
+        {
+            licensePlate = NormalizeLicensePlate(Uri.UnescapeDataString(licensePlate));
+
+            var vehicle = await _context.Vehicles
+                .Include(v => v.VehicleType)
+                .Include(v => v.User)
+                .FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && !v.IsDeleted);
+
+            if (vehicle == null) throw new NotFoundException("Không tìm thấy phương tiện.");
+
+            if (!vehicle.VehicleType.Name.Contains("Khác", StringComparison.OrdinalIgnoreCase) &&
+                !vehicle.VehicleType.Name.Contains("Other", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BadRequestException("Phương tiện này không nằm trong danh sách yêu cầu chờ duyệt loại xe.");
+            }
+
+            vehicle.IsDeleted = true;
+            await _context.SaveChangesAsync();
+
+            if (vehicle.User != null && !string.IsNullOrWhiteSpace(vehicle.User.Email))
+            {
+                var subject = "Yêu cầu thêm phương tiện bị từ chối";
+                var message = $"Chào bạn,<br/><br/>Yêu cầu thêm phương tiện mang biển số <b>{vehicle.LicensePlate}</b> của bạn đã bị từ chối do thông tin loại xe không hợp lệ. Vui lòng đăng ký lại phương tiện với thông tin chính xác.<br/><br/>Trân trọng,<br/>Đội ngũ AutoWashPro.";
+                _ = _emailService.SendEmailAsync(vehicle.User.Email, subject, message);
+            }
+
+            return true;
         }
 
         public async Task<bool> UpdateVehicleTypeByAdminAsync(string licensePlate, int newVehicleTypeId)

@@ -107,4 +107,12 @@ namespace AutoWashPro.BLL.DTOs
         [Required(ErrorMessage = "Vui lòng chọn loại xe.")]
         public int VehicleTypeId { get; set; }
     }
+
+    public class ApproveVehicleTypeRequestDTO
+    {
+        [StringLength(50, ErrorMessage = "Tên loại xe tối đa 50 ký tự.")]
+        public string? CustomizedTypeName { get; set; }
+
+        public string? Description { get; set; }
+    }
 }

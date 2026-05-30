@@ -13,5 +13,7 @@ namespace AutoWashPro.BLL.Services
         Task<VehicleRecognitionDTO> RecognizeVehicleAsync(string licensePlate);
         Task<List<AdminOtherVehicleDTO>> GetOtherVehiclesAsync();
         Task<bool> UpdateVehicleTypeByAdminAsync(string licensePlate, int newVehicleTypeId);
+        Task<bool> ApproveNewVehicleTypeAsync(string licensePlate, ApproveVehicleTypeRequestDTO request);
+        Task<bool> RejectNewVehicleTypeAsync(string licensePlate);
     }
 }
