@@ -423,4 +423,63 @@ Used by admins to view customer details, ban accounts, or review history.
 *   **Update User Status (e.g., Ban):** `PUT /api/v1/admin/users/{id}/status`
 
 ---
+
+## Business Logic Pipelines & Frontend Integration Guide
+
+This section is critical for Frontend Developers. It explains the underlying business rules and the exact integration sequences required to build functional Wallet, Loyalty, and Tier systems.
+
+### 1. Wallet & Payment Pipeline
+
+The SmartWash system operates on a prepaid wallet model. Customers must have sufficient funds in their internal wallet before they can execute a booking.
+
+**Prerequisite:** A user's Wallet is generated automatically during the account Registration process.
+* **FE Action:** The Frontend should fetch the user's balance by calling `GET /api/v1/wallets/me` immediately upon successful login or app initialization.
+
+**The Payment Flow:**
+To add funds to the wallet, the system relies on the third-party PayOS gateway.
+1.  **Initiate Top-Up:** The Frontend calls `POST /api/v1/wallets/top-up` with the desired `amount` and the FE redirect URLs (`returnUrl` / `cancelUrl`).
+2.  **Redirect to Gateway:** The backend creates a `Pending` transaction and returns a `checkoutUrl`. The Frontend must redirect the user's browser/webview to this PayOS checkout page.
+
+> **CRITICAL WARNING FOR FE: ASYNCHRONOUS PAYMENT COMPLETION**
+> Do **NOT** assume the payment is successful just because the user returns to your `returnUrl`. The Top-Up API does not return immediate success to the frontend. The actual wallet balance is updated via an asynchronous server-to-server Webhook (`POST /api/v1/wallets/top-up/callback`).
+> **Implementation Requirement:** When the user lands on the `returnUrl`, the Frontend MUST implement polling on `GET /api/v1/wallets/me` (or listen to a WebSocket/SignalR event if implemented) to verify that the `balance` has increased before showing a "Payment Successful" screen to the user.
+
+### 2. Loyalty (Points) & Promotions Pipeline
+
+The points system encourages user retention through rewards.
+
+**Prerequisite (Understanding Points):**
+The system tracks two distinct types of points:
+*   **Spendable Points (`PromotionPoint`):** The currency the user can actually spend.
+*   **Tier Points (`CurrentYearTierPoints`):** A lifetime/annual tracking metric used strictly for evaluating VIP tier upgrades. Spending points does *not* reduce Tier Points.
+
+**Earning Points:**
+Points are awarded based on the final price of services rendered.
+*   **Business Rule:** Points are **ONLY** awarded when the staff updates a booking status to `Completed`.
+*   **FE Action:** Do not show points as "earned" or "pending" while a booking is in `Pending` or `CheckedIn` status. Only reflect points after the booking lifecycle concludes.
+
+**Spending Points:**
+Users have two avenues to spend their `PromotionPoint` balance:
+1.  **Direct Booking Discount:** Applying points directly in the `CreateBookingDTO` to reduce the final fiat cost.
+2.  **Voucher Redemption:** Exchanging points for a reusable discount code via `POST /api/v1/vouchers/redeem`.
+
+> **Note: FIFO Expiration Rule**
+> The backend enforces a First-In, First-Out (FIFO) logic for point expiration. Points earned oldest are spent or expired first.
+
+### 3. Ranking & Tier Pipeline
+
+The Tier system (e.g., Standard, Gold, Platinum) unlocks benefits like VIP-only Time Slots and point multipliers.
+
+**Evaluation Logic:**
+A user's Tier upgrade is evaluated automatically when a booking is completed.
+*   **Business Rule:** Upgrades are evaluated strictly against `CurrentYearTierPoints` (total accumulated) checking if it meets a Tier's `MinAccumulatedPoints`. It does NOT check the user's current spendable balance. A user who spends all their points can still reach Platinum status.
+
+**Annual Reset Worker:**
+*   **Business Rule:** The system utilizes an `AnnualTierResetWorker` which triggers every year on January 1st. This worker resets `CurrentYearTierPoints` and evaluates if the user maintains their current tier or downgrades based on the previous year's activity.
+
+**FE Actionable (User Retention UI):**
+Because tiers and certain points reset annually, the Frontend plays a vital role in user engagement.
+*   **Implementation Requirement:** The Frontend should read the expiration and tier data to display proactive UI warnings. For example, during December, display banners such as: *"Your Gold status and 500 points expire on Dec 31st! Book a wash now to maintain your benefits!"*
+
+---
 *End of Document*
