@@ -127,55 +127,6 @@ Used if the user wants to change the `vehicleTypeId` or remove a car from their 
 
 ## 3. Customer Booking Process Flow
 
-## The Booking Data Pipeline & Prerequisites
-
-For a customer to successfully create a booking using `POST /api/v1/bookings`, both the Backend Admin configuration and the Frontend data retrieval must happen in a specific order.
-
-The booking system relies on relational data: a vehicle belongs to a specific `VehicleType`, services have prices that vary by `VehicleType`, and bookings are scheduled into `TimeSlots`.
-
-### 1. Admin System Setup (Prerequisites)
-Before any bookings can occur, the Admin must configure the master data:
-1.  **Create Vehicle Types:** Admin calls `POST /api/v1/admin/vehicle-types` (e.g., "Sedan", "SUV", "Motorcycle"). This generates `vehicleTypeId`s.
-2.  **Create Services & Pricing:** Admin calls `POST /api/v1/admin/services`. When creating a service (e.g., "Standard Wash"), the admin must link prices to the existing `vehicleTypeId`s created in step 1. This generates `serviceId`s.
-3.  **Generate Time Slots:** Admin configures available business hours, generating `slotId`s that represent blocks of time (e.g., 08:00 - 09:00).
-
-### 2. Frontend Pre-Booking Flow (Data Retrieval)
-To build the `CreateBookingDTO` payload, the Frontend must gather IDs from the configured master data.
-
-1.  **Registering the User's Vehicle (Needs `vehicleTypeId`)**
-    *   *Action:* FE calls `GET /api/v1/admin/vehicle-types` (or pre-fetches it).
-    *   *User Input:* User selects their car type (e.g., Sedan).
-    *   *Action:* FE calls `POST /api/v1/vehicles` with `licensePlate` and the selected `vehicleTypeId`.
-2.  **Selecting a Service (Needs `serviceId`)**
-    *   *Action:* FE calls `GET /api/v1/services`.
-    *   *User Input:* User selects "Standard Wash".
-    *   *Result:* FE stores the `serviceId` to pass in the booking payload.
-3.  **Selecting a Time Slot (Needs `slotId` and `scheduledDate`)**
-    *   *Action:* FE calls `GET /api/v1/bookings/slots?targetDate=YYYY-MM-DD`.
-    *   *User Input:* User selects an available slot (e.g., 08:00 - 09:00).
-    *   *Result:* FE stores the `slotId` and the chosen `scheduledDate`.
-4.  **Wallet Preparation (Needs sufficient balance)**
-    *   *Action:* FE calls `GET /api/v1/wallets/me`.
-    *   *Result:* FE calculates the total price of the selected services. If the wallet balance is lower than the required deposit, the FE must guide the user to `POST /api/v1/wallets/top-up` before submitting the booking.
-
-### 3. Assembling the Booking Payload
-Once the above steps are completed, the Frontend has all the necessary relational IDs and funds to execute the booking.
-
-```json
-{
-  "scheduledDate": "2023-12-01T00:00:00Z", // From Date Picker
-  "slotId": 1,                             // From GET /api/v1/bookings/slots
-  "pointsToUse": 0,                        // From user input, validated against GET /api/v1/wallets/me
-  "voucherId": null,                       // From GET /api/v1/vouchers/me (if applicable)
-  "vehicles": [
-    {
-      "licensePlate": "51H12345",          // From GET /api/v1/vehicles
-      "serviceId": 1                       // From GET /api/v1/services
-    }
-  ]
-}
-```
-
 This flow covers how a frontend app builds a booking (selecting services, checking dates, applying points/vouchers, and confirming). The system uses a "shopping cart" style architecture where a single booking can include multiple vehicles.
 
 ### Step 1: Fetch Available Services
@@ -424,62 +375,120 @@ Used by admins to view customer details, ban accounts, or review history.
 
 ---
 
-## Business Logic Pipelines & Frontend Integration Guide
+## Frontend Integration Guide: The Business Flows
 
-This section is critical for Frontend Developers. It explains the underlying business rules and the exact integration sequences required to build functional Wallet, Loyalty, and Tier systems.
+As the Backend Tech Lead, I have structured this guide to explain the **Business Flows** rather than just listing endpoints. Read this carefully to understand how data flows through the SmartWash system.
 
-### 1. Wallet & Payment Pipeline
+### 1. User Registration Flow
+**Endpoint:** `POST /api/v1/auth/register`
+**1. Business Purpose:** Creates a new Customer account along with an empty Wallet and Profile.
+**2. Prerequisites (Crucial):** None. This is the entry point.
+**3. Request Payload:**
+```json
+{
+  "phoneNumber": "0912345678",
+  "email": "user@example.com",
+  "password": "Password123",
+  "fullName": "Nguyen Van A"
+}
+```
+**4. Expected Response & Error Handling:**
+*   **Success (201):** User is created.
+*   **Error (400):** Watch out for "Email/Phone already exists" or "Password does not meet complexity requirements" (requires 8 chars, 1 uppercase, 1 number).
+**5. Next Steps:** Automatically redirect the user to the Login screen.
+**6. ⚠️ Critical Warnings for FE:** Do not log the user in automatically after registration. Force them through the explicit login flow to establish JWT tokens.
 
-The SmartWash system operates on a prepaid wallet model. Customers must have sufficient funds in their internal wallet before they can execute a booking.
+### 2. Authentication & Token Management
+**Endpoint:** `POST /api/v1/auth/login`
+**1. Business Purpose:** Authenticates the user and provisions JWT Access & Refresh tokens.
+**2. Prerequisites (Crucial):** User must exist.
+**3. Request Payload:**
+```json
+{
+  "phoneOrEmail": "0912345678",
+  "password": "Password123"
+}
+```
+**4. Expected Response & Error Handling:**
+*   **Success (200):** Returns `Token` (15m expiry) and `RefreshToken` (7d expiry).
+*   **Error (401):** "Invalid credentials".
+*   **Error (429):** "Too many requests" (Brute-force protection is active, tell user to wait).
+**5. Next Steps:** Store tokens securely (e.g., localStorage/secure cookies). Call `GET /api/v1/users/me` and `GET /api/v1/wallets/me` to hydrate the app state.
+**6. ⚠️ Critical Warnings for FE:** Access tokens expire quickly. You MUST implement an axios interceptor (or similar) to catch `401 Unauthorized` errors, call `POST /api/v1/auth/refresh-token`, and automatically retry the failed request without logging the user out.
 
-**Prerequisite:** A user's Wallet is generated automatically during the account Registration process.
-* **FE Action:** The Frontend should fetch the user's balance by calling `GET /api/v1/wallets/me` immediately upon successful login or app initialization.
+### 3. Vehicle Registration Flow
+**Endpoint:** `POST /api/v1/vehicles`
+**1. Business Purpose:** Registers a customer's car to their profile so it can be selected during booking.
+**2. Prerequisites (Crucial):** You must call `GET /api/v1/admin/vehicle-types` first to populate a dropdown so the user can select their `vehicleTypeId` (e.g., Sedan, SUV).
+**3. Request Payload:**
+```json
+{
+  "licensePlate": "51H-123.45",
+  "vehicleTypeId": 1
+}
+```
+**4. Expected Response & Error Handling:**
+*   **Success (200):** Vehicle added. Backend automatically normalizes the plate (e.g., "51H12345").
+*   **Error (400):** "License plate already registered."
+**5. Next Steps:** Call `GET /api/v1/vehicles` to refresh the user's garage UI.
+**6. ⚠️ Critical Warnings for FE:** The backend relies on soft-deletes. If a user deleted a car previously and tries to re-add it, the backend handles the recovery, but FE just treats it as a standard success.
 
-**The Payment Flow:**
-To add funds to the wallet, the system relies on the third-party PayOS gateway.
-1.  **Initiate Top-Up:** The Frontend calls `POST /api/v1/wallets/top-up` with the desired `amount` and the FE redirect URLs (`returnUrl` / `cancelUrl`).
-2.  **Redirect to Gateway:** The backend creates a `Pending` transaction and returns a `checkoutUrl`. The Frontend must redirect the user's browser/webview to this PayOS checkout page.
+### 4. Wallet Top-Up Flow (PayOS Integration)
+**Endpoint:** `POST /api/v1/wallets/top-up`
+**1. Business Purpose:** Generates a payment session to add fiat currency to the user's SmartWash wallet.
+**2. Prerequisites (Crucial):** FE must know the environment's callback URLs.
+**3. Request Payload:**
+```json
+{
+  "amount": 200000.0,
+  "cancelUrl": "https://yourapp.com/payment/cancel",
+  "returnUrl": "https://yourapp.com/payment/success"
+}
+```
+**4. Expected Response & Error Handling:**
+*   **Success (200):** Returns a `checkoutUrl`.
+*   **Error (400):** Invalid amount (must be positive).
+**5. Next Steps:** Redirect the browser/webview entirely to the `checkoutUrl`.
+**6. ⚠️ Critical Warnings for FE:** **ASYNCHRONOUS COMPLETION!** When the user lands back on your `returnUrl`, the money might NOT be in their wallet yet. The backend relies on PayOS firing a webhook. FE MUST implement a polling mechanism (calling `GET /api/v1/wallets/me` every 3 seconds) until the `balance` increases, before showing "Success" to the user.
 
-> **CRITICAL WARNING FOR FE: ASYNCHRONOUS PAYMENT COMPLETION**
-> Do **NOT** assume the payment is successful just because the user returns to your `returnUrl`. The Top-Up API does not return immediate success to the frontend. The actual wallet balance is updated via an asynchronous server-to-server Webhook (`POST /api/v1/wallets/top-up/callback`).
-> **Implementation Requirement:** When the user lands on the `returnUrl`, the Frontend MUST implement polling on `GET /api/v1/wallets/me` (or listen to a WebSocket/SignalR event if implemented) to verify that the `balance` has increased before showing a "Payment Successful" screen to the user.
+### 5. Master Booking Flow (The Cart Architecture)
+**Endpoint:** `POST /api/v1/bookings`
+**1. Business Purpose:** Deducts funds from the wallet and locks in a time slot for washing one or multiple vehicles.
+**2. Prerequisites (Crucial):** This is the most complex API. FE must gather:
+    *   `GET /api/v1/vehicles` -> to get `LicensePlate`.
+    *   `GET /api/v1/services` -> to let user pick `serviceId`.
+    *   `GET /api/v1/bookings/slots?targetDate=...` -> to pick an available `slotId`.
+    *   `GET /api/v1/wallets/me` -> to ensure Balance >= Total Price.
+**3. Request Payload:**
+```json
+{
+  "scheduledDate": "2023-12-01T00:00:00Z",
+  "slotId": 1,
+  "pointsToUse": 0,
+  "voucherId": null,
+  "vehicles": [
+    { "licensePlate": "51H12345", "serviceId": 1 }
+  ]
+}
+```
+**4. Expected Response & Error Handling:**
+*   **Success (200):** Booking confirmed, wallet deducted.
+*   **Error (400):** "Insufficient balance" (redirect user to Top-up).
+*   **Error (400):** "Vehicle already has pending booking" (Anti-hoarding rule).
+*   **Error (400):** "Slot capacity exceeded" (someone booked it fractions of a second before them).
+**5. Next Steps:** Redirect user to the "Booking History" screen and call `GET /api/v1/bookings/me`.
+**6. ⚠️ Critical Warnings for FE:** Ensure `scheduledDate` is sent in UTC formatting but represents the correct local day. Validate the user's wallet balance locally *before* enabling the "Submit Booking" button to prevent unnecessary API failures.
 
-### 2. Loyalty (Points) & Promotions Pipeline
-
-The points system encourages user retention through rewards.
-
-**Prerequisite (Understanding Points):**
-The system tracks two distinct types of points:
-*   **Spendable Points (`PromotionPoint`):** The currency the user can actually spend.
-*   **Tier Points (`CurrentYearTierPoints`):** A lifetime/annual tracking metric used strictly for evaluating VIP tier upgrades. Spending points does *not* reduce Tier Points.
-
-**Earning Points:**
-Points are awarded based on the final price of services rendered.
-*   **Business Rule:** Points are **ONLY** awarded when the staff updates a booking status to `Completed`.
-*   **FE Action:** Do not show points as "earned" or "pending" while a booking is in `Pending` or `CheckedIn` status. Only reflect points after the booking lifecycle concludes.
-
-**Spending Points:**
-Users have two avenues to spend their `PromotionPoint` balance:
-1.  **Direct Booking Discount:** Applying points directly in the `CreateBookingDTO` to reduce the final fiat cost.
-2.  **Voucher Redemption:** Exchanging points for a reusable discount code via `POST /api/v1/vouchers/redeem`.
-
-> **Note: FIFO Expiration Rule**
-> The backend enforces a First-In, First-Out (FIFO) logic for point expiration. Points earned oldest are spent or expired first.
-
-### 3. Ranking & Tier Pipeline
-
-The Tier system (e.g., Standard, Gold, Platinum) unlocks benefits like VIP-only Time Slots and point multipliers.
-
-**Evaluation Logic:**
-A user's Tier upgrade is evaluated automatically when a booking is completed.
-*   **Business Rule:** Upgrades are evaluated strictly against `CurrentYearTierPoints` (total accumulated) checking if it meets a Tier's `MinAccumulatedPoints`. It does NOT check the user's current spendable balance. A user who spends all their points can still reach Platinum status.
-
-**Annual Reset Worker:**
-*   **Business Rule:** The system utilizes an `AnnualTierResetWorker` which triggers every year on January 1st. This worker resets `CurrentYearTierPoints` and evaluates if the user maintains their current tier or downgrades based on the previous year's activity.
-
-**FE Actionable (User Retention UI):**
-Because tiers and certain points reset annually, the Frontend plays a vital role in user engagement.
-*   **Implementation Requirement:** The Frontend should read the expiration and tier data to display proactive UI warnings. For example, during December, display banners such as: *"Your Gold status and 500 points expire on Dec 31st! Book a wash now to maintain your benefits!"*
+### 6. Tier & Loyalty Points Processing
+**Endpoint:** Background / Implicit via `GET /api/v1/users/me`
+**1. Business Purpose:** Rewards users for loyalty and evaluates VIP upgrades.
+**2. Prerequisites (Crucial):** Points are only awarded AFTER a booking status is updated to `Completed` by the Staff.
+**3. Request Payload:** N/A (Read-only for Customer FE).
+**4. Expected Response & Error Handling:** `TotalPoint` (lifetime) and `PromotionPoint` (spendable) will increase.
+**5. Next Steps:** Update UI badges (e.g., "Gold Member"). Users can spend points in two ways:
+    *   **Direct Discount:** Pass `pointsToUse` > 0 in the `POST /api/v1/bookings` payload.
+    *   **Redeem Voucher:** Call `POST /api/v1/vouchers/redeem` to convert points into a discount code.
+**6. ⚠️ Critical Warnings for FE:** Tiers (`CurrentYearTierPoints`) reset automatically every January 1st via a backend worker. FE should read the tier requirements and warn users in December: *"Your points expire soon, book now!"* Furthermore, points expire via FIFO logic. Do not display points as "pending" during a wash; they do not exist until the wash is finalized.
 
 ---
 *End of Document*
