@@ -127,6 +127,55 @@ Used if the user wants to change the `vehicleTypeId` or remove a car from their 
 
 ## 3. Customer Booking Process Flow
 
+## The Booking Data Pipeline & Prerequisites
+
+For a customer to successfully create a booking using `POST /api/v1/bookings`, both the Backend Admin configuration and the Frontend data retrieval must happen in a specific order.
+
+The booking system relies on relational data: a vehicle belongs to a specific `VehicleType`, services have prices that vary by `VehicleType`, and bookings are scheduled into `TimeSlots`.
+
+### 1. Admin System Setup (Prerequisites)
+Before any bookings can occur, the Admin must configure the master data:
+1.  **Create Vehicle Types:** Admin calls `POST /api/v1/admin/vehicle-types` (e.g., "Sedan", "SUV", "Motorcycle"). This generates `vehicleTypeId`s.
+2.  **Create Services & Pricing:** Admin calls `POST /api/v1/admin/services`. When creating a service (e.g., "Standard Wash"), the admin must link prices to the existing `vehicleTypeId`s created in step 1. This generates `serviceId`s.
+3.  **Generate Time Slots:** Admin configures available business hours, generating `slotId`s that represent blocks of time (e.g., 08:00 - 09:00).
+
+### 2. Frontend Pre-Booking Flow (Data Retrieval)
+To build the `CreateBookingDTO` payload, the Frontend must gather IDs from the configured master data.
+
+1.  **Registering the User's Vehicle (Needs `vehicleTypeId`)**
+    *   *Action:* FE calls `GET /api/v1/admin/vehicle-types` (or pre-fetches it).
+    *   *User Input:* User selects their car type (e.g., Sedan).
+    *   *Action:* FE calls `POST /api/v1/vehicles` with `licensePlate` and the selected `vehicleTypeId`.
+2.  **Selecting a Service (Needs `serviceId`)**
+    *   *Action:* FE calls `GET /api/v1/services`.
+    *   *User Input:* User selects "Standard Wash".
+    *   *Result:* FE stores the `serviceId` to pass in the booking payload.
+3.  **Selecting a Time Slot (Needs `slotId` and `scheduledDate`)**
+    *   *Action:* FE calls `GET /api/v1/bookings/slots?targetDate=YYYY-MM-DD`.
+    *   *User Input:* User selects an available slot (e.g., 08:00 - 09:00).
+    *   *Result:* FE stores the `slotId` and the chosen `scheduledDate`.
+4.  **Wallet Preparation (Needs sufficient balance)**
+    *   *Action:* FE calls `GET /api/v1/wallets/me`.
+    *   *Result:* FE calculates the total price of the selected services. If the wallet balance is lower than the required deposit, the FE must guide the user to `POST /api/v1/wallets/top-up` before submitting the booking.
+
+### 3. Assembling the Booking Payload
+Once the above steps are completed, the Frontend has all the necessary relational IDs and funds to execute the booking.
+
+```json
+{
+  "scheduledDate": "2023-12-01T00:00:00Z", // From Date Picker
+  "slotId": 1,                             // From GET /api/v1/bookings/slots
+  "pointsToUse": 0,                        // From user input, validated against GET /api/v1/wallets/me
+  "voucherId": null,                       // From GET /api/v1/vouchers/me (if applicable)
+  "vehicles": [
+    {
+      "licensePlate": "51H12345",          // From GET /api/v1/vehicles
+      "serviceId": 1                       // From GET /api/v1/services
+    }
+  ]
+}
+```
+
 This flow covers how a frontend app builds a booking (selecting services, checking dates, applying points/vouchers, and confirming). The system uses a "shopping cart" style architecture where a single booking can include multiple vehicles.
 
 ### Step 1: Fetch Available Services
