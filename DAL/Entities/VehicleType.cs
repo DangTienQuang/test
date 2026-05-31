@@ -14,6 +14,8 @@ namespace AutoWashPro.DAL.Entities
 
         public string? Description { get; set; }
 
+        public int BaseWeight { get; set; } = 1;
+
         public ICollection<Vehicle> Vehicles { get; set; }
     }
 }

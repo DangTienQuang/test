@@ -12,6 +12,27 @@ namespace AutoWashPro.BLL.DTOs
         public string? Reason { get; set; }
     }
 
+    public class CompatibilityDTO
+    {
+        public bool IsCompatible { get; set; }
+        public string? Message { get; set; }
+        public int RemainingCapacity { get; set; }
+        public int TotalCapacityWeight { get; set; }
+        public int MaxCapacityOfSlot { get; set; }
+    }
+
+    public class CheckCompatibilityRequestDTO
+    {
+        [Required]
+        public int SlotId { get; set; }
+
+        [Required]
+        public DateTime TargetDate { get; set; }
+
+        [Required]
+        public List<VehicleBookingItemDTO> Vehicles { get; set; } = new List<VehicleBookingItemDTO>();
+    }
+
     public class VehicleBookingItemDTO
     {
         [Required]

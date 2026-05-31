@@ -7,6 +7,7 @@ namespace AutoWashPro.BLL.DTOs
         public int Id { get; set; }
         public string Name { get; set; }
         public string? Description { get; set; }
+        public int BaseWeight { get; set; }
     }
 
     public class CreateVehicleTypeDTO
@@ -16,5 +17,8 @@ namespace AutoWashPro.BLL.DTOs
         public string Name { get; set; }
 
         public string? Description { get; set; }
+
+        [Range(0, 100)]
+        public int BaseWeight { get; set; } = 1;
     }
 }

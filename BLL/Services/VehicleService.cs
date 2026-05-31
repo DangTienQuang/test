@@ -33,7 +33,8 @@ namespace AutoWashPro.BLL.Services
                     LicensePlate = v.LicensePlate,
                     VehicleTypeId = v.VehicleTypeId,
                     VehicleType = v.VehicleType.Name,
-                    RegistrationPhotoUrl = v.RegistrationPhotoUrl
+                    RegistrationPhotoUrl = v.RegistrationPhotoUrl,
+                    CarModel = v.CarModel
                 }).ToListAsync();
         }
 
@@ -90,6 +91,7 @@ namespace AutoWashPro.BLL.Services
                 existingVehicle.VehicleTypeId = request.VehicleTypeId;
                 existingVehicle.RegistrationPhotoUrl = finalPhotoUrl;
                 existingVehicle.UserNote = request.UserNote;
+                existingVehicle.CarModel = request.CarModel;
             }
             else
             {
@@ -99,7 +101,8 @@ namespace AutoWashPro.BLL.Services
                     VehicleTypeId = request.VehicleTypeId,
                     UserId = userId,
                     RegistrationPhotoUrl = finalPhotoUrl,
-                    UserNote = request.UserNote
+                    UserNote = request.UserNote,
+                    CarModel = request.CarModel
                 };
 
                 _context.Vehicles.Add(vehicle);
@@ -125,7 +128,8 @@ namespace AutoWashPro.BLL.Services
                     OwnerName = v.User.CustomerProfile != null ? v.User.CustomerProfile.FullName : null,
                     OwnerPhone = v.User != null ? v.User.PhoneNumber : null,
                     RegistrationPhotoUrl = v.RegistrationPhotoUrl,
-                    UserNote = v.UserNote
+                    UserNote = v.UserNote,
+                    CarModel = v.CarModel
                 }).ToListAsync();
         }
 
@@ -298,6 +302,8 @@ namespace AutoWashPro.BLL.Services
                 vehicle.UserNote = request.UserNote;
             }
 
+            vehicle.CarModel = request.CarModel;
+
             await _context.SaveChangesAsync();
 
             return true;
@@ -352,7 +358,8 @@ namespace AutoWashPro.BLL.Services
                 TierName = vehicle.User.CustomerProfile.Tier?.TierName ?? "N/A",
                 HasActiveBooking = activeBooking != null,
                 ActiveBookingId = activeBooking?.BookingId,
-                ScheduledTime = activeBooking?.ScheduledTime
+                ScheduledTime = activeBooking?.ScheduledTime,
+                CarModel = vehicle.CarModel
             };
         }
     }
