@@ -101,7 +101,8 @@ namespace AutoWashPro.BLL.Services
                     VehicleTypeId = request.VehicleTypeId,
                     UserId = userId,
                     RegistrationPhotoUrl = finalPhotoUrl,
-                    UserNote = request.UserNote
+                    UserNote = request.UserNote,
+                    CarModel = request.CarModel
                 };
 
                 _context.Vehicles.Add(vehicle);
@@ -301,10 +302,7 @@ namespace AutoWashPro.BLL.Services
                 vehicle.UserNote = request.UserNote;
             }
 
-            if (!string.IsNullOrWhiteSpace(request.CarModel))
-            {
-                vehicle.CarModel = request.CarModel;
-            }
+            vehicle.CarModel = request.CarModel;
 
             await _context.SaveChangesAsync();
 
