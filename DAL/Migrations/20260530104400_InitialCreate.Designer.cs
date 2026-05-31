@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DAL.Migrations
 {
     [DbContext(typeof(AutoWashDbContext))]
-    [Migration("20260528101527_Ten_Migration_Cua_Ban")]
-    partial class Ten_Migration_Cua_Ban
+    [Migration("20260530104400_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -60,9 +60,6 @@ namespace DAL.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("varchar(20)");
-
-                    b.Property<int>("TrustScorePenalty")
-                        .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime(6)");
@@ -131,6 +128,9 @@ namespace DAL.Migrations
                     b.Property<double>("ChurnScore")
                         .HasColumnType("double");
 
+                    b.Property<int>("CurrentYearTierPoints")
+                        .HasColumnType("int");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -158,9 +158,6 @@ namespace DAL.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("TotalPoint")
-                        .HasColumnType("int");
-
-                    b.Property<int>("TrustScore")
                         .HasColumnType("int");
 
                     b.Property<int>("UserId")
@@ -459,8 +456,17 @@ namespace DAL.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("varchar(20)");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("RegistrationPhotoUrl")
+                        .HasColumnType("longtext");
+
                     b.Property<int?>("UserId")
                         .HasColumnType("int");
+
+                    b.Property<string>("UserNote")
+                        .HasColumnType("longtext");
 
                     b.Property<int>("VehicleTypeId")
                         .HasColumnType("int");

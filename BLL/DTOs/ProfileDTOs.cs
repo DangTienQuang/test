@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Http;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -19,7 +20,9 @@ namespace AutoWashPro.BLL.DTOs
     public class VehicleDTO
     {
         public string LicensePlate { get; set; }
+        public int VehicleTypeId { get; set; }
         public string VehicleType { get; set; }
+        public string? RegistrationPhotoUrl { get; set; }
     }
 
     public class CreateVehicleDTO
@@ -32,7 +35,7 @@ namespace AutoWashPro.BLL.DTOs
         public int VehicleTypeId { get; set; }
 
         public string? RegistrationPhotoUrl { get; set; }
-
+        public IFormFile? PhotoFile { get; set; }
         public string? UserNote { get; set; }
     }
 
@@ -40,6 +43,8 @@ namespace AutoWashPro.BLL.DTOs
     {
         [Required(ErrorMessage = "Vui lòng chọn loại xe.")]
         public int VehicleTypeId { get; set; }
+        public IFormFile? PhotoFile { get; set; }
+        public string? UserNote { get; set; }
     }
 
     public class UpdateUserProfileDTO
