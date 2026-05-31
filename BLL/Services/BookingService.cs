@@ -63,7 +63,18 @@ namespace AutoWashPro.BLL.Services
 
                     if (servicePrice != null)
                     {
-                        totalRequestWeight += servicePrice.CapacityWeight;
+                        if (servicePrice.CapacityWeight > 0)
+                        {
+                            totalRequestWeight += servicePrice.CapacityWeight;
+                        }
+                        else
+                        {
+                            var vehicleType = await _context.VehicleTypes.FirstOrDefaultAsync(vt => vt.Id == item.VehicleTypeId);
+                            if (vehicleType != null)
+                            {
+                                totalRequestWeight += vehicleType.BaseWeight;
+                            }
+                        }
                     }
                 }
             }
@@ -266,15 +277,17 @@ namespace AutoWashPro.BLL.Services
                 if (servicePrice == null)
                     throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Dịch vụ này chưa hỗ trợ cho loại xe {item.LicensePlate}.");
 
+                var actualCapacityWeight = servicePrice.CapacityWeight > 0 ? servicePrice.CapacityWeight : vehicle.VehicleType.BaseWeight;
+
                 totalOriginalPrice += servicePrice.Price;
-                totalCapacityWeight += servicePrice.CapacityWeight;
+                totalCapacityWeight += actualCapacityWeight;
 
                 pendingDetails.Add(new BookingDetail
                 {
                     LicensePlate = item.LicensePlate,
                     ServiceId = item.ServiceId,
                     Price = servicePrice.Price,
-                    CapacityWeight = servicePrice.CapacityWeight,
+                    CapacityWeight = actualCapacityWeight,
                     VehicleCondition = VehicleCondition.Clean
                 });
             }
@@ -763,14 +776,17 @@ namespace AutoWashPro.BLL.Services
                 if (servicePrice == null)
                     throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Dịch vụ này chưa hỗ trợ cho loại xe {item.LicensePlate}.");
 
+                var actualCapacityWeight = servicePrice.CapacityWeight > 0 ? servicePrice.CapacityWeight : vehicle.VehicleType.BaseWeight;
+
                 totalOriginalPrice += servicePrice.Price;
-                totalCapacityWeight += servicePrice.CapacityWeight;
+                totalCapacityWeight += actualCapacityWeight;
 
                 pendingDetails.Add(new BookingDetail
                 {
                     LicensePlate = item.LicensePlate,
                     ServiceId = item.ServiceId,
                     Price = servicePrice.Price,
+                    CapacityWeight = actualCapacityWeight,
                     VehicleCondition = VehicleCondition.Clean
                 });
             }

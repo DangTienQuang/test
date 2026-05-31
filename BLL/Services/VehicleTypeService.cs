@@ -26,7 +26,8 @@ namespace AutoWashPro.BLL.Services
                 {
                     Id = t.Id,
                     Name = t.Name,
-                    Description = t.Description
+                    Description = t.Description,
+                    BaseWeight = t.BaseWeight
                 }).ToListAsync();
         }
 
@@ -39,13 +40,14 @@ namespace AutoWashPro.BLL.Services
             var type = new VehicleType
             {
                 Name = typeName,
-                Description = request.Description
+                Description = request.Description,
+                BaseWeight = request.BaseWeight
             };
 
             _context.VehicleTypes.Add(type);
             await _context.SaveChangesAsync();
 
-            return new VehicleTypeDTO { Id = type.Id, Name = type.Name, Description = type.Description };
+            return new VehicleTypeDTO { Id = type.Id, Name = type.Name, Description = type.Description, BaseWeight = type.BaseWeight };
         }
 
         public async Task<bool> UpdateAsync(int id, CreateVehicleTypeDTO request)
@@ -59,6 +61,7 @@ namespace AutoWashPro.BLL.Services
 
             type.Name = typeName;
             type.Description = request.Description;
+            type.BaseWeight = request.BaseWeight;
             await _context.SaveChangesAsync();
 
             return true;
