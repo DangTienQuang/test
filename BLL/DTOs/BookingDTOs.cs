@@ -21,7 +21,20 @@ namespace AutoWashPro.BLL.DTOs
         [Required]
         public int ServiceId { get; set; }
     }
+    public class CheckAvailableSlotsRequestDTO
+    {
+        [Required]
+        public DateTime TargetDate { get; set; }
 
+        [Required]
+        public List<BookingVehicleItemDTO> BookingVehicles { get; set; } = new List<BookingVehicleItemDTO>();
+    }
+
+    public class BookingVehicleItemDTO
+    {
+        public int VehicleTypeId { get; set; }
+        public int ServiceId { get; set; }
+    }
     public class CreateBookingDTO
     {
         [Required(ErrorMessage = "Vui lòng chọn ít nhất 1 xe.")]
@@ -87,3 +100,4 @@ namespace AutoWashPro.BLL.DTOs
         public required string Reason { get; set; }
     }
 }
+

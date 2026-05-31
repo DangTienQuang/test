@@ -7,7 +7,7 @@ namespace AutoWashPro.BLL.Services
 {
     public interface IBookingService
     {
-        Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, DateTime targetDate);
+        Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, CheckAvailableSlotsRequestDTO request);
         Task<BookingResponseDTO> GetBookingByIdAsync(int userId, int bookingId);
         Task<BookingResponseDTO> CreateBookingAsync(int userId, CreateBookingDTO request);
         Task<BookingResponseDTO> CreateWalkInBookingAsync(int staffId, CreateWalkInBookingDTO request);

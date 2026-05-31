@@ -29,7 +29,7 @@ namespace AutoWashPro.API.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddVehicle([FromBody] CreateVehicleDTO request)
+        public async Task<IActionResult> AddVehicle([FromForm] CreateVehicleDTO request)
         {
             int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
             await _vehicleService.AddVehicleAsync(userId, request);
@@ -37,7 +37,7 @@ namespace AutoWashPro.API.Controllers
         }
 
         [HttpPut("{licensePlate}")]
-        public async Task<IActionResult> UpdateVehicle(string licensePlate, [FromBody] UpdateVehicleDTO request)
+        public async Task<IActionResult> UpdateVehicle(string licensePlate, [FromForm] UpdateVehicleDTO request)
         {
             int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
             await _vehicleService.UpdateVehicleAsync(userId, licensePlate, request);
@@ -52,7 +52,7 @@ namespace AutoWashPro.API.Controllers
             return Ok(new { statusCode = 200, message = "Đã xóa phương tiện khỏi hồ sơ." });
         }
 
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin")] 
         [HttpGet("recognize/{licensePlate}")]
         public async Task<IActionResult> RecognizeVehicle(string licensePlate)
         {

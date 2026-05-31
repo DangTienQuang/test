@@ -31,27 +31,53 @@ namespace AutoWashPro.BLL.Services
             _voucherService = voucherService;
         }
 
-        public async Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, DateTime targetDate)
+        public async Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, CheckAvailableSlotsRequestDTO request)
         {
             var userProfile = await _context.CustomerProfiles.Include(cp => cp.Tier).FirstOrDefaultAsync(cp => cp.UserId == userId);
             if (userProfile == null || userProfile.Tier == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy thông tin hạng thành viên.");
 
-            var maxDate = DateTime.UtcNow.Date.AddDays(userProfile.Tier.BookingWindowDays);
-            if (targetDate.Date < DateTime.UtcNow.Date || targetDate.Date > maxDate)
+            // 1. SỬA LỖI MÚI GIỜ (Dùng cho cả Docker/Linux/Windows)
+            TimeZoneInfo vnTimeZone;
+            try { vnTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time"); }
+            catch (TimeZoneNotFoundException) { vnTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh"); }
+
+            DateTime todayInVN = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vnTimeZone).Date;
+            TimeSpan currentTimeInVN = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vnTimeZone).TimeOfDay;
+
+            var maxDate = todayInVN.AddDays(userProfile.Tier.BookingWindowDays);
+
+            if (request.TargetDate.Date < todayInVN || request.TargetDate.Date > maxDate)
             {
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Hạng {userProfile.Tier.TierName} chỉ được đặt trước từ hôm nay đến ngày {maxDate:dd/MM/yyyy}.");
+            }
+
+            // 2. TÍNH TỔNG TRỌNG LƯỢNG (WEIGHT) CỦA GIỎ HÀNG KHÁCH VỪA CHỌN
+            int totalRequestWeight = 0;
+            if (request.BookingVehicles != null && request.BookingVehicles.Any())
+            {
+                foreach (var item in request.BookingVehicles)
+                {
+                    var servicePrice = await _context.ServicePrices
+                        .FirstOrDefaultAsync(sp => sp.ServiceId == item.ServiceId
+                                                && sp.VehicleTypeId == item.VehicleTypeId);
+
+                    if (servicePrice != null)
+                    {
+                        totalRequestWeight += servicePrice.CapacityWeight;
+                    }
+                }
             }
 
             var allSlots = await _context.TimeSlots.OrderBy(s => s.StartTime).ToListAsync();
             var response = new List<TimeSlotResponseDTO>();
 
-            // Change from Bookings count to DailySlotCapacity BookedWeight
             var dailyCapacities = await _context.DailySlotCapacities
-                .Where(dc => dc.Date == targetDate.Date)
+                .Where(dc => dc.Date == request.TargetDate.Date)
                 .ToDictionaryAsync(dc => dc.SlotId, dc => dc.BookedWeight);
 
             bool isVip = userProfile.Tier.TierName.ToLower() == "gold" || userProfile.Tier.TierName.ToLower() == "platinum";
 
+            // 3. VÒNG LẶP KIỂM TRA TỪNG SLOT
             foreach (var slot in allSlots)
             {
                 var slotDto = new TimeSlotResponseDTO
@@ -68,17 +94,22 @@ namespace AutoWashPro.BLL.Services
                     slotDto.Reason = "Chỉ dành cho VIP";
                 }
 
-                if (targetDate.Date == DateTime.UtcNow.Date && slot.StartTime < DateTime.UtcNow.TimeOfDay)
+                // Chặn slot quá giờ so với giờ Việt Nam
+                if (request.TargetDate.Date == todayInVN && slot.StartTime < currentTimeInVN)
                 {
                     slotDto.IsAvailable = false;
                     slotDto.Reason = "Đã qua giờ";
                 }
 
                 int bookedWeight = dailyCapacities.TryGetValue(slot.SlotId, out int weight) ? weight : 0;
-                if (bookedWeight >= slot.MaxCapacity)
+
+                // --- LOGIC AI SỨC CHỨA ---
+                // Lượng đã đặt + Lượng khách ĐANG ĐỊNH ĐẶT > Sức chứa tối đa
+                if (bookedWeight + totalRequestWeight > slot.MaxCapacity)
                 {
                     slotDto.IsAvailable = false;
-                    slotDto.Reason = "Đã kín chỗ";
+                    // Nếu khách có add xe vào giỏ thì báo "Không đủ chỗ cho dịch vụ", nếu không thì báo "Đã kín"
+                    slotDto.Reason = totalRequestWeight > 0 ? "Không đủ sức chứa cho giỏ hàng của bạn" : "Đã kín chỗ";
                 }
 
                 response.Add(slotDto);
@@ -86,7 +117,6 @@ namespace AutoWashPro.BLL.Services
 
             return response;
         }
-
         public async Task<List<BookingResponseDTO>> GetAllBookingsByDateAsync(DateTime targetDate)
         {
             var bookings = await _context.Bookings
@@ -244,6 +274,7 @@ namespace AutoWashPro.BLL.Services
                     LicensePlate = item.LicensePlate,
                     ServiceId = item.ServiceId,
                     Price = servicePrice.Price,
+                    CapacityWeight = servicePrice.CapacityWeight,
                     VehicleCondition = VehicleCondition.Clean
                 });
             }
@@ -430,12 +461,10 @@ namespace AutoWashPro.BLL.Services
 
                     if (dailyCapacity != null && dailyCapacity.BookedWeight > 0)
                     {
-                        int weightToSubtract = await _context.Bookings
-                            .Where(b => b.BookingId == bookingId)
-                            .SelectMany(b => b.BookingDetails)
-                            .Join(_context.Vehicles, bd => bd.LicensePlate, v => v.LicensePlate, (bd, v) => new { bd, v })
-                            .Join(_context.ServicePrices, temp => new { ServiceId = temp.bd.ServiceId, VehicleTypeId = temp.v.VehicleTypeId }, sp => new { ServiceId = sp.ServiceId, VehicleTypeId = sp.VehicleTypeId }, (temp, sp) => sp)
-                            .SumAsync(sp => (int?)sp.CapacityWeight) ?? 0;
+                        int weightToSubtract = await _context.BookingDetails
+                             .Where(bd => bd.BookingId == bookingId)
+                             .SumAsync(bd => bd.CapacityWeight);
+                       
 
                         dailyCapacity.BookedWeight -= weightToSubtract;
                         if(dailyCapacity.BookedWeight < 0) dailyCapacity.BookedWeight = 0;

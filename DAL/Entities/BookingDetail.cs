@@ -27,7 +27,7 @@ namespace AutoWashPro.DAL.Entities
 
         [Required]
         public decimal Price { get; set; }
-
+        public int CapacityWeight { get; set; }
         public VehicleCondition VehicleCondition { get; set; } = VehicleCondition.Clean;
 
         public int? ActualVehicleTypeId { get; set; }

@@ -30,11 +30,13 @@ namespace AutoWashPro.API.Controllers
             return userId;
         }
 
-        [HttpGet("slots")]
-        public async Task<IActionResult> GetAvailableSlots([FromQuery] DateTime targetDate)
+        // ĐỔI SANG POST ĐỂ NHẬN JSON BODY TỪ FRONTEND
+        [HttpPost("available-slots")]
+        public async Task<IActionResult> GetAvailableSlots([FromBody] CheckAvailableSlotsRequestDTO request)
         {
             int userId = GetUserId();
-            var result = await _bookingService.GetAvailableSlotsAsync(userId, targetDate);
+            // Đảm bảo Service của bạn cũng đã đổi tham số nhận vào thành CheckAvailableSlotsRequestDTO nhé!
+            var result = await _bookingService.GetAvailableSlotsAsync(userId, request);
             return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 

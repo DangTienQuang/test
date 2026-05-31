@@ -31,7 +31,9 @@ namespace AutoWashPro.BLL.Services
                 .Select(v => new VehicleDTO
                 {
                     LicensePlate = v.LicensePlate,
-                    VehicleType = v.VehicleType.Name
+                    VehicleTypeId = v.VehicleTypeId,
+                    VehicleType = v.VehicleType.Name,
+                    RegistrationPhotoUrl = v.RegistrationPhotoUrl
                 }).ToListAsync();
         }
 
@@ -265,10 +267,37 @@ namespace AutoWashPro.BLL.Services
             var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && v.UserId == userId && !v.IsDeleted);
             if (vehicle == null) throw new NotFoundException("Không tìm thấy phương tiện hoặc bạn không có quyền thao tác trên xe này.");
 
-            var typeExists = await _context.VehicleTypes.AnyAsync(t => t.Id == request.VehicleTypeId);
-            if (!typeExists) throw new BadRequestException("Loại xe không hợp lệ.");
+            var vehicleType = await _context.VehicleTypes.FirstOrDefaultAsync(t => t.Id == request.VehicleTypeId);
+            if (vehicleType == null) throw new BadRequestException("Loại xe không hợp lệ.");
+
+            string finalPhotoUrl = vehicle.RegistrationPhotoUrl;
+            if (request.PhotoFile != null && request.PhotoFile.Length > 0)
+            {
+                finalPhotoUrl = await _photoService.UploadImageAsync(request.PhotoFile);
+            }
+
+            if (vehicleType.Name.Contains("Khác", StringComparison.OrdinalIgnoreCase) ||
+                vehicleType.Name.Contains("Other", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(finalPhotoUrl))
+                {
+                    throw new BadRequestException("Bạn bắt buộc phải tải lên hình ảnh thực tế của xe khi chọn loại xe Khác.");
+                }
+
+                if (string.IsNullOrWhiteSpace(request.UserNote) && string.IsNullOrWhiteSpace(vehicle.UserNote))
+                {
+                    throw new BadRequestException("Vui lòng để lại ghi chú tên dòng xe của bạn để chúng tôi hỗ trợ cập nhật.");
+                }
+            }
 
             vehicle.VehicleTypeId = request.VehicleTypeId;
+            vehicle.RegistrationPhotoUrl = finalPhotoUrl;
+
+            if (!string.IsNullOrWhiteSpace(request.UserNote))
+            {
+                vehicle.UserNote = request.UserNote;
+            }
+
             await _context.SaveChangesAsync();
 
             return true;
