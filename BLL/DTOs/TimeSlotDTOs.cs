@@ -39,4 +39,12 @@ namespace AutoWashPro.BLL.DTOs
 
         public bool IsVipOnly { get; set; }
     }
+
+    public class SlotAvailabilityDTO
+    {
+        public int SlotId { get; set; }
+        public string TimeRange { get; set; } = string.Empty;
+        public bool IsAvailable { get; set; }
+        public string Reason { get; set; } = string.Empty;
+    }
 }
