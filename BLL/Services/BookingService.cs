@@ -129,49 +129,6 @@ namespace AutoWashPro.BLL.Services
 
             return response;
         }
-        public async Task<List<SlotAvailabilityDTO>> GetAvailabilityForDateAsync(DateTime date)
-        {
-            var targetDateVn = date.ToVnTime().Date;
-
-            // Tìm tất cả capacities cho ngày đó
-            var capacities = await _context.DailySlotCapacities
-                .Include(c => c.TimeSlot)
-                .Where(c => c.Date.Date == targetDateVn)
-                .ToListAsync();
-
-            if (!capacities.Any())
-            {
-                return new List<SlotAvailabilityDTO>();
-            }
-
-            var nowInVN = DateTime.UtcNow.ToVnTime();
-            var isPastDate = targetDateVn < nowInVN.Date;
-            var isToday = targetDateVn == nowInVN.Date;
-
-            var result = new List<SlotAvailabilityDTO>();
-
-            // Do capacities đã include TimeSlot nên có thể thiếu TimeSlot chưa được tạo DailySlotCapacity.
-            // Thông thường DailySlotCapacity được tạo từ Admin (có sẵn hàm sinh ra). Mình lặp qua capacities.
-            // Sắp xếp theo StartTime để hiển thị đẹp
-            capacities = capacities.OrderBy(c => c.TimeSlot.StartTime).ToList();
-
-            foreach (var capacity in capacities)
-            {
-                bool isExpiredTime = isToday && (capacity.TimeSlot.StartTime <= nowInVN.TimeOfDay);
-                bool isExpired = isPastDate || isExpiredTime;
-                bool isFull = capacity.BookedWeight >= capacity.TimeSlot.MaxCapacity;
-
-                result.Add(new SlotAvailabilityDTO
-                {
-                    SlotId = capacity.SlotId,
-                    TimeRange = $"{capacity.TimeSlot.StartTime:hh\\:mm} - {capacity.TimeSlot.EndTime:hh\\:mm}",
-                    IsAvailable = !isExpired && !isFull,
-                    Reason = isExpired ? "Đã qua giờ" : (isFull ? "Đã đầy" : string.Empty)
-                });
-            }
-
-            return result;
-        }
 
         public async Task<List<BookingResponseDTO>> GetAllBookingsByDateAsync(DateTime targetDate)
         {
