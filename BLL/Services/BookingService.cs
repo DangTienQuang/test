@@ -183,6 +183,60 @@ namespace AutoWashPro.BLL.Services
             return new string(plate.Where(char.IsLetterOrDigit).ToArray()).ToUpper();
         }
 
+        public async Task<List<BookingResponseDTO>> GetBookingsByLicensePlateAsync(string licensePlate)
+        {
+            var normalizedPlate = NormalizeLicensePlate(licensePlate);
+            if (string.IsNullOrEmpty(normalizedPlate))
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Biển số xe không hợp lệ.");
+
+            // Tối ưu hóa: Lấy danh sách BookingId dựa trên LicensePlate trước
+            var matchedBookingIds = await _context.Set<AutoWashPro.DAL.Entities.BookingDetail>()
+                .Where(bd => bd.LicensePlate.Replace("-", "").Replace(".", "").Replace(" ", "").ToUpper() == normalizedPlate)
+                .Select(bd => bd.BookingId)
+                .Distinct()
+                .ToListAsync();
+
+            var query = _context.Bookings
+                .Include(b => b.BookingDetails)
+                    .ThenInclude(bd => bd.Service)
+                .Include(b => b.BookingDetails)
+                    .ThenInclude(bd => bd.ActualVehicleType)
+                .Include(b => b.User)
+                    .ThenInclude(u => u.CustomerProfile)
+                .Where(b => matchedBookingIds.Contains(b.BookingId))
+                .AsNoTracking();
+
+            var bookings = await query.ToListAsync();
+
+            var matchedBookings = bookings.Where(b =>
+                b.BookingDetails != null && b.BookingDetails.Any(bd => NormalizeLicensePlate(bd.LicensePlate) == normalizedPlate))
+                .OrderByDescending(b => b.ScheduledTime)
+                .ToList();
+
+            if (matchedBookings.Count == 0)
+            {
+                return new List<BookingResponseDTO>();
+            }
+
+            return matchedBookings.Select(b =>
+            {
+                var matchingDetail = b.BookingDetails.FirstOrDefault(bd => NormalizeLicensePlate(bd.LicensePlate) == normalizedPlate);
+                var serviceName = matchingDetail?.Service?.ServiceName ?? "N/A";
+                return new BookingResponseDTO
+                {
+                    BookingId = b.BookingId,
+                    LicensePlate = matchingDetail?.LicensePlate ?? licensePlate,
+                    ServiceName = serviceName,
+                    ScheduledTime = b.ScheduledTime,
+                    Status = b.Status,
+                    OriginalPrice = b.OriginalPrice,
+                    PointDiscountAmount = b.PointDiscountAmount,
+                    VoucherDiscountAmount = b.VoucherDiscountAmount,
+                    FinalAmount = b.FinalAmount
+                };
+            }).ToList();
+        }
+
         public async Task<BookingResponseDTO> UpdateBookingStatusByLicensePlateAsync(string licensePlate, string newStatus)
         {
             var allowedStatuses = new[] { "Pending", "CheckedIn", "Completed", "Cancelled", "Delayed", "CancelledBySystem" };
