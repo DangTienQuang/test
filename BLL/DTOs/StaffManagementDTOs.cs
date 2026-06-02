@@ -16,7 +16,7 @@ namespace AutoWashPro.BLL.DTOs
         public DateTime? HiredDate { get; set; }
     }
 
-    public class CreateStaffDTO
+    public class CreateEmployeeDTO
     {
         [Required]
         [RegularExpression(@"^(0[3|5|7|8|9])+([0-9]{8})$", ErrorMessage = "Số điện thoại không hợp lệ.")]
@@ -33,11 +33,14 @@ namespace AutoWashPro.BLL.DTOs
         [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Họ tên không được chỉ chứa khoảng trắng.")]
         public string FullName { get; set; } = string.Empty;
 
+        [Required(ErrorMessage = "Vai trò (Role) là bắt buộc.")]
+        public AutoWashPro.BLL.Enums.EmployeeRole Role { get; set; }
+
         public string? Position { get; set; }
         public DateTime? HiredDate { get; set; }
     }
 
-    public class UpdateStaffDTO
+    public class UpdateEmployeeDTO
     {
         [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Họ tên không được chỉ chứa khoảng trắng.")]
         public string? FullName { get; set; }
