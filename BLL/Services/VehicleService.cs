@@ -137,7 +137,7 @@ namespace AutoWashPro.BLL.Services
         {
             licensePlate = NormalizeLicensePlate(Uri.UnescapeDataString(licensePlate));
 
-            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
             try
             {
                 var vehicle = await _context.Vehicles
@@ -202,7 +202,7 @@ namespace AutoWashPro.BLL.Services
                 {
                     var subject = "Yêu cầu thêm loại xe mới đã được duyệt";
                     var message = $"Chào bạn,<br/><br/>Yêu cầu thêm loại xe cho phương tiện mang biển số <b>{vehicle.LicensePlate}</b> của bạn đã được quản trị viên duyệt thành công. Loại xe của bạn hiện tại là <b>{finalTypeName}</b>.<br/><br/>Trân trọng,<br/>Đội ngũ AutoWashPro.";
-                    _ = _emailService.SendEmailAsync(vehicle.User.Email, subject, message);
+                    _ = Task.Run(() => _emailService.SendEmailAsync(vehicle.User.Email, subject, message));
                 }
 
                 return true;
@@ -238,7 +238,7 @@ namespace AutoWashPro.BLL.Services
             {
                 var subject = "Yêu cầu thêm phương tiện bị từ chối";
                 var message = $"Chào bạn,<br/><br/>Yêu cầu thêm phương tiện mang biển số <b>{vehicle.LicensePlate}</b> của bạn đã bị từ chối do thông tin loại xe không hợp lệ. Vui lòng đăng ký lại phương tiện với thông tin chính xác.<br/><br/>Trân trọng,<br/>Đội ngũ AutoWashPro.";
-                _ = _emailService.SendEmailAsync(vehicle.User.Email, subject, message);
+                _ = Task.Run(() => _emailService.SendEmailAsync(vehicle.User.Email, subject, message));
             }
 
             return true;

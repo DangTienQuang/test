@@ -29,7 +29,7 @@ namespace AutoWashPro.BLL.Services
         }
         public async Task<AuthResponseDTO> RegisterAsync(RegisterDTO request)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
             try
             {
                 var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber);
