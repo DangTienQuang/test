@@ -262,10 +262,12 @@ static void SyncCustomerProfilePoints(AutoWashDbContext context)
     const string completionPrefix = "Hoàn thành dịch vụ";
     var now = DateTime.UtcNow;
 
-    foreach (var profile in context.CustomerProfiles.ToList())
+    var profiles = context.CustomerProfiles.ToList();
+    var allLedgers = context.PointLedgers.ToList();
+    var groupedLedgers = allLedgers.GroupBy(p => p.UserId).ToDictionary(g => g.Key, g => g.ToList());
+    foreach (var profile in profiles)
     {
-        var ledgers = context.PointLedgers.Where(p => p.UserId == profile.UserId).ToList();
-        if (!ledgers.Any()) continue;
+        if (!groupedLedgers.TryGetValue(profile.UserId, out var ledgers) || !ledgers.Any()) continue;
 
         var totalAdded = ledgers
             .Where(p => p.PointsAdded > 0 && (p.ExpiryDate == null || p.ExpiryDate > now))

@@ -40,7 +40,7 @@ namespace AutoWashPro.BLL.Services
 
         public async Task RedeemVoucherAsync(int userId, int voucherId)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
             try
             {
                 var voucher = await _context.Vouchers.FindAsync(voucherId);
