@@ -26,6 +26,7 @@ namespace AutoWashPro.DAL.Data
         public DbSet<DailySlotCapacity> DailySlotCapacities { get; set; }
         public DbSet<AIConversationLog> AIConversationLogs { get; set; }
         public DbSet<AIKnowledgeBase> AIKnowledgeBases { get; set; }
+        public DbSet<CarModel> CarModels { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

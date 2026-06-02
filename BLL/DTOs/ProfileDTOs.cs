@@ -38,6 +38,7 @@ namespace AutoWashPro.BLL.DTOs
         public string? RegistrationPhotoUrl { get; set; }
         public IFormFile? PhotoFile { get; set; }
         public string? UserNote { get; set; }
+        public int? CarModelId { get; set; }
         public string? CarModel { get; set; }
     }
 
@@ -47,6 +48,7 @@ namespace AutoWashPro.BLL.DTOs
         public int VehicleTypeId { get; set; }
         public IFormFile? PhotoFile { get; set; }
         public string? UserNote { get; set; }
+        public int? CarModelId { get; set; }
         public string? CarModel { get; set; }
     }
 

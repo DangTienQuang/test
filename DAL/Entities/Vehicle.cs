@@ -23,6 +23,11 @@ namespace AutoWashPro.DAL.Entities
 
         public string? UserNote { get; set; }
 
+        public int? CarModelId { get; set; }
+
+        [ForeignKey("CarModelId")]
+        public CarModel CarModelEntity { get; set; }
+
         public string? CarModel { get; set; }
 
         public bool IsDeleted { get; set; } = false;
