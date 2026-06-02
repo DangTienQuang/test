@@ -3,6 +3,7 @@ using System;
 using AutoWashPro.DAL.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DAL.Migrations
 {
     [DbContext(typeof(AutoWashDbContext))]
-    partial class AutoWashDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260530055901_AddManagerProfiles")]
+    partial class AddManagerProfiles
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -88,9 +91,6 @@ namespace DAL.Migrations
                     b.Property<int>("BookingId")
                         .HasColumnType("int");
 
-                    b.Property<int>("CapacityWeight")
-                        .HasColumnType("int");
-
                     b.Property<string>("LicensePlate")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -117,30 +117,6 @@ namespace DAL.Migrations
                     b.HasIndex("ServiceId");
 
                     b.ToTable("BookingDetails");
-                });
-
-            modelBuilder.Entity("AutoWashPro.DAL.Entities.CarModel", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    b.Property<string>("Brand")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("varchar(100)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("varchar(100)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("CarModels");
                 });
 
             modelBuilder.Entity("AutoWashPro.DAL.Entities.CustomerProfile", b =>
@@ -682,30 +658,13 @@ namespace DAL.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("varchar(20)");
 
-                    b.Property<string>("CarModel")
-                        .HasColumnType("longtext");
-
-                    b.Property<int?>("CarModelId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("RegistrationPhotoUrl")
-                        .HasColumnType("longtext");
-
                     b.Property<int?>("UserId")
                         .HasColumnType("int");
-
-                    b.Property<string>("UserNote")
-                        .HasColumnType("longtext");
 
                     b.Property<int>("VehicleTypeId")
                         .HasColumnType("int");
 
                     b.HasKey("LicensePlate");
-
-                    b.HasIndex("CarModelId");
 
                     b.HasIndex("UserId");
 
@@ -718,9 +677,6 @@ namespace DAL.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    b.Property<int>("BaseWeight")
                         .HasColumnType("int");
 
                     b.Property<string>("Description")
@@ -1067,10 +1023,6 @@ namespace DAL.Migrations
 
             modelBuilder.Entity("AutoWashPro.DAL.Entities.Vehicle", b =>
                 {
-                    b.HasOne("AutoWashPro.DAL.Entities.CarModel", "CarModelEntity")
-                        .WithMany()
-                        .HasForeignKey("CarModelId");
-
                     b.HasOne("AutoWashPro.DAL.Entities.User", "User")
                         .WithMany("Vehicles")
                         .HasForeignKey("UserId");
@@ -1080,8 +1032,6 @@ namespace DAL.Migrations
                         .HasForeignKey("VehicleTypeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("CarModelEntity");
 
                     b.Navigation("User");
 
