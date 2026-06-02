@@ -42,6 +42,17 @@ namespace AutoWashPro.BLL.DTOs
         [Required]
         public int ServiceId { get; set; }
     }
+    public class UpdateBookingStatusByPlateDTO
+    {
+        [Required(ErrorMessage = "Biển số xe không được để trống.")]
+        [MinLength(1)]
+        [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Biển số xe không hợp lệ.")]
+        public string LicensePlate { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Trạng thái không được để trống.")]
+        public string NewStatus { get; set; } = string.Empty;
+    }
+
     public class CheckAvailableSlotsRequestDTO
     {
         [Required]

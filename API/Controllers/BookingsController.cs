@@ -38,13 +38,6 @@ namespace AutoWashPro.API.Controllers
             return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
-        [HttpGet("availability")]
-        public async Task<IActionResult> GetAvailabilityForDate([FromQuery] DateTime date)
-        {
-            var result = await _bookingService.GetAvailabilityForDateAsync(date);
-            return Ok(new { statusCode = 200, message = "Success", data = result });
-        }
-
         // ĐỔI SANG POST ĐỂ NHẬN JSON BODY TỪ FRONTEND
         [HttpPost("available-slots")]
         public async Task<IActionResult> GetAvailableSlots([FromBody] CheckAvailableSlotsRequestDTO request)
