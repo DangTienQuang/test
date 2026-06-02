@@ -206,8 +206,15 @@ namespace AutoWashPro.BLL.Services
             //
             // Cập nhật: hệ thống luôn lưu LicensePlate với các ký tự, nhưng khi lookup ta cần Normalize
             // cả record trong db để so khớp chính xác nhất.
-            var startOfDay = todayInVN.Date;
-            var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
+            var startOfDayInVN = todayInVN.Date;
+            var endOfDayInVN = startOfDayInVN.AddDays(1).AddTicks(-1);
+
+            // Do trong DB ScheduledTime có thể được lưu bằng UTC, ta convert ngày giờ VN sang UTC để query
+            // lấy một khoảng đủ rộng (UTC time) để chắc chắn bao gồm cả ngày theo giờ VN.
+            var startOfDayUtc = TimeZoneInfo.ConvertTimeToUtc(startOfDayInVN, TimeZoneInfo.FindSystemTimeZoneById(
+                Environment.OSVersion.Platform == PlatformID.Win32NT ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh"));
+            var endOfDayUtc = TimeZoneInfo.ConvertTimeToUtc(endOfDayInVN, TimeZoneInfo.FindSystemTimeZoneById(
+                Environment.OSVersion.Platform == PlatformID.Win32NT ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh"));
 
             var query = _context.Bookings
                 .Include(b => b.BookingDetails)
@@ -216,7 +223,7 @@ namespace AutoWashPro.BLL.Services
                     .ThenInclude(bd => bd.ActualVehicleType)
                 .Include(b => b.User)
                     .ThenInclude(u => u.CustomerProfile)
-                .Where(b => b.ScheduledTime >= startOfDay && b.ScheduledTime <= endOfDay);
+                .Where(b => b.ScheduledTime >= startOfDayUtc && b.ScheduledTime <= endOfDayUtc);
 
             if (newStatus == "CheckedIn")
             {
