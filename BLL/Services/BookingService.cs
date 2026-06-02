@@ -603,6 +603,30 @@ namespace AutoWashPro.BLL.Services
             }).ToList();
         }
 
+        public async Task<List<BookingResponseDTO>> GetBookingsByLicensePlateAsync(string licensePlate)
+        {
+            string normalizedPlate = licensePlate.Replace(" ", "").Replace("-", "").Replace(".", "").ToUpper();
+            var bookings = await _context.Bookings
+                .Include(b => b.BookingDetails)
+                .ThenInclude(bd => bd.Service)
+                .Where(b => b.BookingDetails.Any(bd => bd.LicensePlate.Replace(" ", "").Replace("-", "").Replace(".", "").ToUpper() == normalizedPlate))
+                .OrderByDescending(b => b.ScheduledTime)
+                .ToListAsync();
+
+            return bookings.Select(b => new BookingResponseDTO
+            {
+                BookingId = b.BookingId,
+                LicensePlate = string.Join(", ", b.BookingDetails.Select(d => d.LicensePlate)),
+                ServiceName = string.Join(", ", b.BookingDetails.Select(d => d.Service.ServiceName)),
+                ScheduledTime = b.ScheduledTime,
+                Status = b.Status,
+                OriginalPrice = b.OriginalPrice,
+                PointDiscountAmount = b.PointDiscountAmount,
+                VoucherDiscountAmount = b.VoucherDiscountAmount,
+                FinalAmount = b.FinalAmount
+            }).ToList();
+        }
+
         public async Task<bool> CancelBookingAsync(int userId, int bookingId)
         {
             var booking = await _context.Bookings
