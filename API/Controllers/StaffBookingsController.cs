@@ -26,13 +26,6 @@ namespace AutoWashPro.API.Controllers
             return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
-        [HttpGet("by-license-plate/{licensePlate}")]
-        public async Task<IActionResult> GetBookingsByLicensePlate(string licensePlate)
-        {
-            var result = await _bookingService.GetBookingsByLicensePlateAsync(licensePlate);
-            return Ok(new { statusCode = 200, message = "Success", data = result });
-        }
-
         [HttpPut("{id}/status")]
         public async Task<IActionResult> UpdateBookingStatus(int id, [FromQuery] string newStatus)
         {

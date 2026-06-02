@@ -18,7 +18,6 @@ namespace AutoWashPro.BLL.Services
         Task<bool> UpdateBookingStatusAsync(int bookingId, string newStatus);
         Task<BookingResponseDTO> UpdateBookingStatusByLicensePlateAsync(string licensePlate, string newStatus);
         Task<List<BookingResponseDTO>> GetMyBookingsAsync(int userId);
-        Task<List<BookingResponseDTO>> GetBookingsByLicensePlateAsync(string licensePlate);
         Task<bool> CancelBookingAsync(int userId, int bookingId);
         Task<bool> UpdateVehicleConditionAsync(int staffId, int bookingId, UpdateVehicleConditionDTO request);
         Task MarkAsNoShowAsync(int bookingId);
