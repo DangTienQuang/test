@@ -27,6 +27,7 @@ namespace AutoWashPro.BLL.Services
         {
             return await _context.Vehicles
                 .Include(v => v.VehicleType)
+                .Include(v => v.CarModelEntity)
                 .Where(v => v.UserId == userId && !v.IsDeleted)
                 .Select(v => new VehicleDTO
                 {
@@ -34,7 +35,7 @@ namespace AutoWashPro.BLL.Services
                     VehicleTypeId = v.VehicleTypeId,
                     VehicleType = v.VehicleType.Name,
                     RegistrationPhotoUrl = v.RegistrationPhotoUrl,
-                    CarModel = v.CarModel
+                    CarModel = v.CarModelId.HasValue ? v.CarModelEntity.Name : v.CarModel
                 }).ToListAsync();
         }
 
@@ -78,6 +79,27 @@ namespace AutoWashPro.BLL.Services
 
             var normalizedPlate = NormalizeLicensePlate(request.LicensePlate);
 
+            int? finalCarModelId = null;
+            string? finalCarModel = null;
+
+            if (request.CarModelId.HasValue)
+            {
+                var carModelExists = await _context.CarModels.AnyAsync(c => c.Id == request.CarModelId.Value && c.IsActive);
+                if (!carModelExists)
+                    throw new BadRequestException("Dòng xe bạn chọn không tồn tại hoặc đã ngừng hỗ trợ.");
+
+                finalCarModelId = request.CarModelId.Value;
+                finalCarModel = null;
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(request.CarModel))
+                    throw new BadRequestException("Vui lòng nhập tên dòng xe của bạn khi chọn mục 'Khác'.");
+
+                finalCarModelId = null;
+                finalCarModel = request.CarModel.Trim();
+            }
+
             var existingVehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == normalizedPlate);
             if (existingVehicle != null)
             {
@@ -91,7 +113,8 @@ namespace AutoWashPro.BLL.Services
                 existingVehicle.VehicleTypeId = request.VehicleTypeId;
                 existingVehicle.RegistrationPhotoUrl = finalPhotoUrl;
                 existingVehicle.UserNote = request.UserNote;
-                existingVehicle.CarModel = request.CarModel;
+                existingVehicle.CarModelId = finalCarModelId;
+                existingVehicle.CarModel = finalCarModel;
             }
             else
             {
@@ -102,7 +125,8 @@ namespace AutoWashPro.BLL.Services
                     UserId = userId,
                     RegistrationPhotoUrl = finalPhotoUrl,
                     UserNote = request.UserNote,
-                    CarModel = request.CarModel
+                    CarModelId = finalCarModelId,
+                    CarModel = finalCarModel
                 };
 
                 _context.Vehicles.Add(vehicle);
@@ -294,6 +318,27 @@ namespace AutoWashPro.BLL.Services
                 }
             }
 
+            int? finalCarModelId = null;
+            string? finalCarModel = null;
+
+            if (request.CarModelId.HasValue)
+            {
+                var carModelExists = await _context.CarModels.AnyAsync(c => c.Id == request.CarModelId.Value && c.IsActive);
+                if (!carModelExists)
+                    throw new BadRequestException("Dòng xe bạn chọn không tồn tại hoặc đã ngừng hỗ trợ.");
+
+                finalCarModelId = request.CarModelId.Value;
+                finalCarModel = null;
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(request.CarModel))
+                    throw new BadRequestException("Vui lòng nhập tên dòng xe của bạn khi chọn mục 'Khác'.");
+
+                finalCarModelId = null;
+                finalCarModel = request.CarModel.Trim();
+            }
+
             vehicle.VehicleTypeId = request.VehicleTypeId;
             vehicle.RegistrationPhotoUrl = finalPhotoUrl;
 
@@ -302,7 +347,8 @@ namespace AutoWashPro.BLL.Services
                 vehicle.UserNote = request.UserNote;
             }
 
-            vehicle.CarModel = request.CarModel;
+            vehicle.CarModelId = finalCarModelId;
+            vehicle.CarModel = finalCarModel;
 
             await _context.SaveChangesAsync();
 
