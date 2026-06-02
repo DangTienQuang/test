@@ -85,3 +85,61 @@ Trả về danh sách tất cả các Slot của xưởng. Nếu một Slot khô
 - 🔴 **Tuyệt đối không tự lọc/tính toán (No Client-side Filtering)**: Frontend **KHÔNG ĐƯỢC** tự tính tổng số lượng xe rồi trừ vào Capacity. Toàn bộ logic kiểm tra "giờ đã qua", "đủ chỗ không", "có phải VIP không" phải phụ thuộc 100% vào giá trị `isAvailable` do Backend trả về.
 - 🔴 **Luôn gọi lại API khi giỏ hàng thay đổi**: Nếu ở màn hình chọn giờ mà khách ấn nút "Back" ra ngoài để thêm/bớt một chiếc xe, thì khi vào lại màn hình chọn giờ, Frontend **bắt buộc phải gọi lại API này** với payload mới. (Ví dụ: Slot 09:00 ban đầu `isAvailable=true` vì khách chỉ rửa 1 xe, nhưng nếu thêm 3 xe nữa vào giỏ thì slot đó có thể chuyển thành `false`).
 - 🔴 **Timezone (Múi giờ)**: Backend đã tự động chuẩn hoá thời gian so sánh theo múi giờ Việt Nam (UTC+7). FE truyền `targetDate` lên tốt nhất là truyền chuỗi ngày thuần tuý theo UTC (như `2026-06-02T00:00:00.000Z`) để tránh lệch ngày.
+
+---
+
+## 2. User Flow: Nhân viên Check-in / Check-out bằng Biển số xe
+
+### 1. Business Purpose
+Thay vì nhân viên phải ghi nhớ mã Booking ID, API này cho phép nhân viên (Staff/Admin) cập nhật trạng thái lịch hẹn (Check-in để nhận xe, hoặc Complete để trả xe) bằng cách nhập trực tiếp hoặc quét **biển số xe** (License Plate). Backend sẽ tự động quét danh sách lịch hẹn hợp lệ trong ngày hôm nay (theo múi giờ Việt Nam) để cập nhật.
+
+### 2. Prerequisites
+- Frontend (App nội bộ của Staff) đang ở màn hình quét biển số hoặc có ô textbox nhập biển số.
+- API chỉ được gọi bởi tài khoản có quyền `Admin` hoặc `Staff`.
+
+### 3. Request Payload
+- **Endpoint**: `PUT /api/v1/admin/bookings/status-by-license-plate`
+- **Method**: `PUT`
+- **Headers**: `Authorization: Bearer <staff_token>`
+- **Body (`UpdateBookingStatusByPlateDTO`)**:
+```json
+{
+  "licensePlate": "29A-123.45", // Có thể chứa dấu gạch ngang, khoảng trắng, chấm. Backend sẽ tự lọc lấy chữ và số để so khớp.
+  "newStatus": "CheckedIn"      // Hoặc "Completed"
+}
+```
+
+### 4. Expected Response & Error Handling
+**Thành công (200 OK)**:
+Sau khi cập nhật thành công, API trả về bản tóm tắt thông tin của Booking đó để Staff hiển thị lên màn hình (xác nhận lại xe này sử dụng dịch vụ gì, khách hàng là ai).
+```json
+{
+  "statusCode": 200,
+  "message": "Đã cập nhật trạng thái xe 29A-123.45 thành: CheckedIn",
+  "data": {
+    "bookingId": 105,
+    "licensePlate": "29A12345",
+    "serviceName": "Rửa xe bọt tuyết, Hút bụi nội thất",
+    "scheduledTime": "2026-06-02T08:00:00Z",
+    "status": "CheckedIn",
+    "originalPrice": 150000,
+    "pointDiscountAmount": 0,
+    "voucherDiscountAmount": 0,
+    "finalAmount": 150000
+  }
+}
+```
+
+**Các lỗi phổ biến (4xx, 5xx)**:
+- `400 Bad Request`: Biển số xe rỗng, hoặc `newStatus` gửi lên không hợp lệ (Không phải CheckedIn/Completed).
+- `404 Not Found`: "Không tìm thấy lịch hẹn hợp lệ trong ngày hôm nay cho xe có biển số X". Nguyên nhân có thể do:
+  - Khách chưa đặt lịch cho ngày hôm nay.
+  - Xe đã được Check-in rồi nhưng Staff lại bấm gọi "CheckedIn" lần nữa (Nếu đã CheckedIn thì chỉ được chuyển lên Completed).
+
+### 5. Next Steps
+- Dựa vào kết quả trả về, hiển thị thông báo thành công xanh lá cây (Toast/Alert) cho Staff.
+- Render lại thông tin xe (Tên dịch vụ, giá tiền) lên màn hình của Staff để Staff tiến hành thi công.
+
+### 6. Critical Warnings for FE (Cảnh báo Quan trọng)
+- 🔴 **FE không cần chuẩn hóa biển số**: Không cần viết Regex phức tạp ở phía Client để xóa khoảng trắng hay dấu chấm. Cứ gửi nguyên chuỗi biển số khách/staff nhập lên, Backend đã có hàm `NormalizeLicensePlate` lo việc chuẩn hóa.
+- 🔴 **Giới hạn thời gian**: API này được thiết kế để tìm kiếm Booking **chỉ trong ngày hôm nay** (dựa theo thời gian thực của VN). Nếu nhân viên cố tình test bằng cách nhập biển số của lịch hẹn ngày mai, Backend sẽ từ chối và báo 404.

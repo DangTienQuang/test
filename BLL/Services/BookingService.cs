@@ -206,8 +206,15 @@ namespace AutoWashPro.BLL.Services
             //
             // Cập nhật: hệ thống luôn lưu LicensePlate với các ký tự, nhưng khi lookup ta cần Normalize
             // cả record trong db để so khớp chính xác nhất.
-            var startOfDay = todayInVN.Date;
-            var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
+            var startOfDayInVN = todayInVN.Date;
+            var endOfDayInVN = startOfDayInVN.AddDays(1).AddTicks(-1);
+
+            // Do trong DB ScheduledTime có thể được lưu bằng UTC, ta convert ngày giờ VN sang UTC để query
+            // lấy một khoảng đủ rộng (UTC time) để chắc chắn bao gồm cả ngày theo giờ VN.
+            var startOfDayUtc = TimeZoneInfo.ConvertTimeToUtc(startOfDayInVN, TimeZoneInfo.FindSystemTimeZoneById(
+                Environment.OSVersion.Platform == PlatformID.Win32NT ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh"));
+            var endOfDayUtc = TimeZoneInfo.ConvertTimeToUtc(endOfDayInVN, TimeZoneInfo.FindSystemTimeZoneById(
+                Environment.OSVersion.Platform == PlatformID.Win32NT ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh"));
 
             var query = _context.Bookings
                 .Include(b => b.BookingDetails)
@@ -216,7 +223,7 @@ namespace AutoWashPro.BLL.Services
                     .ThenInclude(bd => bd.ActualVehicleType)
                 .Include(b => b.User)
                     .ThenInclude(u => u.CustomerProfile)
-                .Where(b => b.ScheduledTime >= startOfDay && b.ScheduledTime <= endOfDay);
+                .Where(b => b.ScheduledTime >= startOfDayUtc && b.ScheduledTime <= endOfDayUtc);
 
             if (newStatus == "CheckedIn")
             {
@@ -235,13 +242,20 @@ namespace AutoWashPro.BLL.Services
             var bookings = await query.ToListAsync();
 
             // Tìm in-memory để loại bỏ ký tự đặc biệt khi so sánh biển số xe
-            var booking = bookings.FirstOrDefault(b =>
-                b.BookingDetails.Any(bd => NormalizeLicensePlate(bd.LicensePlate) == normalizedPlate));
+            var matchedBookings = bookings.Where(b =>
+                b.BookingDetails.Any(bd => NormalizeLicensePlate(bd.LicensePlate) == normalizedPlate)).ToList();
 
-            if (booking == null)
+            if (matchedBookings.Count == 0)
             {
                 throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Không tìm thấy lịch hẹn hợp lệ trong ngày hôm nay cho xe có biển số {licensePlate}. Vui lòng kiểm tra lại trạng thái hiện tại của xe.");
             }
+
+            if (matchedBookings.Count > 1)
+            {
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Phát hiện nhiều lịch hẹn ({matchedBookings.Count}) hợp lệ cho xe có biển số {licensePlate} trong ngày hôm nay. Vui lòng sử dụng mã Booking ID để cập nhật chính xác.");
+            }
+
+            var booking = matchedBookings.First();
 
             // Gọi lại hàm UpdateBookingStatusAsync để tái sử dụng logic thưởng điểm
             var isUpdated = await UpdateBookingStatusAsync(booking.BookingId, newStatus);
