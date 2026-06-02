@@ -33,6 +33,13 @@ namespace AutoWashPro.API.Controllers
             return Ok(new { statusCode = 200, message = $"Đã cập nhật trạng thái thành: {newStatus}" });
         }
 
+        [HttpPut("status-by-license-plate")]
+        public async Task<IActionResult> UpdateBookingStatusByLicensePlate([FromBody] UpdateBookingStatusByPlateDTO request)
+        {
+            var result = await _bookingService.UpdateBookingStatusByLicensePlateAsync(request.LicensePlate, request.NewStatus);
+            return Ok(new { statusCode = 200, message = $"Đã cập nhật trạng thái xe {request.LicensePlate} thành: {request.NewStatus}", data = result });
+        }
+
         [HttpPut("{id}/no-show")]
         public async Task<IActionResult> MarkAsNoShow(int id)
         {

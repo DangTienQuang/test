@@ -177,6 +177,95 @@ namespace AutoWashPro.BLL.Services
             };
         }
 
+        private string NormalizeLicensePlate(string plate)
+        {
+            if (string.IsNullOrWhiteSpace(plate)) return string.Empty;
+            return new string(plate.Where(char.IsLetterOrDigit).ToArray()).ToUpper();
+        }
+
+        public async Task<BookingResponseDTO> UpdateBookingStatusByLicensePlateAsync(string licensePlate, string newStatus)
+        {
+            var allowedStatuses = new[] { "Pending", "CheckedIn", "Completed", "Cancelled", "Delayed", "CancelledBySystem" };
+            if (!allowedStatuses.Contains(newStatus)) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Trạng thái không hợp lệ.");
+
+            var normalizedPlate = NormalizeLicensePlate(licensePlate);
+            if (string.IsNullOrEmpty(normalizedPlate))
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Biển số xe không hợp lệ.");
+
+            var todayInVN = DateTime.UtcNow.ToVnTime().Date;
+
+            // Tìm Booking có chứa xe này TRONG NGÀY HÔM NAY và ở trạng thái hợp lý để update.
+            // Ví dụ: Muốn CheckedIn -> tìm booking Pending
+            // Muốn Completed -> tìm booking CheckedIn
+            // Khắc phục timezone bug: scheduledTime được lưu ở database (thường là UTC).
+            // Ta tính khoảng đầu ngày và cuối ngày của VN, rồi chuyển ngược về UTC để query an toàn.
+            // Nhưng vì database có thể đang lưu ScheduledTime là ngày giờ VN (do hàm createBooking),
+            // Ta sẽ query một khoảng thời gian rộng hơn và lọc lại ở in-memory hoặc query cẩn thận.
+            // Do dữ liệu license plate có thể lưu dưới dạng chuẩn hoặc có gạch ngang,
+            // dùng db function hoặc as enumerable để filter chính xác. Để tối ưu ta lấy lên trước.
+            //
+            // Cập nhật: hệ thống luôn lưu LicensePlate với các ký tự, nhưng khi lookup ta cần Normalize
+            // cả record trong db để so khớp chính xác nhất.
+            var startOfDay = todayInVN.Date;
+            var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
+
+            var query = _context.Bookings
+                .Include(b => b.BookingDetails)
+                    .ThenInclude(bd => bd.Service)
+                .Include(b => b.BookingDetails)
+                    .ThenInclude(bd => bd.ActualVehicleType)
+                .Include(b => b.User)
+                    .ThenInclude(u => u.CustomerProfile)
+                .Where(b => b.ScheduledTime >= startOfDay && b.ScheduledTime <= endOfDay);
+
+            if (newStatus == "CheckedIn")
+            {
+                query = query.Where(b => b.Status == "Pending");
+            }
+            else if (newStatus == "Completed")
+            {
+                query = query.Where(b => b.Status == "CheckedIn");
+            }
+            else
+            {
+                // Cho phép huỷ nếu chưa hoàn thành
+                query = query.Where(b => b.Status == "Pending" || b.Status == "CheckedIn");
+            }
+
+            var bookings = await query.ToListAsync();
+
+            // Tìm in-memory để loại bỏ ký tự đặc biệt khi so sánh biển số xe
+            var booking = bookings.FirstOrDefault(b =>
+                b.BookingDetails.Any(bd => NormalizeLicensePlate(bd.LicensePlate) == normalizedPlate));
+
+            if (booking == null)
+            {
+                throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Không tìm thấy lịch hẹn hợp lệ trong ngày hôm nay cho xe có biển số {licensePlate}. Vui lòng kiểm tra lại trạng thái hiện tại của xe.");
+            }
+
+            // Gọi lại hàm UpdateBookingStatusAsync để tái sử dụng logic thưởng điểm
+            var isUpdated = await UpdateBookingStatusAsync(booking.BookingId, newStatus);
+
+            if (!isUpdated)
+            {
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Cập nhật trạng thái thất bại.");
+            }
+
+            // Map ra DTO để trả về cho nhân viên xác nhận thông tin
+            return new BookingResponseDTO
+            {
+                BookingId = booking.BookingId,
+                LicensePlate = normalizedPlate,
+                ServiceName = string.Join(", ", booking.BookingDetails.Select(d => d.Service.ServiceName)),
+                ScheduledTime = booking.ScheduledTime,
+                Status = newStatus,
+                OriginalPrice = booking.OriginalPrice,
+                PointDiscountAmount = booking.PointDiscountAmount,
+                VoucherDiscountAmount = booking.VoucherDiscountAmount,
+                FinalAmount = booking.FinalAmount
+            };
+        }
+
         public async Task<bool> UpdateBookingStatusAsync(int bookingId, string newStatus)
         {
             var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.BookingId == bookingId);
