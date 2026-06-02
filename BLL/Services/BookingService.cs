@@ -242,13 +242,20 @@ namespace AutoWashPro.BLL.Services
             var bookings = await query.ToListAsync();
 
             // Tìm in-memory để loại bỏ ký tự đặc biệt khi so sánh biển số xe
-            var booking = bookings.FirstOrDefault(b =>
-                b.BookingDetails.Any(bd => NormalizeLicensePlate(bd.LicensePlate) == normalizedPlate));
+            var matchedBookings = bookings.Where(b =>
+                b.BookingDetails.Any(bd => NormalizeLicensePlate(bd.LicensePlate) == normalizedPlate)).ToList();
 
-            if (booking == null)
+            if (matchedBookings.Count == 0)
             {
                 throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Không tìm thấy lịch hẹn hợp lệ trong ngày hôm nay cho xe có biển số {licensePlate}. Vui lòng kiểm tra lại trạng thái hiện tại của xe.");
             }
+
+            if (matchedBookings.Count > 1)
+            {
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Phát hiện nhiều lịch hẹn ({matchedBookings.Count}) hợp lệ cho xe có biển số {licensePlate} trong ngày hôm nay. Vui lòng sử dụng mã Booking ID để cập nhật chính xác.");
+            }
+
+            var booking = matchedBookings.First();
 
             // Gọi lại hàm UpdateBookingStatusAsync để tái sử dụng logic thưởng điểm
             var isUpdated = await UpdateBookingStatusAsync(booking.BookingId, newStatus);
