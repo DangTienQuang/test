@@ -51,8 +51,26 @@ namespace AutoWashPro.DAL.Data
                 .HasForeignKey<EmployeeProfile>(e => e.EmployeeId);
 
             modelBuilder.Entity<DailySlotCapacity>()
-                .HasIndex(d => new { d.SlotId, d.Date })
+                .HasIndex(d => new { d.SlotId, d.Date, d.BranchId })
                 .IsUnique();
+
+            modelBuilder.Entity<ServicePrice>()
+                .HasOne(sp => sp.Branch)
+                .WithMany()
+                .HasForeignKey(sp => sp.BranchId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<TimeSlot>()
+                .HasOne(ts => ts.Branch)
+                .WithMany()
+                .HasForeignKey(ts => ts.BranchId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<DailySlotCapacity>()
+                .HasOne(dsc => dsc.Branch)
+                .WithMany()
+                .HasForeignKey(dsc => dsc.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<BookingDetail>()
                 .HasOne(bd => bd.Booking)

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AutoWashPro.DAL.Entities
 {
@@ -7,6 +8,11 @@ namespace AutoWashPro.DAL.Entities
     {
         [Key]
         public int SlotId { get; set; }
+
+        [Required]
+        public int BranchId { get; set; }
+        [ForeignKey("BranchId")]
+        public Branch Branch { get; set; }
 
         [Required]
         public TimeSpan StartTime { get; set; }

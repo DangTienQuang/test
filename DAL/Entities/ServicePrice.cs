@@ -19,6 +19,11 @@ namespace AutoWashPro.DAL.Entities
         public VehicleType VehicleType { get; set; }
 
         [Required]
+        public int BranchId { get; set; }
+        [ForeignKey("BranchId")]
+        public Branch Branch { get; set; }
+
+        [Required]
         public decimal Price { get; set; }
 
         public int CapacityWeight { get; set; } = 1;

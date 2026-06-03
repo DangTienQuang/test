@@ -61,7 +61,7 @@ namespace AutoWashPro.BLL.Services
                 .Where(d => d.ProcessingLaneId == assignment.LaneId
                          && d.ProcessingStaffId == staffUserId
                          && d.Booking.ScheduledTime.Date == today
-                         && (d.Booking.Status == "CheckedIn" || d.Booking.Status == "Processing"))
+                         && (d.Status == "CheckedIn" || d.Status == "Processing"))
                 .ToListAsync();
 
             return details.Select(d => new StaffBookingDetailDTO
@@ -71,41 +71,58 @@ namespace AutoWashPro.BLL.Services
                 LicensePlate = d.LicensePlate,
                 ServiceName = d.Service.ServiceName,
                 VehicleTypeName = d.ActualVehicleType?.Name ?? "Unknown",
-                Status = d.Booking.Status
+                Status = d.Status
             }).ToList();
         }
 
-        public async Task<bool> UpdateBookingStatusAsync(int staffUserId, int bookingId, string newStatus)
+        public async Task<bool> UpdateBookingDetailStatusAsync(int staffUserId, int detailId, string newStatus)
         {
             if (newStatus != "Processing" && newStatus != "Completed")
             {
                 throw new BadRequestException("Invalid status update.");
             }
 
-            var booking = await _context.Bookings
-                .Include(b => b.BookingDetails)
-                .FirstOrDefaultAsync(b => b.BookingId == bookingId);
+            var detail = await _context.BookingDetails
+                .Include(d => d.Booking)
+                .FirstOrDefaultAsync(d => d.DetailId == detailId);
 
-            if (booking == null) throw new NotFoundException("Booking not found.");
+            if (detail == null) throw new NotFoundException("Booking detail not found.");
 
-            // Verify if staff is assigned to at least one detail of this booking
-            bool isAssigned = booking.BookingDetails.Any(d => d.ProcessingStaffId == staffUserId);
-            if (!isAssigned)
+            if (detail.ProcessingStaffId != staffUserId)
             {
-                throw new BadRequestException("You are not assigned to this booking.");
+                throw new BadRequestException("You are not assigned to this vehicle.");
             }
 
-            if (newStatus == "Processing" && booking.Status != "CheckedIn" && booking.Status != "Processing")
+            if (newStatus == "Processing" && detail.Status != "CheckedIn" && detail.Status != "Processing")
             {
-                throw new BadRequestException("Can only start processing checked-in bookings.");
+                throw new BadRequestException("Can only start processing checked-in vehicles.");
             }
 
-            if (newStatus == "Completed" && booking.Status != "Processing" && booking.Status != "Completed")
+            if (newStatus == "Completed" && detail.Status != "Processing" && detail.Status != "Completed")
             {
-                throw new BadRequestException("Can only complete processing bookings.");
+                throw new BadRequestException("Can only complete processing vehicles.");
             }
 
-            booking.Status = newStatus;
+            detail.Status = newStatus;
+
+            // Check if all details in the booking are completed
+            if (newStatus == "Completed")
+            {
+                var allDetails = await _context.BookingDetails.Where(d => d.BookingId == detail.BookingId).ToListAsync();
+                if (allDetails.All(d => d.Status == "Completed" || (d.DetailId == detailId)))
+                {
+                    detail.Booking.Status = "Completed";
+                }
+                else
+                {
+                    detail.Booking.Status = "Processing"; // At least one car is completed but not all
+                }
+            }
+            else if (newStatus == "Processing" && detail.Booking.Status == "CheckedIn")
+            {
+                 detail.Booking.Status = "Processing";
+            }
+
             await _context.SaveChangesAsync();
             return true;
         }

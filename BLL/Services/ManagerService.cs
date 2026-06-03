@@ -168,6 +168,10 @@ namespace AutoWashPro.BLL.Services
 
                     detail.ProcessingLaneId = assignInfo.LaneId;
                     detail.ProcessingStaffId = assignInfo.StaffId;
+                    if (detail.Status == "Pending")
+                    {
+                        detail.Status = "CheckedIn";
+                    }
                 }
             }
 

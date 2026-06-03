@@ -18,25 +18,36 @@ namespace AutoWashPro.BLL.Services
             _context = context;
         }
 
-        public async Task<List<ServiceDTO>> GetActiveServicesAsync()
+        public async Task<List<ServiceDTO>> GetActiveServicesAsync(int? branchId = null)
         {
-            var services = await _context.Services
+            var query = _context.Services
                 .Include(s => s.ServicePrices)
                     .ThenInclude(sp => sp.VehicleType)
-                .Where(s => s.IsActive) 
-                .ToListAsync();
+                .Where(s => s.IsActive);
 
-            return services.Select(s => MapToDTO(s)).ToList();
+            if (branchId.HasValue)
+            {
+                query = query.Where(s => s.ServicePrices.Any(sp => sp.BranchId == branchId.Value));
+            }
+
+            var services = await query.ToListAsync();
+            return services.Select(s => MapToDTO(s, branchId)).ToList();
         }
 
-        public async Task<List<ServiceDTO>> GetAllServicesAsync()
+        public async Task<List<ServiceDTO>> GetAllServicesAsync(int? branchId = null)
         {
-            var services = await _context.Services
+            var query = _context.Services
                 .Include(s => s.ServicePrices)
                     .ThenInclude(sp => sp.VehicleType)
-                .ToListAsync();
+                .AsQueryable();
 
-            return services.Select(s => MapToDTO(s)).ToList();
+            if (branchId.HasValue)
+            {
+                query = query.Where(s => s.ServicePrices.Any(sp => sp.BranchId == branchId.Value));
+            }
+
+            var services = await query.ToListAsync();
+            return services.Select(s => MapToDTO(s, branchId)).ToList();
         }
 
         public async Task<ServiceDTO> GetServiceByIdAsync(int id)
@@ -64,6 +75,7 @@ namespace AutoWashPro.BLL.Services
                 ServicePrices = request.Prices.Select(p => new ServicePrice
                 {
                     VehicleTypeId = p.VehicleTypeId,
+                    BranchId = p.BranchId,
                     Price = p.Price,
                     EstimatedDurationMinutes = p.EstimatedDurationMinutes
                 }).ToList()
@@ -95,6 +107,7 @@ namespace AutoWashPro.BLL.Services
             service.ServicePrices = request.Prices.Select(p => new ServicePrice
             {
                 VehicleTypeId = p.VehicleTypeId,
+                BranchId = p.BranchId,
                 Price = p.Price,
                 EstimatedDurationMinutes = p.EstimatedDurationMinutes
             }).ToList();
@@ -112,18 +125,25 @@ namespace AutoWashPro.BLL.Services
             return true;
         }
 
-        private static ServiceDTO MapToDTO(Service service)
+        private static ServiceDTO MapToDTO(Service service, int? branchId = null)
         {
+            var prices = service.ServicePrices.AsEnumerable();
+            if (branchId.HasValue)
+            {
+                prices = prices.Where(p => p.BranchId == branchId.Value);
+            }
+
             return new ServiceDTO
             {
                 ServiceId = service.ServiceId,
                 ServiceName = service.ServiceName,
                 Description = service.Description,
                 IsActive = service.IsActive,
-                Prices = service.ServicePrices.Select(sp => new ServicePriceDTO
+                Prices = prices.Select(sp => new ServicePriceDTO
                 {
                     VehicleTypeId = sp.VehicleTypeId,
                     VehicleTypeName = sp.VehicleType?.Name ?? "N/A",
+                    BranchId = sp.BranchId,
                     Price = sp.Price,
                     EstimatedDurationMinutes = sp.EstimatedDurationMinutes
                 }).ToList()

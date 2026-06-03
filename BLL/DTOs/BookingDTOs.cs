@@ -24,6 +24,9 @@ namespace AutoWashPro.BLL.DTOs
     public class CheckCompatibilityRequestDTO
     {
         [Required]
+        public int BranchId { get; set; }
+
+        [Required]
         public int SlotId { get; set; }
 
         [Required]
@@ -56,6 +59,9 @@ namespace AutoWashPro.BLL.DTOs
     public class CheckAvailableSlotsRequestDTO
     {
         [Required]
+        public int BranchId { get; set; }
+
+        [Required]
         public DateTime TargetDate { get; set; }
 
         [Required]
@@ -69,6 +75,9 @@ namespace AutoWashPro.BLL.DTOs
     }
     public class CreateBookingDTO
     {
+        [Required]
+        public int BranchId { get; set; }
+
         [Required(ErrorMessage = "Vui lòng chọn ít nhất 1 xe.")]
         public required List<VehicleBookingItemDTO> Vehicles { get; set; }
 
@@ -85,6 +94,9 @@ namespace AutoWashPro.BLL.DTOs
 
     public class CreateWalkInBookingDTO
     {
+        [Required]
+        public int BranchId { get; set; }
+
         [Required(ErrorMessage = "Vui lòng chọn ít nhất 1 xe.")]
         public required List<VehicleBookingItemDTO> Vehicles { get; set; }
 

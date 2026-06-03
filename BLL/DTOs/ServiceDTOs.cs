@@ -16,6 +16,7 @@ namespace AutoWashPro.BLL.DTOs
     {
         public int VehicleTypeId { get; set; }
         public string VehicleTypeName { get; set; }
+        public int BranchId { get; set; }
         public decimal Price { get; set; }
         public int EstimatedDurationMinutes { get; set; }
     }
@@ -35,6 +36,9 @@ namespace AutoWashPro.BLL.DTOs
     {
         [Required]
         public int VehicleTypeId { get; set; }
+
+        [Required]
+        public int BranchId { get; set; }
 
         [Required]
         [Range(0, double.MaxValue, ErrorMessage = "Giá tiền không hợp lệ.")]

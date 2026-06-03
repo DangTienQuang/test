@@ -16,6 +16,12 @@ namespace AutoWashPro.DAL.Entities
         public TimeSlot TimeSlot { get; set; } = null!;
 
         [Required]
+        public int BranchId { get; set; }
+
+        [ForeignKey("BranchId")]
+        public Branch Branch { get; set; } = null!;
+
+        [Required]
         public DateTime Date { get; set; }
 
         [Required]

@@ -6,6 +6,7 @@ namespace AutoWashPro.BLL.DTOs
     public class TimeSlotAdminResponseDTO
     {
         public int SlotId { get; set; }
+        public int BranchId { get; set; }
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
         public int MaxCapacity { get; set; }
@@ -14,6 +15,9 @@ namespace AutoWashPro.BLL.DTOs
 
     public class CreateTimeSlotDTO
     {
+        [Required]
+        public int BranchId { get; set; }
+
         [Required]
         public TimeSpan StartTime { get; set; }
 
@@ -28,6 +32,9 @@ namespace AutoWashPro.BLL.DTOs
 
     public class UpdateTimeSlotDTO
     {
+        [Required]
+        public int BranchId { get; set; }
+
         [Required]
         public TimeSpan StartTime { get; set; }
 

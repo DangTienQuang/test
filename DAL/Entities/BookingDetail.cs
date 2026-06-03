@@ -46,5 +46,8 @@ namespace AutoWashPro.DAL.Entities
 
         [ForeignKey("ProcessingStaffId")]
         public User? ProcessingStaff { get; set; }
+
+        [MaxLength(20)]
+        public string Status { get; set; } = "Pending"; // CheckedIn, Processing, Completed
     }
 }

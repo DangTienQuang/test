@@ -19,9 +19,9 @@ namespace AutoWashPro.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAllTimeSlots()
+        public async Task<IActionResult> GetAllTimeSlots([FromQuery] int? branchId)
         {
-            var result = await _timeSlotService.GetAllTimeSlotsAsync();
+            var result = await _timeSlotService.GetAllTimeSlotsAsync(branchId);
             return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
