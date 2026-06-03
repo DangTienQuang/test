@@ -28,6 +28,11 @@ namespace AutoWashPro.BLL.Services
                 throw new BadRequestException("Manager profile not found.");
             }
 
+            if (!profile.BranchId.HasValue)
+            {
+                throw new BadRequestException("Manager is not assigned to any branch.");
+            }
+
             return profile;
         }
 

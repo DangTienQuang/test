@@ -25,8 +25,11 @@ namespace AutoWashPro.BLL.Services
                 throw new BadRequestException("Phone number already exists.");
             }
 
-            var branch = await _context.Branches.FindAsync(createDto.BranchId);
-            if (branch == null) throw new NotFoundException("Branch not found.");
+            if (createDto.BranchId.HasValue)
+            {
+                var branch = await _context.Branches.FindAsync(createDto.BranchId);
+                if (branch == null) throw new NotFoundException("Branch not found.");
+            }
 
             var user = new User
             {
