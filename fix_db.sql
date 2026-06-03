@@ -1,0 +1,14 @@
+DROP TABLE IF EXISTS `StaffLaneAssignments`;
+DROP TABLE IF EXISTS `EmployeeProfiles`;
+ALTER TABLE `BookingDetails` DROP FOREIGN KEY `FK_BookingDetails_Lanes_ProcessingLaneId`;
+ALTER TABLE `BookingDetails` DROP FOREIGN KEY `FK_BookingDetails_Users_ProcessingStaffId`;
+ALTER TABLE `BookingDetails` DROP INDEX `IX_BookingDetails_ProcessingLaneId`;
+ALTER TABLE `BookingDetails` DROP INDEX `IX_BookingDetails_ProcessingStaffId`;
+ALTER TABLE `BookingDetails` DROP COLUMN `ProcessingLaneId`;
+ALTER TABLE `BookingDetails` DROP COLUMN `ProcessingStaffId`;
+ALTER TABLE `Bookings` DROP FOREIGN KEY `FK_Bookings_Branches_BranchId`;
+ALTER TABLE `Bookings` DROP INDEX `IX_Bookings_BranchId`;
+ALTER TABLE `Bookings` DROP COLUMN `BranchId`;
+DROP TABLE IF EXISTS `Lanes`;
+DROP TABLE IF EXISTS `Branches`;
+DELETE FROM `__EFMigrationsHistory` WHERE `MigrationId` = '20260603115109_AddBranchAndLaneSystem';
