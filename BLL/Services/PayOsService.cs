@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace AutoWashPro.API.Services
+namespace AutoWashPro.BLL.Services
 {
     public class PayOsService : IPayOsService
     {
