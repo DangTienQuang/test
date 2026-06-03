@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using System;
+using System.Security.Claims;
 
 namespace BLL.Helpers
 {
@@ -9,15 +10,17 @@ namespace BLL.Helpers
             var claim = user.FindFirst(ClaimTypes.NameIdentifier);
 
             if (claim == null)
-                throw new Exception("UserId claim not found.");
+                throw new UnauthorizedAccessException("Không tìm thấy UserId trong Token. Vui lòng đăng nhập lại.");
 
-            return int.Parse(claim.Value);
+            if (!int.TryParse(claim.Value, out int userId))
+                throw new UnauthorizedAccessException("Định dạng UserId trong Token không hợp lệ.");
+
+            return userId;
         }
 
         public static string GetRole(ClaimsPrincipal user)
         {
-            return user.FindFirst(ClaimTypes.Role)?.Value
-                   ?? string.Empty;
+            return user.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
         }
     }
 }

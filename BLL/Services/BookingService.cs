@@ -446,7 +446,54 @@ namespace AutoWashPro.BLL.Services
                 MaxCapacityOfSlot = slot.MaxCapacity
             };
         }
+        // File: BLL/Services/BookingService.cs
 
+        public async Task<bool> SendBookingConfirmationEmailAsync(int userId, int bookingId)
+        {
+            try
+            {
+                // 1. Lấy thông tin Booking và User. 
+                // Phải Include đầy đủ vì context này chạy hoàn toàn độc lập với luồng CreateBooking
+                var booking = await _context.Bookings
+                    .Include(b => b.BookingDetails)
+                        .ThenInclude(bd => bd.Service)
+                    .Include(b => b.User)
+                        .ThenInclude(u => u.CustomerProfile)
+                    .FirstOrDefaultAsync(b => b.BookingId == bookingId && b.UserId == userId);
+
+                // 2. Validate an toàn
+                if (booking == null || string.IsNullOrEmpty(booking.User?.Email))
+                {
+                    Console.WriteLine($"[Cảnh báo] Không thể gửi mail: Không tìm thấy đơn #{bookingId} hoặc User không có email.");
+                    return false;
+                }
+
+                var customerName = booking.User.CustomerProfile?.FullName ?? "Quý khách";
+
+                // 3. Build HTML Template (Nghiệp vụ tốn CPU)
+                var emailHtml = BLL.Helpers.EmailTemplateBuilder.BuildBookingConfirmationEmail(
+                    booking,
+                    booking.BookingDetails.ToList(),
+                    customerName
+                );
+
+                // 4. Gọi Service Gửi mail
+                await _emailService.SendEmailAsync(
+                    booking.User.Email,
+                    $"[SmartWash] Đặt lịch thành công - #{booking.BookingId}",
+                    emailHtml
+                );
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Trong Background Task, KHÔNG ĐƯỢC throw exception làm crash app. 
+                // Chỉ ghi Log để Developer trace lỗi.
+                Console.WriteLine($"[Lỗi Background Task - Email] Booking #{bookingId}: {ex.Message}");
+                return false;
+            }
+        }
         public async Task<CompatibilityDTO> CheckCompatibilityAsync(int userId, CheckCompatibilityRequestDTO request)
         {
             return await ValidateBookingCompatibilityAsync(userId, request.SlotId, request.TargetDate, request.Vehicles);

@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using BLL.Helpers;
 
 namespace AutoWashPro.API.Controllers
 {
@@ -14,10 +16,12 @@ namespace AutoWashPro.API.Controllers
     public class BookingsController : ControllerBase
     {
         private readonly IBookingService _bookingService;
+        private readonly IServiceProvider _serviceProvider;
 
-        public BookingsController(IBookingService bookingService)
+        public BookingsController(IBookingService bookingService, IServiceProvider serviceProvider)
         {
             _bookingService = bookingService;
+            _serviceProvider = serviceProvider;
         }
 
         private int GetUserId()
@@ -47,7 +51,34 @@ namespace AutoWashPro.API.Controllers
             var result = await _bookingService.GetAvailableSlotsAsync(userId, request);
             return Ok(new { statusCode = 200, message = "Success", data = result });
         }
+        [HttpPost("{bookingId}/trigger-email")]
+        [Authorize]
+        public IActionResult TriggerConfirmationEmail(int bookingId)
+        {
+            // Lấy UserId từ Token (Giả sử bạn dùng ClaimHelper)
+            var userId = ClaimHelper.GetUserId(User);
 
+            // Bắn một Background Task độc lập với luồng HTTP hiện tại
+            _ = Task.Run(async () =>
+            {
+                // TẠO MỘT SCOPE MỚI: Rất quan trọng để DbContext không bị Dispose khi API trả về 202
+                using (var scope = _serviceProvider.CreateScope())
+                {
+                    // Xin hệ thống cấp cho 1 instance IBookingService MỚI, đi kèm với 1 DbContext MỚI
+                    var scopedBookingService = scope.ServiceProvider.GetRequiredService<IBookingService>();
+                    
+                    // Thực thi hàm gửi mail bằng instance mới này
+                    await scopedBookingService.SendBookingConfirmationEmailAsync(userId, bookingId);
+                }
+            });
+
+            // Lập tức trả về cho Frontend mà không cần chờ mail gửi xong
+            // Dùng 202 Accepted: Báo cho FE biết "Hệ thống đã ghi nhận yêu cầu và đang xử lý ngầm"
+            return Accepted(new { 
+                statusCode = 202, 
+                message = "Hệ thống đang tiến hành gửi email xác nhận." 
+            });
+        }
         [HttpPost]
         public async Task<IActionResult> CreateBooking([FromBody] CreateBookingDTO request)
         {
