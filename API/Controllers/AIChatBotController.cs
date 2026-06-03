@@ -24,9 +24,6 @@ namespace API.Controllers
         [HttpPost("chat")]
         public async Task<IActionResult> Chat([FromBody] AIChatRequestDTO request)
         {
-            if (request == null || string.IsNullOrWhiteSpace(request.Message))
-                throw new BadRequestException("Message is required.");
-
             int userId = ClaimHelper.GetUserId(User);
             var result = await _aiService.ChatAsync(userId, request);
 

@@ -50,11 +50,11 @@ namespace AutoWashPro.BLL.Services
             var vehicleType = await _context.VehicleTypes.FirstOrDefaultAsync(t => t.Id == request.VehicleTypeId);
             if (vehicleType == null) throw new BadRequestException("Loại xe không hợp lệ.");
 
-            string finalPhotoUrl = request.RegistrationPhotoUrl;
+            string? finalPhotoUrl = request.RegistrationPhotoUrl;
 
-            if (request.PhotoFile != null && request.PhotoFile.Length > 0)
+            if (request.PhotoStream != null && request.PhotoStream.Length > 0 && !string.IsNullOrEmpty(request.PhotoFileName))
             {
-                finalPhotoUrl = await _photoService.UploadImageAsync(request.PhotoFile);
+                finalPhotoUrl = await _photoService.UploadImageAsync(request.PhotoStream, request.PhotoFileName);
             }
 
             if (vehicleType.Name.Contains("Khác", StringComparison.OrdinalIgnoreCase) ||
@@ -298,10 +298,10 @@ namespace AutoWashPro.BLL.Services
             var vehicleType = await _context.VehicleTypes.FirstOrDefaultAsync(t => t.Id == request.VehicleTypeId);
             if (vehicleType == null) throw new BadRequestException("Loại xe không hợp lệ.");
 
-            string finalPhotoUrl = vehicle.RegistrationPhotoUrl;
-            if (request.PhotoFile != null && request.PhotoFile.Length > 0)
+            string? finalPhotoUrl = vehicle.RegistrationPhotoUrl;
+            if (request.PhotoStream != null && request.PhotoStream.Length > 0 && !string.IsNullOrEmpty(request.PhotoFileName))
             {
-                finalPhotoUrl = await _photoService.UploadImageAsync(request.PhotoFile);
+                finalPhotoUrl = await _photoService.UploadImageAsync(request.PhotoStream, request.PhotoFileName);
             }
 
             if (vehicleType.Name.Contains("Khác", StringComparison.OrdinalIgnoreCase) ||

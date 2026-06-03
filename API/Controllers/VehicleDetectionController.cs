@@ -19,16 +19,15 @@ namespace API.Controllers
         [RequestSizeLimit(10 * 1024 * 1024)]
         public async Task<IActionResult> DetectPlate(IFormFile image)
         {
-            if (image == null || image.Length == 0)
-                throw new BadRequestException("No image provided.");
+            byte[]? imageBytes = null;
+            if (image != null && image.Length > 0)
+            {
+                using var ms = new MemoryStream();
+                await image.CopyToAsync(ms);
+                imageBytes = ms.ToArray();
+            }
 
-            using var ms = new MemoryStream();
-            await image.CopyToAsync(ms);
-
-            var result = await _plateService.DetectPlateAsync(ms.ToArray());
-
-            if (!result.Detected)
-                throw new NotFoundException("No license plate detected.");
+            var result = await _plateService.DetectPlateAsync(imageBytes);
 
             return Ok(new
             {
@@ -48,20 +47,17 @@ namespace API.Controllers
             IFormFile? frontImage,
             IFormFile? backImage)
         {
-            if (frontImage == null && backImage == null)
-                throw new BadRequestException("At least one image required.");
-
             byte[]? frontBytes = null;
             byte[]? backBytes = null;
 
-            if (frontImage != null)
+            if (frontImage != null && frontImage.Length > 0)
             {
                 using var ms = new MemoryStream();
                 await frontImage.CopyToAsync(ms);
                 frontBytes = ms.ToArray();
             }
 
-            if (backImage != null)
+            if (backImage != null && backImage.Length > 0)
             {
                 using var ms = new MemoryStream();
                 await backImage.CopyToAsync(ms);
@@ -69,9 +65,6 @@ namespace API.Controllers
             }
 
             var result = await _plateService.DetectDualPlateAsync(frontBytes, backBytes);
-
-            if (!result.Detected)
-                throw new NotFoundException("No license plate detected.");
 
             return Ok(new
             {
