@@ -11,6 +11,12 @@ namespace AutoWashPro.BLL.DTOs
         public DateTime ExpiryDate { get; set; }
         public bool IsUsed { get; set; }
         public DateTime? UsedDate { get; set; }
+        public AutoWashPro.DAL.Enums.VoucherType VoucherType { get; set; }
+        public string? ImageUrl { get; set; }
+        public int? RequiredTierId { get; set; }
+        public string? RequiredTierName { get; set; }
+        public TimeSpan? ValidStartTime { get; set; }
+        public TimeSpan? ValidEndTime { get; set; }
     }
 
     public class RedeemVoucherRequestDTO
@@ -28,6 +34,12 @@ namespace AutoWashPro.BLL.DTOs
         public DateTime ExpiryDate { get; set; }
         public int PointsRequired { get; set; }
         public int RedeemedCount { get; set; }
+        public AutoWashPro.DAL.Enums.VoucherType VoucherType { get; set; }
+        public string? ImageUrl { get; set; }
+        public int? RequiredTierId { get; set; }
+        public string? RequiredTierName { get; set; }
+        public TimeSpan? ValidStartTime { get; set; }
+        public TimeSpan? ValidEndTime { get; set; }
     }
 
     public class CreateOrUpdateVoucherDTO
@@ -37,7 +49,7 @@ namespace AutoWashPro.BLL.DTOs
         [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Mã voucher không được chỉ chứa khoảng trắng.")]
         public required string Code { get; set; }
 
-        [Range(typeof(decimal), "1", "1000000000", ErrorMessage = "Số tiền giảm không hợp lệ.")]
+        [Range(typeof(decimal), "0", "1000000000", ErrorMessage = "Số tiền giảm không hợp lệ.")]
         public decimal DiscountAmount { get; set; }
 
         [Range(0, int.MaxValue)]
@@ -48,5 +60,11 @@ namespace AutoWashPro.BLL.DTOs
 
         [Range(0, int.MaxValue)]
         public int PointsRequired { get; set; }
+
+        public AutoWashPro.DAL.Enums.VoucherType VoucherType { get; set; } = AutoWashPro.DAL.Enums.VoucherType.Discount;
+        public string? ImageUrl { get; set; }
+        public int? RequiredTierId { get; set; }
+        public TimeSpan? ValidStartTime { get; set; }
+        public TimeSpan? ValidEndTime { get; set; }
     }
 }
