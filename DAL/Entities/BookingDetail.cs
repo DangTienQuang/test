@@ -36,5 +36,15 @@ namespace AutoWashPro.DAL.Entities
         public VehicleType? ActualVehicleType { get; set; }
 
         public decimal MismatchSurcharge { get; set; } = 0;
+
+        public int? ProcessingLaneId { get; set; }
+
+        [ForeignKey("ProcessingLaneId")]
+        public Lane? ProcessingLane { get; set; }
+
+        public int? ProcessingStaffId { get; set; }
+
+        [ForeignKey("ProcessingStaffId")]
+        public User? ProcessingStaff { get; set; }
     }
 }

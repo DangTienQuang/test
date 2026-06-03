@@ -23,6 +23,12 @@ namespace AutoWashPro.DAL.Entities
         [MaxLength(20)]
         public string Status { get; set; } = "Pending";
 
+        [Required]
+        public int BranchId { get; set; }
+
+        [ForeignKey("BranchId")]
+        public Branch Branch { get; set; } = null!;
+
         public ICollection<BookingDetail> BookingDetails { get; set; } = new List<BookingDetail>();
 
         [Required]
