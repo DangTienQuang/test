@@ -37,6 +37,10 @@ namespace AutoWashPro.DAL.Entities
 
         public DateTime? DateOfBirth { get; set; }
 
+        public int? LastBirthdayGiftYear { get; set; }
+
+        public DateTime? LastWinbackSentDate { get; set; }
+
         [Timestamp]
         public DateTime? RowVersion { get; set; }
     }
