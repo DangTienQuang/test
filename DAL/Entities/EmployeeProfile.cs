@@ -15,10 +15,9 @@ namespace AutoWashPro.DAL.Entities
         [MaxLength(100)]
         public string FullName { get; set; } = null!;
 
-        [Required]
-        public int BranchId { get; set; }
+        public int? BranchId { get; set; }
 
         [ForeignKey("BranchId")]
-        public Branch Branch { get; set; } = null!;
+        public Branch? Branch { get; set; }
     }
 }
