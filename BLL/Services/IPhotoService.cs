@@ -1,7 +1,9 @@
+﻿using Microsoft.AspNetCore.Http;
+
 namespace BLL.Services
 {
     public interface IPhotoService
     {
-        Task<string> UploadImageAsync(System.IO.Stream fileStream, string fileName);
+        Task<string> UploadImageAsync(IFormFile file);
     }
 }

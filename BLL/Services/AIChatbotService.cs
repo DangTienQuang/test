@@ -31,9 +31,11 @@ namespace BLL.Services
             int userId,
             AIChatRequestDTO request)
         {
-            if (request == null || string.IsNullOrWhiteSpace(request.Message))
+            if (request == null
+                || string.IsNullOrWhiteSpace(request.Message))
             {
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Message is required.");
+                throw new Exception(
+                    "Tin nhắn không được để trống.");
             }
 
             var originalMessage = request.Message.Trim();

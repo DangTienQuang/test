@@ -8,7 +8,6 @@ using AutoWashPro.BLL.DTOs;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -19,20 +18,18 @@ namespace AutoWashPro.BLL.Services
         private readonly ITierService _tierService;
         private readonly IEmailService _emailService;
         private readonly IVoucherService _voucherService;
-        private readonly IServiceProvider _serviceProvider;
 
         public BookingService(
             AutoWashDbContext context,
             IWalletService walletService,
             ITierService tierService,
-            IEmailService emailService, IVoucherService voucherService, IServiceProvider serviceProvider)
+            IEmailService emailService, IVoucherService voucherService)
         {
             _context = context;
             _walletService = walletService;
             _tierService = tierService;
             _emailService = emailService;
             _voucherService = voucherService;
-            _serviceProvider = serviceProvider;
         }
 
         public async Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, CheckAvailableSlotsRequestDTO request)
@@ -450,18 +447,6 @@ namespace AutoWashPro.BLL.Services
             };
         }
         // File: BLL/Services/BookingService.cs
-
-        public void TriggerConfirmationEmailInBackground(int userId, int bookingId)
-        {
-            _ = Task.Run(async () =>
-            {
-                using (var scope = _serviceProvider.CreateScope())
-                {
-                    var scopedBookingService = scope.ServiceProvider.GetRequiredService<IBookingService>();
-                    await scopedBookingService.SendBookingConfirmationEmailAsync(userId, bookingId);
-                }
-            });
-        }
 
         public async Task<bool> SendBookingConfirmationEmailAsync(int userId, int bookingId)
         {

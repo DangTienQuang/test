@@ -24,6 +24,5 @@ namespace AutoWashPro.BLL.Services
         Task ReportMismatchAsync(int detailId, AutoWashPro.DAL.Entities.VehicleCondition condition, int actualTypeId);
         Task ForceCancelBookingsAsync(ForceCancelRequestDTO request);
         Task<bool> SendBookingConfirmationEmailAsync(int userId, int bookingId);
-        void TriggerConfirmationEmailInBackground(int userId, int bookingId);
     }
 }

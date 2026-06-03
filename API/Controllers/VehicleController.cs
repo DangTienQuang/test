@@ -1,6 +1,5 @@
 ﻿using AutoWashPro.BLL.DTOs;
 using AutoWashPro.BLL.Services;
-using AutoWashPro.API.Models.Requests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -30,50 +29,18 @@ namespace AutoWashPro.API.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddVehicle([FromForm] CreateVehicleRequest request)
+        public async Task<IActionResult> AddVehicle([FromForm] CreateVehicleDTO request)
         {
             int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
-
-            var dto = new CreateVehicleDTO
-            {
-                LicensePlate = request.LicensePlate,
-                VehicleTypeId = request.VehicleTypeId,
-                RegistrationPhotoUrl = request.RegistrationPhotoUrl,
-                UserNote = request.UserNote,
-                CarModelId = request.CarModelId,
-                CarModel = request.CarModel
-            };
-
-            if (request.PhotoFile != null)
-            {
-                dto.PhotoStream = request.PhotoFile.OpenReadStream();
-                dto.PhotoFileName = request.PhotoFile.FileName;
-            }
-
-            await _vehicleService.AddVehicleAsync(userId, dto);
+            await _vehicleService.AddVehicleAsync(userId, request);
             return Created("", new { statusCode = 201, message = "Thêm xe thành công." });
         }
 
         [HttpPut("{licensePlate}")]
-        public async Task<IActionResult> UpdateVehicle(string licensePlate, [FromForm] UpdateVehicleRequest request)
+        public async Task<IActionResult> UpdateVehicle(string licensePlate, [FromForm] UpdateVehicleDTO request)
         {
             int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
-
-            var dto = new UpdateVehicleDTO
-            {
-                VehicleTypeId = request.VehicleTypeId,
-                UserNote = request.UserNote,
-                CarModelId = request.CarModelId,
-                CarModel = request.CarModel
-            };
-
-            if (request.PhotoFile != null)
-            {
-                dto.PhotoStream = request.PhotoFile.OpenReadStream();
-                dto.PhotoFileName = request.PhotoFile.FileName;
-            }
-
-            await _vehicleService.UpdateVehicleAsync(userId, licensePlate, dto);
+            await _vehicleService.UpdateVehicleAsync(userId, licensePlate, request);
             return Ok(new { statusCode = 200, message = "Cập nhật thông tin xe thành công." });
         }
 
