@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using AutoWashPro.API.Helpers;
+using BLL.Helpers;
 
 namespace AutoWashPro.API.Controllers
 {

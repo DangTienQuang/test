@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using AutoWashPro.BLL.Services;
 using Microsoft.Extensions.Configuration;
 
-namespace AutoWashPro.API.Services
+namespace AutoWashPro.BLL.Services
 {
     public class ReflectionPayOsClient : IPayOsClient
     {
