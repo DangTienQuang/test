@@ -149,6 +149,7 @@ builder.Services.AddScoped<IPhotoService, PhotoService>();
 // 7. BACKGROUND WORKERS
 // ==============================================================================
 builder.Services.AddHostedService<AutoWashPro.API.Workers.AnnualTierResetWorker>();
+builder.Services.AddHostedService<AutoWashPro.API.Workers.CRMCampaignWorker>();
 
 // ==============================================================================
 // 8. SWAGGER CONFIGURATION

@@ -44,7 +44,8 @@ namespace AutoWashPro.BLL.Services
                 {
                     LicensePlate = v.LicensePlate,
                     VehicleType = v.VehicleType?.Name
-                }).ToList()
+                }).ToList(),
+                DateOfBirth = user.CustomerProfile?.DateOfBirth
             };
         }
 
@@ -61,6 +62,11 @@ namespace AutoWashPro.BLL.Services
             if (!string.IsNullOrWhiteSpace(request.FullName) && user.CustomerProfile.FullName != request.FullName.Trim())
             {
                 user.CustomerProfile.FullName = request.FullName.Trim();
+                isUpdated = true;
+            }
+            if (request.DateOfBirth.HasValue && user.CustomerProfile.DateOfBirth != request.DateOfBirth.Value)
+            {
+                user.CustomerProfile.DateOfBirth = request.DateOfBirth.Value.ToUniversalTime();
                 isUpdated = true;
             }
             if (!string.IsNullOrWhiteSpace(request.PhoneNumber) && user.PhoneNumber != request.PhoneNumber.Trim())

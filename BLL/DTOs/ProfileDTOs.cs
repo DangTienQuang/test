@@ -15,6 +15,7 @@ namespace AutoWashPro.BLL.DTOs
         public int PromotionPoint { get; set; }
         public double ChurnScore { get; set; }
         public List<VehicleDTO> Vehicles { get; set; }
+        public DateTime? DateOfBirth { get; set; }
     }
 
     public class VehicleDTO
@@ -61,6 +62,7 @@ namespace AutoWashPro.BLL.DTOs
         public string? PhoneNumber { get; set; }
         [EmailAddress(ErrorMessage = "Email không đúng định dạng.")]
         public string? Email { get; set; }
+        public DateTime? DateOfBirth { get; set; }
     }
 
     public class UpdateUserStatusDTO

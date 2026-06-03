@@ -586,7 +586,7 @@ namespace AutoWashPro.BLL.Services
 
             // PHASE 4: Financial Math
             var (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher) =
-                await CalculateBookingPricingAsync(userId, totalOriginalPrice, request.VoucherId, request.PointsToUse);
+                await CalculateBookingPricingAsync(userId, totalOriginalPrice, request.VoucherId, request.PointsToUse, targetDateTime);
 
             // PHASE 5: Transaction
             var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userId);
@@ -810,7 +810,7 @@ namespace AutoWashPro.BLL.Services
         }
 
         private async Task<(decimal voucherDiscount, decimal pointDiscount, int pointsUsed, decimal finalAmount, UserVoucher? userVoucher)>
-            CalculateBookingPricingAsync(int userId, decimal originalPrice, int? voucherId, int pointsToUseRequest)
+            CalculateBookingPricingAsync(int userId, decimal originalPrice, int? voucherId, int pointsToUseRequest, DateTime scheduledTime)
         {
             decimal voucherDiscount = 0;
             UserVoucher? userVoucher = null;
@@ -824,6 +824,33 @@ namespace AutoWashPro.BLL.Services
                 if (userVoucher == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Bạn không sở hữu Voucher này.");
                 if (userVoucher.IsUsed) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Voucher này đã được sử dụng.");
                 if (userVoucher.Voucher.ExpiryDate < DateTime.UtcNow) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Voucher này đã hết hạn.");
+
+                if (userVoucher.Voucher.VoucherType == AutoWashPro.DAL.Enums.VoucherType.PhysicalGift)
+                {
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Voucher quà tặng hiện vật không thể dùng để trừ tiền hóa đơn.");
+                }
+
+                if (userVoucher.Voucher.ValidStartTime.HasValue && userVoucher.Voucher.ValidEndTime.HasValue)
+                {
+                    var timeOfDay = scheduledTime.TimeOfDay;
+                    var startTime = userVoucher.Voucher.ValidStartTime.Value;
+                    var endTime = userVoucher.Voucher.ValidEndTime.Value;
+
+                    bool isValidTime = false;
+                    if (startTime <= endTime)
+                    {
+                        isValidTime = timeOfDay >= startTime && timeOfDay <= endTime;
+                    }
+                    else
+                    {
+                        isValidTime = timeOfDay >= startTime || timeOfDay <= endTime;
+                    }
+
+                    if (!isValidTime)
+                    {
+                        throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Voucher Happy Hour này chỉ áp dụng trong khung giờ từ {startTime:hh\\:mm} đến {endTime:hh\\:mm}.");
+                    }
+                }
 
                 voucherDiscount = Math.Min(userVoucher.Voucher.DiscountAmount, originalPrice);
             }
@@ -1086,7 +1113,7 @@ namespace AutoWashPro.BLL.Services
             }
 
             var (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher) =
-                await CalculateBookingPricingAsync(customerUserId, totalOriginalPrice, request.VoucherId, request.PointsToUse);
+                await CalculateBookingPricingAsync(customerUserId, totalOriginalPrice, request.VoucherId, request.PointsToUse, targetDateTime);
 
             var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == customerUserId);
             if (wallet == null || wallet.Balance < finalAmount)
