@@ -1,5 +1,6 @@
 ﻿using AutoWashPro.BLL.DTOs;
 using AutoWashPro.BLL.Services;
+using AutoWashPro.API.Models.Requests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
