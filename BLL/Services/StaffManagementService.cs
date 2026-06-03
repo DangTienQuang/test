@@ -49,33 +49,34 @@ namespace AutoWashPro.BLL.Services
             return users.Select(MapStaff).ToList();
         }
 
-        public async Task<List<StaffResponseDTO>> GetStaffsByRoleAsync(string role, string? keyword, string? status)
+        public async Task<List<StaffResponseDTO>> GetEmployeesAsync(string? role, string? keyword, string? status)
         {
-            EnsurePersonnelRole(role);
+            if (!string.IsNullOrWhiteSpace(role))
+            {
+                EnsurePersonnelRole(role);
+            }
             return await GetStaffsAsync(keyword, role, status);
         }
 
-        public async Task<StaffResponseDTO> GetStaffByRoleAsync(int staffUserId, string role)
+        public async Task<StaffResponseDTO> GetEmployeeAsync(int staffUserId)
         {
-            EnsurePersonnelRole(role);
             var user = await GetStaffUserAsync(staffUserId);
-            if (user.Role != role) throw new NotFoundException("Khong tim thay nhan su.");
             return MapStaff(user);
         }
 
-        public async Task<StaffResponseDTO> CreateStaffAsync(CreateStaffDTO request)
+        public async Task<StaffResponseDTO> CreateStaffAsync(CreateEmployeeDTO request)
         {
-            return await CreatePersonnelAsync(request, UserRoles.Staff);
+            return await CreatePersonnelAsync(request);
         }
 
-        public async Task<StaffResponseDTO> CreateStaffWithRoleAsync(CreateStaffDTO request, string role)
+        public async Task<StaffResponseDTO> CreateEmployeeAsync(CreateEmployeeDTO request)
         {
-            EnsurePersonnelRole(role);
-            return await CreatePersonnelAsync(request, role);
+            return await CreatePersonnelAsync(request);
         }
 
-        private async Task<StaffResponseDTO> CreatePersonnelAsync(CreateStaffDTO request, string role)
+        private async Task<StaffResponseDTO> CreatePersonnelAsync(CreateEmployeeDTO request)
         {
+            var role = request.Role == Enums.EmployeeRole.Manager ? UserRoles.Manager : UserRoles.Staff;
             EnsurePersonnelRole(role);
 
             var phone = request.PhoneNumber.Trim();
@@ -120,7 +121,12 @@ namespace AutoWashPro.BLL.Services
             return MapStaff(user);
         }
 
-        public async Task<StaffResponseDTO> UpdateStaffAsync(int staffUserId, UpdateStaffDTO request)
+        public async Task<StaffResponseDTO> UpdateStaffAsync(int staffUserId, UpdateEmployeeDTO request)
+        {
+            return await UpdateEmployeeAsync(staffUserId, request);
+        }
+
+        public async Task<StaffResponseDTO> UpdateEmployeeAsync(int staffUserId, UpdateEmployeeDTO request)
         {
             var user = await GetStaffUserAsync(staffUserId);
 
@@ -167,15 +173,7 @@ namespace AutoWashPro.BLL.Services
             return MapStaff(user);
         }
 
-        public async Task<StaffResponseDTO> UpdateStaffByRoleAsync(int staffUserId, string role, UpdateStaffDTO request)
-        {
-            EnsurePersonnelRole(role);
-            var user = await GetStaffUserAsync(staffUserId);
-            if (user.Role != role) throw new NotFoundException("Khong tim thay nhan su.");
-            return await UpdateStaffAsync(staffUserId, request);
-        }
-
-        public async Task<bool> UpdateStaffStatusAsync(int staffUserId, string status)
+        public async Task<bool> UpdateEmployeeStatusAsync(int staffUserId, string status)
         {
             if (status != UserStatuses.Active && status != UserStatuses.Blocked)
                 throw new BadRequestException("Trạng thái chỉ được phép là Active hoặc Blocked.");
@@ -186,11 +184,9 @@ namespace AutoWashPro.BLL.Services
             return true;
         }
 
-        public async Task<bool> SoftDeleteStaffByRoleAsync(int staffUserId, string role)
+        public async Task<bool> SoftDeleteEmployeeAsync(int staffUserId)
         {
-            EnsurePersonnelRole(role);
             var user = await GetStaffUserAsync(staffUserId);
-            if (user.Role != role) throw new NotFoundException("Khong tim thay nhan su.");
 
             user.Status = UserStatuses.Blocked;
             await _context.SaveChangesAsync();

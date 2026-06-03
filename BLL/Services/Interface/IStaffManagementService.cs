@@ -5,14 +5,14 @@ namespace AutoWashPro.BLL.Services
     public interface IStaffManagementService
     {
         Task<List<StaffResponseDTO>> GetStaffsAsync(string? keyword, string? role, string? status);
-        Task<List<StaffResponseDTO>> GetStaffsByRoleAsync(string role, string? keyword, string? status);
-        Task<StaffResponseDTO> GetStaffByRoleAsync(int staffUserId, string role);
-        Task<StaffResponseDTO> CreateStaffAsync(CreateStaffDTO request);
-        Task<StaffResponseDTO> CreateStaffWithRoleAsync(CreateStaffDTO request, string role);
-        Task<StaffResponseDTO> UpdateStaffAsync(int staffUserId, UpdateStaffDTO request);
-        Task<StaffResponseDTO> UpdateStaffByRoleAsync(int staffUserId, string role, UpdateStaffDTO request);
-        Task<bool> UpdateStaffStatusAsync(int staffUserId, string status);
-        Task<bool> SoftDeleteStaffByRoleAsync(int staffUserId, string role);
+        Task<List<StaffResponseDTO>> GetEmployeesAsync(string? role, string? keyword, string? status);
+        Task<StaffResponseDTO> GetEmployeeAsync(int staffUserId);
+        Task<StaffResponseDTO> CreateStaffAsync(CreateEmployeeDTO request);
+        Task<StaffResponseDTO> CreateEmployeeAsync(CreateEmployeeDTO request);
+        Task<StaffResponseDTO> UpdateStaffAsync(int staffUserId, UpdateEmployeeDTO request);
+        Task<StaffResponseDTO> UpdateEmployeeAsync(int staffUserId, UpdateEmployeeDTO request);
+        Task<bool> UpdateEmployeeStatusAsync(int staffUserId, string status);
+        Task<bool> SoftDeleteEmployeeAsync(int staffUserId);
 
         Task<List<WorkShiftResponseDTO>> GetWorkShiftsAsync(bool includeInactive);
         Task<WorkShiftResponseDTO> CreateWorkShiftAsync(CreateWorkShiftDTO request);
