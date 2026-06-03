@@ -1,10 +1,11 @@
-using Microsoft.Extensions.Configuration;
 using System;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using AutoWashPro.BLL.Services;
+using Microsoft.Extensions.Configuration;
 
-namespace AutoWashPro.BLL.Services
+namespace AutoWashPro.API.Services
 {
     public class ReflectionPayOsClient : IPayOsClient
     {
@@ -98,7 +99,7 @@ namespace AutoWashPro.BLL.Services
             if (result == null) throw new Exception("PayOS result is null.");
 
             var checkoutUrlProp = result.GetType().GetProperty("checkoutUrl") ?? result.GetType().GetProperty("CheckoutUrl");
-
+            
             return new PaymentLinkResult
             {
                 CheckoutUrl = checkoutUrlProp?.GetValue(result)?.ToString() ?? string.Empty,
@@ -114,7 +115,6 @@ namespace AutoWashPro.BLL.Services
             var codeProp = result.GetType().GetProperty("code") ?? result.GetType().GetProperty("Code");
             var orderCodeProp = result.GetType().GetProperty("orderCode") ?? result.GetType().GetProperty("OrderCode");
 
-            await Task.CompletedTask;
             return new WebhookVerificationResult
             {
                 Code = codeProp?.GetValue(result)?.ToString() ?? string.Empty,
