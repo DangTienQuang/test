@@ -6,8 +6,8 @@ namespace AutoWashPro.BLL.Services
 {
     public interface IServiceService
     {
-        Task<List<ServiceDTO>> GetActiveServicesAsync();
-        Task<List<ServiceDTO>> GetAllServicesAsync();
+        Task<List<ServiceDTO>> GetActiveServicesAsync(int? branchId = null);
+        Task<List<ServiceDTO>> GetAllServicesAsync(int? branchId = null);
         Task<ServiceDTO> GetServiceByIdAsync(int id);
         Task<ServiceDTO> CreateServiceAsync(CreateOrUpdateServiceDTO request);
         Task<bool> UpdateServiceAsync(int id, CreateOrUpdateServiceDTO request);

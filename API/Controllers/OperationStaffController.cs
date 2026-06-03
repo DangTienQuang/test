@@ -42,11 +42,11 @@ namespace AutoWashPro.API.Controllers
             return Ok(tasks);
         }
 
-        [HttpPut("bookings/{bookingId}/status")]
-        public async Task<IActionResult> UpdateBookingStatus(int bookingId, [FromBody] UpdateBookingStatusDTO dto)
+        [HttpPut("bookings/details/{detailId}/status")]
+        public async Task<IActionResult> UpdateBookingDetailStatus(int detailId, [FromBody] UpdateBookingStatusDTO dto)
         {
-            await _staffService.UpdateBookingStatusAsync(GetUserId(), bookingId, dto.Status);
-            return Ok(new { Message = $"Booking status updated to {dto.Status}." });
+            await _staffService.UpdateBookingDetailStatusAsync(GetUserId(), detailId, dto.Status);
+            return Ok(new { Message = $"Booking detail status updated to {dto.Status}." });
         }
     }
 }

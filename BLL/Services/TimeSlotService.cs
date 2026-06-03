@@ -19,13 +19,20 @@ namespace AutoWashPro.BLL.Services
             _context = context;
         }
 
-        public async Task<List<TimeSlotAdminResponseDTO>> GetAllTimeSlotsAsync()
+        public async Task<List<TimeSlotAdminResponseDTO>> GetAllTimeSlotsAsync(int? branchId = null)
         {
-            return await _context.TimeSlots
+            var query = _context.TimeSlots.AsQueryable();
+            if (branchId.HasValue)
+            {
+                query = query.Where(ts => ts.BranchId == branchId.Value);
+            }
+
+            return await query
                 .OrderBy(ts => ts.StartTime)
                 .Select(ts => new TimeSlotAdminResponseDTO
                 {
                     SlotId = ts.SlotId,
+                    BranchId = ts.BranchId,
                     StartTime = ts.StartTime,
                     EndTime = ts.EndTime,
                     MaxCapacity = ts.MaxCapacity,
@@ -42,9 +49,10 @@ namespace AutoWashPro.BLL.Services
 
             // Kiểm tra trùng lặp thời gian
             var isOverlap = await _context.TimeSlots.AnyAsync(ts =>
-                (request.StartTime >= ts.StartTime && request.StartTime < ts.EndTime) ||
+                ts.BranchId == request.BranchId &&
+                ((request.StartTime >= ts.StartTime && request.StartTime < ts.EndTime) ||
                 (request.EndTime > ts.StartTime && request.EndTime <= ts.EndTime) ||
-                (request.StartTime <= ts.StartTime && request.EndTime >= ts.EndTime));
+                (request.StartTime <= ts.StartTime && request.EndTime >= ts.EndTime)));
 
             if (isOverlap)
             {
@@ -53,6 +61,7 @@ namespace AutoWashPro.BLL.Services
 
             var timeSlot = new TimeSlot
             {
+                BranchId = request.BranchId,
                 StartTime = request.StartTime,
                 EndTime = request.EndTime,
                 MaxCapacity = request.MaxCapacity,
@@ -65,6 +74,7 @@ namespace AutoWashPro.BLL.Services
             return new TimeSlotAdminResponseDTO
             {
                 SlotId = timeSlot.SlotId,
+                BranchId = timeSlot.BranchId,
                 StartTime = timeSlot.StartTime,
                 EndTime = timeSlot.EndTime,
                 MaxCapacity = timeSlot.MaxCapacity,
@@ -87,6 +97,7 @@ namespace AutoWashPro.BLL.Services
 
             var isOverlap = await _context.TimeSlots.AnyAsync(ts =>
                 ts.SlotId != slotId &&
+                ts.BranchId == request.BranchId &&
                 ((request.StartTime >= ts.StartTime && request.StartTime < ts.EndTime) ||
                  (request.EndTime > ts.StartTime && request.EndTime <= ts.EndTime) ||
                  (request.StartTime <= ts.StartTime && request.EndTime >= ts.EndTime)));
@@ -96,6 +107,7 @@ namespace AutoWashPro.BLL.Services
                 throw new BadRequestException("Khung giờ bị trùng lặp với một khung giờ đã tồn tại.");
             }
 
+            timeSlot.BranchId = request.BranchId;
             timeSlot.StartTime = request.StartTime;
             timeSlot.EndTime = request.EndTime;
             timeSlot.MaxCapacity = request.MaxCapacity;
@@ -106,6 +118,7 @@ namespace AutoWashPro.BLL.Services
             return new TimeSlotAdminResponseDTO
             {
                 SlotId = timeSlot.SlotId,
+                BranchId = timeSlot.BranchId,
                 StartTime = timeSlot.StartTime,
                 EndTime = timeSlot.EndTime,
                 MaxCapacity = timeSlot.MaxCapacity,

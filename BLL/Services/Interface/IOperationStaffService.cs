@@ -8,6 +8,6 @@ namespace AutoWashPro.BLL.Services
     {
         Task<StaffLaneTaskDTO?> GetTodayLaneAssignmentAsync(int staffUserId);
         Task<List<StaffBookingDetailDTO>> GetAssignedBookingDetailsAsync(int staffUserId);
-        Task<bool> UpdateBookingStatusAsync(int staffUserId, int bookingId, string newStatus);
+        Task<bool> UpdateBookingDetailStatusAsync(int staffUserId, int detailId, string newStatus);
     }
 }

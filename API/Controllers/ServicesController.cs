@@ -20,11 +20,11 @@ namespace AutoWashPro.API.Controllers
 
         [AllowAnonymous] 
         [HttpGet]
-        public async Task<IActionResult> GetActiveServices()
+        public async Task<IActionResult> GetActiveServices([FromQuery] int? branchId)
         {
             try
             {
-                var result = await _serviceService.GetActiveServicesAsync();
+                var result = await _serviceService.GetActiveServicesAsync(branchId);
                 return Ok(new { statusCode = 200, message = "Success", data = result });
             }
             catch (Exception ex)
