@@ -832,7 +832,7 @@ namespace AutoWashPro.BLL.Services
 
                 if (userVoucher.Voucher.ValidStartTime.HasValue && userVoucher.Voucher.ValidEndTime.HasValue)
                 {
-                    var timeOfDay = scheduledTime.TimeOfDay;
+                    var timeOfDay = scheduledTime.ToVnTime().TimeOfDay;
                     var startTime = userVoucher.Voucher.ValidStartTime.Value;
                     var endTime = userVoucher.Voucher.ValidEndTime.Value;
 

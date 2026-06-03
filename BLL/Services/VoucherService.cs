@@ -259,5 +259,29 @@ namespace AutoWashPro.BLL.Services
             _context.UserVouchers.Add(userVoucher);
             await _context.SaveChangesAsync();
         }
+
+        public async Task<bool> ConsumePhysicalVoucherAsync(int userId, string voucherCode)
+        {
+            var userVoucher = await _context.UserVouchers
+                .Include(uv => uv.Voucher)
+                .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.Voucher.Code == voucherCode.Trim());
+
+            if (userVoucher == null) throw new NotFoundException("Mã voucher không tồn tại trong hệ thống hoặc khách chưa lấy mã này.");
+
+            if (userVoucher.IsUsed) throw new BadRequestException("Mã voucher này đã được sử dụng trước đó.");
+
+            if (userVoucher.Voucher.ExpiryDate < DateTime.UtcNow) throw new BadRequestException("Voucher này đã hết hạn.");
+
+            if (userVoucher.Voucher.VoucherType != AutoWashPro.DAL.Enums.VoucherType.PhysicalGift)
+            {
+                throw new BadRequestException("Voucher này không phải là loại Quà Tặng Hiện Vật. Không thể tiêu thụ (consume) thông qua chức năng này.");
+            }
+
+            userVoucher.IsUsed = true;
+            userVoucher.UsedDate = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

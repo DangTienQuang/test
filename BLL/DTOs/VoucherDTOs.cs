@@ -25,6 +25,15 @@ namespace AutoWashPro.BLL.DTOs
         public int VoucherId { get; set; }
     }
 
+    public class ConsumeVoucherRequestDTO
+    {
+        [Required(ErrorMessage = "User ID không được để trống.")]
+        public int UserId { get; set; }
+
+        [Required(ErrorMessage = "Mã Voucher không được để trống.")]
+        public required string VoucherCode { get; set; }
+    }
+
     public class AdminVoucherDTO
     {
         public int VoucherId { get; set; }

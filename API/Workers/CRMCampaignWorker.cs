@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
 using AutoWashPro.BLL.Services;
+using AutoWashPro.BLL.Helpers;
 
 namespace AutoWashPro.API.Workers
 {
@@ -60,7 +61,7 @@ namespace AutoWashPro.API.Workers
         {
             _logger.LogInformation("Bắt đầu quét khách hàng có sinh nhật hôm nay...");
 
-            var today = DateTime.UtcNow.AddHours(7).Date; // Lấy ngày VN
+            var today = DateTime.UtcNow.ToVnTime().Date;
 
             var birthdayUsers = await context.Users
                 .Include(u => u.CustomerProfile)
@@ -68,12 +69,13 @@ namespace AutoWashPro.API.Workers
                             && u.CustomerProfile.DateOfBirth.HasValue
                             && u.CustomerProfile.DateOfBirth.Value.Month == today.Month
                             && u.CustomerProfile.DateOfBirth.Value.Day == today.Day
+                            && (u.CustomerProfile.LastBirthdayGiftYear == null || u.CustomerProfile.LastBirthdayGiftYear < today.Year)
                             && u.Status == "Active")
                 .ToListAsync();
 
             if (!birthdayUsers.Any())
             {
-                _logger.LogInformation("Không có khách hàng nào sinh nhật hôm nay.");
+                _logger.LogInformation("Không có khách hàng nào hợp lệ nhận quà sinh nhật hôm nay.");
                 return;
             }
 
@@ -81,7 +83,7 @@ namespace AutoWashPro.API.Workers
             {
                 var code = $"HPBD-{user.UserId}-{today.Year}";
 
-                // Kiểm tra xem đã tặng voucher sinh nhật năm nay chưa
+                // Kiểm tra xem đã tặng voucher sinh nhật năm nay chưa (phòng thủ thứ 2)
                 var hasVoucher = await context.Vouchers.AnyAsync(v => v.Code == code);
                 if (hasVoucher) continue;
 
@@ -106,6 +108,10 @@ namespace AutoWashPro.API.Workers
                 };
 
                 context.UserVouchers.Add(userVoucher);
+
+                // Đánh dấu đã tặng
+                user.CustomerProfile.LastBirthdayGiftYear = today.Year;
+
                 await context.SaveChangesAsync();
 
                 if (!string.IsNullOrEmpty(user.Email))
@@ -127,13 +133,15 @@ namespace AutoWashPro.API.Workers
         {
             _logger.LogInformation("Bắt đầu quét khách hàng Win-back (>60 ngày)...");
 
-            var targetDate = DateTime.UtcNow.AddDays(-60);
+            var thresholdDate = DateTime.UtcNow.ToVnTime().AddDays(-60).Date;
+            var winbackCutoffDate = DateTime.UtcNow.ToVnTime().AddDays(-30).Date; // Chỉ gửi lại sau ít nhất 30 ngày nếu vẫn chưa quay lại
 
             var winbackUsers = await context.Users
                 .Include(u => u.CustomerProfile)
                 .Where(u => u.CustomerProfile != null
                             && u.CustomerProfile.LastVisitDate.HasValue
-                            && u.CustomerProfile.LastVisitDate.Value.Date == targetDate.Date // Chạy đúng vào ngày thứ 60
+                            && u.CustomerProfile.LastVisitDate.Value.Date <= thresholdDate // Quá 60 ngày
+                            && (u.CustomerProfile.LastWinbackSentDate == null || u.CustomerProfile.LastWinbackSentDate.Value.Date <= winbackCutoffDate)
                             && u.Status == "Active")
                 .ToListAsync();
 
@@ -145,7 +153,7 @@ namespace AutoWashPro.API.Workers
 
             foreach (var user in winbackUsers)
             {
-                var code = $"COMEBACK-{user.UserId}-{DateTime.UtcNow:MMdd}";
+                var code = $"COMEBACK-{user.UserId}-{DateTime.UtcNow.ToVnTime():MMdd}";
 
                 var hasVoucher = await context.Vouchers.AnyAsync(v => v.Code == code);
                 if (hasVoucher) continue;
@@ -171,6 +179,10 @@ namespace AutoWashPro.API.Workers
                 };
 
                 context.UserVouchers.Add(userVoucher);
+
+                // Đánh dấu đã gửi
+                user.CustomerProfile.LastWinbackSentDate = DateTime.UtcNow.ToVnTime().Date;
+
                 await context.SaveChangesAsync();
 
                 if (!string.IsNullOrEmpty(user.Email))
