@@ -11,7 +11,7 @@ namespace BLL.Services
     public interface ILicensePlateService
     {
         // Single image (existing)
-        Task<LicensePlateResult> DetectPlateAsync(byte[] imageBytes);
+        Task<LicensePlateResult> DetectPlateAsync(byte[]? imageBytes);
 
         // Dual camera — new
         Task<DualPlateResult> DetectDualPlateAsync(

@@ -36,12 +36,15 @@ namespace BLL.Services
         // ─── Dual Camera Entry Point ────────────────────────────────────────
         public async Task<DualPlateResult> DetectDualPlateAsync(byte[]? frontImageBytes, byte[]? backImageBytes)
         {
+            if ((frontImageBytes == null || frontImageBytes.Length == 0) && (backImageBytes == null || backImageBytes.Length == 0))
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("At least one image required.");
+
             // Run both cameras in parallel
-            var frontTask = frontImageBytes != null
+            var frontTask = frontImageBytes != null && frontImageBytes.Length > 0
                 ? DetectSingleAsync(frontImageBytes, PlatePosition.Front)
                 : Task.FromResult<SinglePlateResult?>(null);
 
-            var backTask = backImageBytes != null
+            var backTask = backImageBytes != null && backImageBytes.Length > 0
                 ? DetectSingleAsync(backImageBytes, PlatePosition.Back)
                 : Task.FromResult<SinglePlateResult?>(null);
 
@@ -50,7 +53,12 @@ namespace BLL.Services
             var front = await frontTask;
             var back = await backTask;
 
-            return ReconcileResults(front, back);
+            var result = ReconcileResults(front, back);
+
+            if (!result.Detected)
+                throw new AutoWashPro.BLL.Exceptions.NotFoundException("No license plate detected.");
+
+            return result;
         }
 
         // ─── Single Camera Detection ────────────────────────────────────────
@@ -183,11 +191,14 @@ namespace BLL.Services
                                                                           .ToArray());
 
         // ─── Existing Single Image API (unchanged) ──────────────────────────
-        public async Task<LicensePlateResult> DetectPlateAsync(byte[] imageBytes)
+        public async Task<LicensePlateResult> DetectPlateAsync(byte[]? imageBytes)
         {
+            if (imageBytes == null || imageBytes.Length == 0)
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("No image provided.");
+
             var boxes = GetFilteredBoxes(imageBytes);
             if (!boxes.Any())
-                return new LicensePlateResult { Detected = false };
+                throw new AutoWashPro.BLL.Exceptions.NotFoundException("No license plate detected.");
 
             var bestBox = boxes.OrderByDescending(b => b.Confidence).First();
             var cropped = CropRegion(imageBytes, bestBox, PlatePosition.Back);

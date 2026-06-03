@@ -1,7 +1,6 @@
 ﻿using BLL.Helpers;
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using System.Security.Principal;
 
@@ -22,16 +21,15 @@ namespace BLL.Services
             _cloudinary = new Cloudinary(acc);
         }
 
-        public async Task<string> UploadImageAsync(IFormFile file)
+        public async Task<string> UploadImageAsync(System.IO.Stream fileStream, string fileName)
         {
             var uploadResult = new ImageUploadResult();
 
-            if (file.Length > 0)
+            if (fileStream.Length > 0)
             {
-                using var stream = file.OpenReadStream();
                 var uploadParams = new ImageUploadParams
                 {
-                    File = new FileDescription(file.FileName, stream),
+                    File = new FileDescription(fileName, fileStream),
                     // Tùy chọn: Tự động crop ảnh thành hình vuông (nếu làm avatar)
                     Transformation = new Transformation().Height(500).Width(500).Crop("fill").Gravity("face"),
                     Folder = "AutoWashPro" // Tên folder nó sẽ tạo trên Cloudinary
