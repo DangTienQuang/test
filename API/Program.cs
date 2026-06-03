@@ -145,6 +145,11 @@ builder.Services.AddScoped<IAIIntentService, AIIntentService>();
 builder.Services.AddScoped<ILicensePlateService, LicensePlateService>();
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();
+builder.Services.AddScoped<IBranchService, BranchService>();
+builder.Services.AddScoped<ILaneService, LaneService>();
+builder.Services.AddScoped<IEmployeeService, EmployeeService>();
+builder.Services.AddScoped<IManagerService, ManagerService>();
+builder.Services.AddScoped<IOperationStaffService, OperationStaffService>();
 // ==============================================================================
 // 7. BACKGROUND WORKERS
 // ==============================================================================
