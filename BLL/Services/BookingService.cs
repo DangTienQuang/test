@@ -1052,7 +1052,7 @@ namespace AutoWashPro.BLL.Services
             // Find current time slot to update capacity
             var timeOfDay = targetDateTime.TimeOfDay;
             var slot = await _context.TimeSlots
-                .Where(s => s.BranchId == 1 && s.StartTime <= timeOfDay && s.EndTime >= timeOfDay) // Hardcode BranchId = 1 temporarily for walk-ins
+                .Where(s => s.BranchId == request.BranchId && s.StartTime <= timeOfDay && s.EndTime >= timeOfDay)
                 .FirstOrDefaultAsync();
 
             using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
@@ -1175,7 +1175,7 @@ namespace AutoWashPro.BLL.Services
 
             var query = _context.Bookings
                 .Include(b => b.User)
-                .Where(b => b.Status == "Pending");
+                .Where(b => b.Status == "Pending" && b.BranchId == request.BranchId);
 
             if (request.AffectedDate.HasValue)
             {
