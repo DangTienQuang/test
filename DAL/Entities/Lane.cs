@@ -22,6 +22,6 @@ namespace AutoWashPro.DAL.Entities
         public bool IsActive { get; set; } = true;
 
         public ICollection<StaffLaneAssignment> StaffAssignments { get; set; } = new List<StaffLaneAssignment>();
-        public ICollection<BookingDetail> ProcessingBookings { get; set; } = new List<BookingDetail>();
+        public ICollection<Booking> ProcessingBookings { get; set; } = new List<Booking>();
     }
 }

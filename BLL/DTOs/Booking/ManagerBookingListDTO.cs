@@ -10,14 +10,8 @@ namespace AutoWashPro.BLL.DTOs
         public DateTime ScheduledTime { get; set; }
         public string? CustomerName { get; set; }
         public string? CustomerPhone { get; set; }
-        public List<ManagerBookingDetailDTO> Details { get; set; } = new List<ManagerBookingDetailDTO>();
-    }
-
-    public class ManagerBookingDetailDTO
-    {
-        public int DetailId { get; set; }
         public string LicensePlate { get; set; } = null!;
-        public string ServiceName { get; set; } = null!;
+        public List<string> ServiceNames { get; set; } = new List<string>();
         public int? ProcessingLaneId { get; set; }
         public string? ProcessingLaneName { get; set; }
         public int? ProcessingStaffId { get; set; }

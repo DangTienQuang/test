@@ -54,30 +54,20 @@ namespace AutoWashPro.BLL.Services
 
             // 2. TÍNH TỔNG TRỌNG LƯỢNG (WEIGHT) CỦA GIỎ HÀNG KHÁCH VỪA CHỌN
             int totalRequestWeight = 0;
-            if (request.BookingVehicles != null && request.BookingVehicles.Any())
+            if (request.ServiceIds != null && request.ServiceIds.Any())
             {
-                foreach (var item in request.BookingVehicles)
+                var vehicleType = await _context.VehicleTypes.FirstOrDefaultAsync(vt => vt.Id == request.VehicleTypeId);
+                var baseWeight = vehicleType?.BaseWeight ?? 0;
+
+                foreach (var serviceId in request.ServiceIds)
                 {
                     var servicePrice = await _context.ServicePrices
-                        .FirstOrDefaultAsync(sp => sp.ServiceId == item.ServiceId
-                                                && sp.VehicleTypeId == item.VehicleTypeId
+                        .FirstOrDefaultAsync(sp => sp.ServiceId == serviceId
+                                                && sp.VehicleTypeId == request.VehicleTypeId
                                                 && sp.BranchId == request.BranchId);
 
-                    if (servicePrice != null)
-                    {
-                        if (servicePrice.CapacityWeight > 0)
-                        {
-                            totalRequestWeight += servicePrice.CapacityWeight;
-                        }
-                        else
-                        {
-                            var vehicleType = await _context.VehicleTypes.FirstOrDefaultAsync(vt => vt.Id == item.VehicleTypeId);
-                            if (vehicleType != null)
-                            {
-                                totalRequestWeight += vehicleType.BaseWeight;
-                            }
-                        }
-                    }
+                    var actualWeight = servicePrice?.CapacityWeight > 0 ? servicePrice.CapacityWeight : baseWeight;
+                    if (actualWeight > totalRequestWeight) totalRequestWeight = actualWeight;
                 }
             }
 
@@ -145,8 +135,8 @@ namespace AutoWashPro.BLL.Services
             return bookings.Select(b => new BookingResponseDTO
             {
                 BookingId = b.BookingId,
-                LicensePlate = string.Join(", ", b.BookingDetails.Select(d => d.LicensePlate)),
-                ServiceName = string.Join(", ", b.BookingDetails.Select(d => d.Service.ServiceName)),
+                LicensePlate = b.LicensePlate,
+                ServiceNames = b.BookingDetails.Select(d => d.Service.ServiceName).ToList(),
                 ScheduledTime = b.ScheduledTime,
                 Status = b.Status,
                 OriginalPrice = b.OriginalPrice,
@@ -169,8 +159,8 @@ namespace AutoWashPro.BLL.Services
             return new BookingResponseDTO
             {
                 BookingId = booking.BookingId,
-                LicensePlate = string.Join(", ", booking.BookingDetails.Select(d => d.LicensePlate)),
-                ServiceName = string.Join(", ", booking.BookingDetails.Select(d => d.Service.ServiceName)),
+                LicensePlate = booking.LicensePlate,
+                ServiceNames = booking.BookingDetails.Select(d => d.Service.ServiceName).ToList(),
                 ScheduledTime = booking.ScheduledTime,
                 Status = booking.Status,
                 OriginalPrice = booking.OriginalPrice,
@@ -192,44 +182,28 @@ namespace AutoWashPro.BLL.Services
             if (string.IsNullOrEmpty(normalizedPlate))
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException("Biển số xe không hợp lệ.");
 
-            // Tối ưu hóa: Lấy danh sách BookingId dựa trên LicensePlate trước
-            var matchedBookingIds = await _context.Set<AutoWashPro.DAL.Entities.BookingDetail>()
-                .Where(bd => bd.LicensePlate.Replace("-", "").Replace(".", "").Replace(" ", "").ToUpper() == normalizedPlate)
-                .Select(bd => bd.BookingId)
-                .Distinct()
-                .ToListAsync();
-
-            var query = _context.Bookings
+            var bookings = await _context.Bookings
                 .Include(b => b.BookingDetails)
                     .ThenInclude(bd => bd.Service)
-                .Include(b => b.BookingDetails)
-                    .ThenInclude(bd => bd.ActualVehicleType)
                 .Include(b => b.User)
                     .ThenInclude(u => u.CustomerProfile)
-                .Where(b => matchedBookingIds.Contains(b.BookingId))
-                .AsNoTracking();
-
-            var bookings = await query.ToListAsync();
-
-            var matchedBookings = bookings.Where(b =>
-                b.BookingDetails != null && b.BookingDetails.Any(bd => NormalizeLicensePlate(bd.LicensePlate) == normalizedPlate))
+                .Where(b => b.LicensePlate.Replace("-", "").Replace(".", "").Replace(" ", "").ToUpper() == normalizedPlate)
                 .OrderByDescending(b => b.ScheduledTime)
-                .ToList();
+                .AsNoTracking()
+                .ToListAsync();
 
-            if (matchedBookings.Count == 0)
+            if (bookings.Count == 0)
             {
                 return new List<BookingResponseDTO>();
             }
 
-            return matchedBookings.Select(b =>
+            return bookings.Select(b =>
             {
-                var matchingDetail = b.BookingDetails.FirstOrDefault(bd => NormalizeLicensePlate(bd.LicensePlate) == normalizedPlate);
-                var serviceName = matchingDetail?.Service?.ServiceName ?? "N/A";
                 return new BookingResponseDTO
                 {
                     BookingId = b.BookingId,
-                    LicensePlate = matchingDetail?.LicensePlate ?? licensePlate,
-                    ServiceName = serviceName,
+                    LicensePlate = b.LicensePlate,
+                    ServiceNames = b.BookingDetails.Select(d => d.Service.ServiceName).ToList(),
                     ScheduledTime = b.ScheduledTime,
                     Status = b.Status,
                     OriginalPrice = b.OriginalPrice,
@@ -264,7 +238,7 @@ namespace AutoWashPro.BLL.Services
 
             // 3. LỌC CHÍNH XÁC BIỂN SỐ (In-memory)
             var matches = query.Where(b =>
-                b.BookingDetails.Any(bd => NormalizeLicensePlate(bd.LicensePlate) == normalizedPlate)
+                NormalizeLicensePlate(b.LicensePlate) == normalizedPlate
             ).ToList();
 
             if (matches.Count == 0)
@@ -317,7 +291,7 @@ namespace AutoWashPro.BLL.Services
             {
                 BookingId = booking.BookingId,
                 LicensePlate = normalizedPlate,
-                ServiceName = string.Join(", ", booking.BookingDetails.Select(d => d.Service.ServiceName)),
+                ServiceNames = booking.BookingDetails.Select(d => d.Service.ServiceName).ToList(),
                 ScheduledTime = booking.ScheduledTime,
                 Status = newStatus,
                 OriginalPrice = booking.OriginalPrice,
@@ -364,17 +338,10 @@ namespace AutoWashPro.BLL.Services
             return true;
         }
 
-        public async Task<CompatibilityDTO> ValidateBookingCompatibilityAsync(int userId, int branchId, int slotId, DateTime targetDate, List<VehicleBookingItemDTO> vehicles)
+        public async Task<CompatibilityDTO> ValidateBookingCompatibilityAsync(int userId, int branchId, int slotId, DateTime targetDate, int? vehicleId, string licensePlate, List<int> serviceIds)
         {
-            if (vehicles == null || vehicles.Count == 0)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Giỏ hàng không có xe nào.");
-
-            if (vehicles.Count > 5)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Tài khoản cá nhân chỉ được phép đặt tối đa 5 xe trong một lần đặt lịch.");
-
-            var duplicatePlates = vehicles.GroupBy(v => v.LicensePlate).Where(g => g.Count() > 1).Any();
-            if (duplicatePlates)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Danh sách xe có chứa biển số bị trùng lặp.");
+            if (serviceIds == null || serviceIds.Count == 0)
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Vui lòng chọn ít nhất 1 dịch vụ.");
 
             var slot = await _context.TimeSlots.FirstOrDefaultAsync(ts => ts.SlotId == slotId && ts.BranchId == branchId);
             if (slot == null)
@@ -402,26 +369,26 @@ namespace AutoWashPro.BLL.Services
 
             int totalCapacityWeight = 0;
 
-            foreach (var item in vehicles)
+            var vehicle = await _context.Vehicles.Include(v => v.VehicleType).FirstOrDefaultAsync(v => v.LicensePlate == licensePlate && v.UserId == userId && !v.IsDeleted);
+            if (vehicle == null)
+                throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Xe với biển số {licensePlate} không tồn tại trong hồ sơ của bạn.");
+
+            bool hasActiveBooking = await _context.Bookings.AnyAsync(b => b.LicensePlate == licensePlate && (b.Status == "Pending" || b.Status == "CheckedIn"));
+            if (hasActiveBooking)
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Xe biển số {licensePlate} đang có lịch hẹn chưa hoàn thành. Không thể đặt thêm lịch mới cho xe này.");
+
+            foreach (var serviceId in serviceIds)
             {
-                var vehicle = await _context.Vehicles.Include(v => v.VehicleType).FirstOrDefaultAsync(v => v.LicensePlate == item.LicensePlate && v.UserId == userId && !v.IsDeleted);
-                if (vehicle == null)
-                    throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Xe với biển số {item.LicensePlate} không tồn tại trong hồ sơ của bạn.");
-
-                bool hasActiveBooking = await _context.Bookings.AnyAsync(b => b.BookingDetails.Any(bd => bd.LicensePlate == item.LicensePlate) && (b.Status == "Pending" || b.Status == "CheckedIn"));
-                if (hasActiveBooking)
-                    throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Xe biển số {item.LicensePlate} đang có lịch hẹn chưa hoàn thành. Không thể đặt thêm lịch mới cho xe này.");
-
-                var service = await _context.Services.FindAsync(item.ServiceId);
+                var service = await _context.Services.FindAsync(serviceId);
                 if (service == null || !service.IsActive)
-                    throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Dịch vụ cho xe {item.LicensePlate} không tồn tại hoặc đã ngừng kinh doanh.");
+                    throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Dịch vụ {serviceId} không tồn tại hoặc đã ngừng kinh doanh.");
 
-                var servicePrice = await _context.ServicePrices.FirstOrDefaultAsync(sp => sp.ServiceId == item.ServiceId && sp.VehicleTypeId == vehicle.VehicleTypeId && sp.BranchId == branchId);
+                var servicePrice = await _context.ServicePrices.FirstOrDefaultAsync(sp => sp.ServiceId == serviceId && sp.VehicleTypeId == vehicle.VehicleTypeId && sp.BranchId == branchId);
                 if (servicePrice == null)
-                    throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Dịch vụ này chưa hỗ trợ cho loại xe {item.LicensePlate}.");
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Dịch vụ {serviceId} chưa hỗ trợ cho loại xe này.");
 
                 var actualCapacityWeight = servicePrice.CapacityWeight > 0 ? servicePrice.CapacityWeight : vehicle.VehicleType.BaseWeight;
-                totalCapacityWeight += actualCapacityWeight;
+                if (actualCapacityWeight > totalCapacityWeight) totalCapacityWeight = actualCapacityWeight;
             }
 
             var dailyCapacity = await _context.DailySlotCapacities.FirstOrDefaultAsync(dc => dc.SlotId == slot.SlotId && dc.BranchId == branchId && dc.Date == targetDateTime.Date);
@@ -433,7 +400,7 @@ namespace AutoWashPro.BLL.Services
                 return new CompatibilityDTO
                 {
                     IsCompatible = false,
-                    Message = "Xưởng không đủ sức chứa cho giỏ hàng của bạn.",
+                    Message = "Xưởng không đủ sức chứa cho yêu cầu của bạn.",
                     RemainingCapacity = remainingCapacity > 0 ? remainingCapacity : 0,
                     TotalCapacityWeight = totalCapacityWeight,
                     MaxCapacityOfSlot = slot.MaxCapacity
@@ -499,59 +466,56 @@ namespace AutoWashPro.BLL.Services
         }
         public async Task<CompatibilityDTO> CheckCompatibilityAsync(int userId, CheckCompatibilityRequestDTO request)
         {
-            return await ValidateBookingCompatibilityAsync(userId, request.BranchId, request.SlotId, request.TargetDate, request.Vehicles);
+            return await ValidateBookingCompatibilityAsync(userId, request.BranchId, request.SlotId, request.TargetDate, request.VehicleId, request.LicensePlate, request.ServiceIds);
         }
 
         public async Task<BookingResponseDTO> CreateBookingAsync(int userId, CreateBookingDTO request)
         {
-            var compatibility = await ValidateBookingCompatibilityAsync(userId, request.BranchId, request.SlotId, request.ScheduledDate, request.Vehicles.Select(v => new VehicleBookingItemDTO { LicensePlate = v.LicensePlate, ServiceId = v.ServiceId }).ToList());
+            var compatibility = await ValidateBookingCompatibilityAsync(userId, request.BranchId, request.SlotId, request.ScheduledDate, request.VehicleId, request.LicensePlate, request.ServiceIds);
 
             if (!compatibility.IsCompatible)
             {
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException(compatibility.Message ?? "Xưởng không đủ sức chứa cho giỏ hàng của bạn.");
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException(compatibility.Message ?? "Xưởng không đủ sức chứa cho yêu cầu của bạn.");
             }
 
             var slot = await _context.TimeSlots.FindAsync(request.SlotId);
             var targetDateTime = request.ScheduledDate.Date.Add(slot.StartTime);
 
-            // --- THAY THẾ TOÀN BỘ ĐOẠN VÒNG LẶP CŨ BẰNG ĐOẠN NÀY ---
-
-            decimal totalOriginalPrice = 0;
-            int totalCapacityWeight = compatibility.TotalCapacityWeight;
             var pendingDetails = new List<BookingDetail>();
 
-            // 1. Kéo toàn bộ xe của User trong 1 lần gọi DB
-            var requestedPlates = request.Vehicles.Select(v => v.LicensePlate).ToList();
-            var userVehicles = await _context.Vehicles
-                .Include(v => v.VehicleType)
-                .Where(v => requestedPlates.Contains(v.LicensePlate) && v.UserId == userId && !v.IsDeleted)
-                .ToListAsync();
+            var vehicleTypeQuery = await _context.Vehicles
+                .Where(v => v.LicensePlate == request.LicensePlate && v.UserId == userId && !v.IsDeleted)
+                .Select(v => new { v.LicensePlate, v.VehicleType.BaseWeight, v.VehicleTypeId })
+                .FirstOrDefaultAsync();
 
-            // 2. Kéo toàn bộ giá dịch vụ liên quan trong 1 lần gọi DB
-            var requestedServiceIds = request.Vehicles.Select(v => v.ServiceId).Distinct().ToList();
-            var servicePrices = await _context.ServicePrices
-                .Where(sp => requestedServiceIds.Contains(sp.ServiceId))
-                .ToListAsync();
-
-            // 3. Vòng lặp bây giờ chỉ xử lý trên RAM (Cực kỳ nhanh)
-            foreach (var item in request.Vehicles)
+            if (vehicleTypeQuery == null)
             {
-                var vehicle = userVehicles.FirstOrDefault(v => v.LicensePlate == item.LicensePlate);
-                // Lưu ý: Đã validate ở trên nên vehicle chắc chắn không null
+                 throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy phương tiện.");
+            }
 
-                var servicePrice = servicePrices.FirstOrDefault(sp => sp.ServiceId == item.ServiceId && sp.VehicleTypeId == vehicle.VehicleTypeId);
+            var servicePrices = await _context.ServicePrices
+                .Include(sp => sp.Service)
+                .Where(sp => request.ServiceIds.Contains(sp.ServiceId) && sp.VehicleTypeId == vehicleTypeQuery.VehicleTypeId && sp.BranchId == request.BranchId)
+                .ToListAsync();
 
-                var actualCapacityWeight = servicePrice.CapacityWeight > 0 ? servicePrice.CapacityWeight : vehicle.VehicleType.BaseWeight;
+            decimal totalOriginalPrice = 0;
+            int maxCapacityWeight = 0;
 
-                totalOriginalPrice += servicePrice.Price;
+            foreach (var serviceId in request.ServiceIds)
+            {
+                var sp = servicePrices.FirstOrDefault(s => s.ServiceId == serviceId);
+                if (sp == null)
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Dịch vụ {serviceId} không hỗ trợ cho loại xe này.");
+
+                var actualWeight = sp.CapacityWeight > 0 ? sp.CapacityWeight : vehicleTypeQuery.BaseWeight;
+                if (actualWeight > maxCapacityWeight) maxCapacityWeight = actualWeight;
+
+                totalOriginalPrice += sp.Price;
 
                 pendingDetails.Add(new BookingDetail
                 {
-                    LicensePlate = item.LicensePlate,
-                    ServiceId = item.ServiceId,
-                    Price = servicePrice.Price,
-                    CapacityWeight = actualCapacityWeight,
-                    VehicleCondition = VehicleCondition.Clean
+                    ServiceId = serviceId,
+                    Price = sp.Price
                 });
             }
 
@@ -585,8 +549,8 @@ namespace AutoWashPro.BLL.Services
                dailyCapacity = await _context.DailySlotCapacities.FirstAsync(dc => dc.SlotId == slot.SlotId && dc.Date == targetDateTime.Date);
             }
 
-            if (dailyCapacity.BookedWeight + totalCapacityWeight > slot.MaxCapacity)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Xưởng không đủ sức chứa cho số lượng xe này. Vui lòng giảm bớt xe hoặc chọn khung giờ khác.");
+            if (dailyCapacity.BookedWeight + maxCapacityWeight > slot.MaxCapacity)
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Xưởng không đủ sức chứa cho xe này. Vui lòng chọn khung giờ khác.");
 
             // PHASE 4: Financial Math
             var (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher) =
@@ -600,7 +564,7 @@ namespace AutoWashPro.BLL.Services
             try
             {
                 // Update Capacity
-                dailyCapacity.BookedWeight += totalCapacityWeight;
+                dailyCapacity.BookedWeight += maxCapacityWeight;
                 try
                 {
                     await _context.SaveChangesAsync();
@@ -638,6 +602,10 @@ namespace AutoWashPro.BLL.Services
                 var booking = new Booking
                 {
                     UserId = userId,
+                    VehicleId = request.VehicleId,
+                    LicensePlate = request.LicensePlate,
+                    CapacityWeight = maxCapacityWeight,
+                    VehicleCondition = VehicleCondition.Clean,
                     BranchId = request.BranchId,
                     ScheduledTime = targetDateTime,
                     Status = "Pending",
@@ -674,11 +642,13 @@ namespace AutoWashPro.BLL.Services
                     Console.WriteLine($"[Lỗi gửi mail]: {ex.Message}");
                 }
 
+                var serviceNames = await _context.Services.Where(s => request.ServiceIds.Contains(s.ServiceId)).Select(s => s.ServiceName).ToListAsync();
+
                 return new BookingResponseDTO
                 {
                     BookingId = booking.BookingId,
-                    LicensePlate = string.Join(", ", pendingDetails.Select(d => d.LicensePlate)),
-                    ServiceName = "Nhiều dịch vụ",
+                    LicensePlate = booking.LicensePlate,
+                    ServiceNames = serviceNames,
                     ScheduledTime = booking.ScheduledTime,
                     Status = booking.Status,
                     OriginalPrice = booking.OriginalPrice,
@@ -706,12 +676,13 @@ namespace AutoWashPro.BLL.Services
             return bookings.Select(b => new BookingResponseDTO
             {
                 BookingId = b.BookingId,
-                LicensePlate = string.Join(", ", b.BookingDetails.Select(d => d.LicensePlate)),
-                ServiceName = string.Join(", ", b.BookingDetails.Select(d => d.Service.ServiceName)),
+                LicensePlate = b.LicensePlate,
+                ServiceNames = b.BookingDetails.Select(d => d.Service.ServiceName).ToList(),
                 ScheduledTime = b.ScheduledTime,
                 Status = b.Status,
                 OriginalPrice = b.OriginalPrice,
                 PointDiscountAmount = b.PointDiscountAmount,
+                VoucherDiscountAmount = b.VoucherDiscountAmount,
                 FinalAmount = b.FinalAmount
             }).ToList();
         }
@@ -739,12 +710,7 @@ namespace AutoWashPro.BLL.Services
 
                     if (dailyCapacity != null && dailyCapacity.BookedWeight > 0)
                     {
-                        int weightToSubtract = await _context.BookingDetails
-                             .Where(bd => bd.BookingId == bookingId)
-                             .SumAsync(bd => bd.CapacityWeight);
-                       
-
-                        dailyCapacity.BookedWeight -= weightToSubtract;
+                        dailyCapacity.BookedWeight -= booking.CapacityWeight;
                         if(dailyCapacity.BookedWeight < 0) dailyCapacity.BookedWeight = 0;
                     }
                 }
@@ -899,32 +865,30 @@ namespace AutoWashPro.BLL.Services
                 if (booking.Status != "CheckedIn")
                     throw new AutoWashPro.BLL.Exceptions.BadRequestException("Chỉ có thể cập nhật tình trạng xe khi xe đã Check-in tại trạm.");
 
-                var detail = booking.BookingDetails.FirstOrDefault(d => d.DetailId == request.DetailId);
-                if (detail == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy thông tin xe trong lịch hẹn này.");
-
-                detail.VehicleCondition = request.Condition;
+                booking.VehicleCondition = request.Condition;
 
                 decimal newSurcharge = 0;
+                var basePrice = booking.BookingDetails.Sum(bd => bd.Price);
 
                 if (request.Condition == VehicleCondition.Dirty)
                 {
-                    newSurcharge += detail.Price * 0.2m; // 20% Upsell
+                    newSurcharge += basePrice * 0.2m; // 20% Upsell
                 }
                 else if (request.Condition == VehicleCondition.VeryDirty)
                 {
-                    newSurcharge += detail.Price * 0.5m; // 50% Upsell
+                    newSurcharge += basePrice * 0.5m; // 50% Upsell
                 }
 
                 if (request.ActualVehicleTypeId.HasValue)
                 {
-                    detail.ActualVehicleTypeId = request.ActualVehicleTypeId.Value;
+                    booking.ActualVehicleTypeId = request.ActualVehicleTypeId.Value;
                     // In a real scenario, we might look up the price difference between booked VehicleType and ActualVehicleType.
                     // For now, we apply a flat mismatch surcharge (e.g., 30% of base price)
-                    newSurcharge += detail.Price * 0.3m;
+                    newSurcharge += basePrice * 0.3m;
                 }
 
-                decimal surchargeDiff = newSurcharge - detail.MismatchSurcharge;
-                detail.MismatchSurcharge = newSurcharge;
+                decimal surchargeDiff = newSurcharge - booking.MismatchSurcharge;
+                booking.MismatchSurcharge = newSurcharge;
 
                 booking.OriginalPrice += surchargeDiff;
                 booking.FinalAmount += surchargeDiff;
@@ -1008,22 +972,28 @@ namespace AutoWashPro.BLL.Services
             return price;
         }
 
-        public async Task ReportMismatchAsync(int detailId, VehicleCondition condition, int actualTypeId)
+        public async Task ReportMismatchAsync(int bookingId, VehicleCondition condition, int actualTypeId)
         {
-            var detail = await _context.BookingDetails.Include(d => d.Booking).FirstOrDefaultAsync(d => d.DetailId == detailId);
-            if (detail == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy chi tiết xe.");
+            var booking = await _context.Bookings.Include(b => b.BookingDetails).FirstOrDefaultAsync(b => b.BookingId == bookingId);
+            if (booking == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy Booking.");
 
-            detail.VehicleCondition = condition;
-            detail.ActualVehicleTypeId = actualTypeId;
+            booking.VehicleCondition = condition;
+            booking.ActualVehicleTypeId = actualTypeId;
 
-            decimal newPrice = await GetPriceFromDb(detail.ServiceId, actualTypeId, condition, detail.Booking.BranchId);
-
-            if (newPrice > detail.Price)
+            decimal totalNewPrice = 0;
+            decimal totalOldPrice = 0;
+            foreach (var detail in booking.BookingDetails)
             {
-                detail.MismatchSurcharge = newPrice - detail.Price;
+                totalOldPrice += detail.Price;
+                totalNewPrice += await GetPriceFromDb(detail.ServiceId, actualTypeId, condition, booking.BranchId);
+            }
+
+            if (totalNewPrice > totalOldPrice)
+            {
+                booking.MismatchSurcharge = totalNewPrice - totalOldPrice;
 
                 // Mock Push Notification
-                Console.WriteLine($"[PUSH] Thông báo tới User: Phát sinh phụ phí {detail.MismatchSurcharge} VNĐ do sai lệch loại xe/độ bẩn.");
+                Console.WriteLine($"[PUSH] Thông báo tới User: Phát sinh phụ phí {booking.MismatchSurcharge} VNĐ do sai lệch loại xe/độ bẩn.");
             }
 
             await _context.SaveChangesAsync();
@@ -1031,55 +1001,51 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<BookingResponseDTO> CreateWalkInBookingAsync(int staffId, CreateWalkInBookingDTO request)
         {
-            if (request.Vehicles == null || request.Vehicles.Count == 0)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Giỏ hàng không có xe nào.");
-
-            if (request.Vehicles.Count > 5)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Tài khoản cá nhân chỉ được phép đặt tối đa 5 xe trong một lần đặt lịch.");
+            if (request.ServiceIds == null || request.ServiceIds.Count == 0)
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Vui lòng chọn ít nhất 1 dịch vụ.");
 
             int customerUserId = request.UserId;
-            // Similar validation but skips specific time slot and uses immediate current time
-            var duplicatePlates = request.Vehicles.GroupBy(v => v.LicensePlate).Where(g => g.Count() > 1).Any();
-            if (duplicatePlates)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Danh sách xe có chứa biển số bị trùng lặp.");
-
             var targetDateTime = DateTime.UtcNow;
 
+            // Anti-hoarding Rule
+            bool hasActiveBooking = await _context.Bookings.AnyAsync(b => b.LicensePlate == request.LicensePlate && (b.Status == "Pending" || b.Status == "CheckedIn"));
+            if (hasActiveBooking)
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Xe biển số {request.LicensePlate} đang có lịch hẹn chưa hoàn thành.");
+
+            var vehicleTypeQuery = await _context.Vehicles
+                .Where(v => v.LicensePlate == request.LicensePlate && !v.IsDeleted)
+                .Select(v => new { v.LicensePlate, v.VehicleType.BaseWeight, v.VehicleTypeId })
+                .FirstOrDefaultAsync();
+
+            if (vehicleTypeQuery == null)
+            {
+                 throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Xe với biển số {request.LicensePlate} không tồn tại trong hệ thống.");
+            }
+
+            var servicePrices = await _context.ServicePrices
+                .Include(sp => sp.Service)
+                .Where(sp => request.ServiceIds.Contains(sp.ServiceId) && sp.VehicleTypeId == vehicleTypeQuery.VehicleTypeId && sp.BranchId == request.BranchId)
+                .ToListAsync();
+
             decimal totalOriginalPrice = 0;
-            int totalCapacityWeight = 0;
+            int maxCapacityWeight = 0;
             var pendingDetails = new List<BookingDetail>();
 
-            foreach (var item in request.Vehicles)
+            foreach (var serviceId in request.ServiceIds)
             {
-                var vehicle = await _context.Vehicles.Include(v => v.VehicleType).FirstOrDefaultAsync(v => v.LicensePlate == item.LicensePlate && !v.IsDeleted);
-                if (vehicle == null)
-                    throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Xe với biển số {item.LicensePlate} không tồn tại trong hệ thống.");
+                var sp = servicePrices.FirstOrDefault(s => s.ServiceId == serviceId);
+                if (sp == null)
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Dịch vụ {serviceId} không hỗ trợ cho loại xe này.");
 
-                // Anti-hoarding Rule
-                bool hasActiveBooking = await _context.Bookings.AnyAsync(b => b.BookingDetails.Any(bd => bd.LicensePlate == item.LicensePlate) && (b.Status == "Pending" || b.Status == "CheckedIn"));
-                if (hasActiveBooking)
-                    throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Xe biển số {item.LicensePlate} đang có lịch hẹn chưa hoàn thành.");
+                var actualWeight = sp.CapacityWeight > 0 ? sp.CapacityWeight : vehicleTypeQuery.BaseWeight;
+                if (actualWeight > maxCapacityWeight) maxCapacityWeight = actualWeight;
 
-                var service = await _context.Services.FindAsync(item.ServiceId);
-                if (service == null || !service.IsActive)
-                    throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Dịch vụ cho xe {item.LicensePlate} không tồn tại hoặc đã ngừng kinh doanh.");
-
-                var servicePrice = await _context.ServicePrices.FirstOrDefaultAsync(sp => sp.ServiceId == item.ServiceId && sp.VehicleTypeId == vehicle.VehicleTypeId && sp.BranchId == request.BranchId);
-                if (servicePrice == null)
-                    throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Dịch vụ này chưa hỗ trợ cho loại xe {item.LicensePlate}.");
-
-                var actualCapacityWeight = servicePrice.CapacityWeight > 0 ? servicePrice.CapacityWeight : vehicle.VehicleType.BaseWeight;
-
-                totalOriginalPrice += servicePrice.Price;
-                totalCapacityWeight += actualCapacityWeight;
+                totalOriginalPrice += sp.Price;
 
                 pendingDetails.Add(new BookingDetail
                 {
-                    LicensePlate = item.LicensePlate,
-                    ServiceId = item.ServiceId,
-                    Price = servicePrice.Price,
-                    CapacityWeight = actualCapacityWeight,
-                    VehicleCondition = VehicleCondition.Clean
+                    ServiceId = serviceId,
+                    Price = sp.Price
                 });
             }
 
@@ -1112,10 +1078,10 @@ namespace AutoWashPro.BLL.Services
                     }
                 }
 
-                if (dailyCapacity.BookedWeight + totalCapacityWeight > slot.MaxCapacity)
-                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Xưởng không đủ sức chứa cho số lượng xe này ngay lúc này. Vui lòng thử lại sau.");
+                if (dailyCapacity.BookedWeight + maxCapacityWeight > slot.MaxCapacity)
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Xưởng không đủ sức chứa cho xe này ngay lúc này. Vui lòng thử lại sau.");
 
-                dailyCapacity.BookedWeight += totalCapacityWeight;
+                dailyCapacity.BookedWeight += maxCapacityWeight;
             }
 
             var (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher) =
@@ -1156,6 +1122,10 @@ namespace AutoWashPro.BLL.Services
                 var booking = new Booking
                 {
                     UserId = customerUserId,
+                    VehicleId = request.VehicleId,
+                    LicensePlate = request.LicensePlate,
+                    CapacityWeight = maxCapacityWeight,
+                    VehicleCondition = VehicleCondition.Clean,
                     BranchId = request.BranchId,
                     ScheduledTime = targetDateTime,
                     Status = "CheckedIn", // Walk-ins go straight to CheckedIn
@@ -1177,11 +1147,13 @@ namespace AutoWashPro.BLL.Services
 
                 await transaction.CommitAsync();
 
+                var serviceNames = await _context.Services.Where(s => request.ServiceIds.Contains(s.ServiceId)).Select(s => s.ServiceName).ToListAsync();
+
                 return new BookingResponseDTO
                 {
                     BookingId = booking.BookingId,
-                    LicensePlate = string.Join(", ", pendingDetails.Select(d => d.LicensePlate)),
-                    ServiceName = "Nhiều dịch vụ (Walk-in)",
+                    LicensePlate = booking.LicensePlate,
+                    ServiceNames = serviceNames,
                     ScheduledTime = booking.ScheduledTime,
                     Status = booking.Status,
                     OriginalPrice = booking.OriginalPrice,

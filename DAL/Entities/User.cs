@@ -36,6 +36,6 @@ namespace AutoWashPro.DAL.Entities
         public ICollection<Vehicle> Vehicles { get; set; } = new List<Vehicle>();
         public ICollection<AIConversationLog> AIConversationLogs { get; set; }
         public ICollection<StaffLaneAssignment> LaneAssignments { get; set; } = new List<StaffLaneAssignment>();
-        public ICollection<BookingDetail> ProcessedBookingDetails { get; set; } = new List<BookingDetail>();
+        public ICollection<Booking> ProcessedBookings { get; set; } = new List<Booking>();
     }
 }

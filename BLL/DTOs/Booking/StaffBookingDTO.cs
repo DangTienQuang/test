@@ -1,13 +1,13 @@
 using System;
+using System.Collections.Generic;
 
 namespace AutoWashPro.BLL.DTOs
 {
-    public class StaffBookingDetailDTO
+    public class StaffBookingDTO
     {
-        public int DetailId { get; set; }
         public int BookingId { get; set; }
         public string LicensePlate { get; set; } = null!;
-        public string ServiceName { get; set; } = null!;
+        public List<string> ServiceNames { get; set; } = new List<string>();
         public string VehicleTypeName { get; set; } = null!;
         public string Status { get; set; } = null!; // CheckedIn, Processing, Completed
     }
