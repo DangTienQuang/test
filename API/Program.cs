@@ -150,6 +150,7 @@ builder.Services.AddScoped<ILaneService, LaneService>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IManagerService, ManagerService>();
 builder.Services.AddScoped<IOperationStaffService, OperationStaffService>();
+
 // ==============================================================================
 // 7. BACKGROUND WORKERS
 // ==============================================================================
@@ -221,6 +222,44 @@ using (var scope = app.Services.CreateScope())
     context.Database.Migrate();
     SyncCustomerProfilePoints(context);
 
+    // 10.1 Khởi tạo Hạng (Tier) cơ bản
+    var firstTier = context.Tiers.FirstOrDefault(t => t.MinAccumulatedPoints == 0);
+    if (firstTier == null)
+    {
+        firstTier = new AutoWashPro.DAL.Entities.Tier
+        {
+            TierName = "Standard",
+            PointMultiplier = 1.0,
+            BookingWindowDays = 7,
+            MinAccumulatedPoints = 0
+        };
+        context.Tiers.Add(firstTier);
+        context.SaveChanges();
+    }
+
+    // 10.2 Khởi tạo Chi nhánh & Làn rửa xe (Đã sửa theo cấu trúc hiện tại)
+    var defaultBranch = context.Branches.FirstOrDefault();
+    if (defaultBranch == null)
+    {
+        defaultBranch = new AutoWashPro.DAL.Entities.Branch
+        {
+            Name = "Chi nhánh Trung Tâm",
+            Address = "123 Lê Lợi, Quận 1, TP.HCM",
+            IsActive = true
+        };
+        context.Branches.Add(defaultBranch);
+        context.SaveChanges();
+
+        context.Lanes.Add(new AutoWashPro.DAL.Entities.Lane
+        {
+            BranchId = defaultBranch.BranchId,
+            Name = "Làn 1 - VIP",
+            IsActive = true
+        });
+        context.SaveChanges();
+    }
+
+    // 10.3 Khởi tạo ADMIN
     if (!context.Users.Any(u => u.Role == "Admin"))
     {
         var admin = new AutoWashPro.DAL.Entities.User
@@ -231,18 +270,6 @@ using (var scope = app.Services.CreateScope())
             Status = "Active"
         };
         context.Users.Add(admin);
-
-        var firstTier = context.Tiers.FirstOrDefault(t => t.MinAccumulatedPoints == 0)
-            ?? new AutoWashPro.DAL.Entities.Tier
-            {
-                TierName = "Standard",
-                PointMultiplier = 1.0,
-                BookingWindowDays = 7,
-                MinAccumulatedPoints = 0
-            };
-
-        if (firstTier.TierId == 0) context.Tiers.Add(firstTier);
-
         context.SaveChanges();
 
         context.CustomerProfiles.Add(new AutoWashPro.DAL.Entities.CustomerProfile
@@ -254,7 +281,97 @@ using (var scope = app.Services.CreateScope())
             TotalPoint = 0,
             PromotionPoint = 0
         });
+        context.SaveChanges();
+    }
 
+    // 10.4 Khởi tạo MANAGER (Thuộc chi nhánh)
+    if (!context.Users.Any(u => u.Role == "Manager"))
+    {
+        var manager = new AutoWashPro.DAL.Entities.User
+        {
+            PhoneNumber = "0888888888",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Manager@123"),
+            Role = "Manager",
+            Status = "Active"
+        };
+        context.Users.Add(manager);
+        context.SaveChanges();
+
+        // Gán vào EmployeeProfile
+        context.EmployeeProfiles.Add(new AutoWashPro.DAL.Entities.EmployeeProfile
+        {
+            EmployeeId = manager.UserId,
+            BranchId = defaultBranch.BranchId,
+            FullName = "Quản lý Nguyễn Văn A"
+        });
+        context.SaveChanges();
+    }
+
+    // 10.5 Khởi tạo STAFF (Thuộc chi nhánh)
+    if (!context.Users.Any(u => u.Role == "Staff"))
+    {
+        var staff = new AutoWashPro.DAL.Entities.User
+        {
+            PhoneNumber = "0777777777",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Staff@123"),
+            Role = "Staff",
+            Status = "Active"
+        };
+        context.Users.Add(staff);
+        context.SaveChanges();
+
+        // Gán vào EmployeeProfile
+        context.EmployeeProfiles.Add(new AutoWashPro.DAL.Entities.EmployeeProfile
+        {
+            EmployeeId = staff.UserId,
+            BranchId = defaultBranch.BranchId,
+            FullName = "Nhân viên Trần Văn B"
+        });
+        context.SaveChanges();
+    }
+
+    // 10.6 Khởi tạo CUSTOMER test với ví 1.000.000đ
+    if (!context.Users.Any(u => u.Role == "Customer" && u.PhoneNumber == "0666666666"))
+    {
+        var customer = new AutoWashPro.DAL.Entities.User
+        {
+            PhoneNumber = "0666666666",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("User@123"),
+            Role = "Customer",
+            Status = "Active"
+        };
+        context.Users.Add(customer);
+        context.SaveChanges();
+
+        context.CustomerProfiles.Add(new AutoWashPro.DAL.Entities.CustomerProfile
+        {
+            UserId = customer.UserId,
+            FullName = "Khách Hàng VIP",
+            TierId = firstTier.TierId,
+            ChurnScore = 0,
+            TotalPoint = 0,
+            PromotionPoint = 0
+        });
+        context.SaveChanges();
+
+        // Nạp sẵn 1 triệu vào ví
+        var wallet = new AutoWashPro.DAL.Entities.Wallet
+        {
+            UserId = customer.UserId,
+            Balance = 1000000
+        };
+        context.Wallets.Add(wallet);
+        context.SaveChanges();
+
+        // Ghi lại lịch sử nạp
+        context.Transactions.Add(new AutoWashPro.DAL.Entities.Transaction
+        {
+            WalletId = wallet.WalletId,
+            Amount = 1000000,
+            TransactionType = "Topup",
+            Description = "Hệ thống tặng tiền trải nghiệm",
+            Status = "Completed"
+        });
         context.SaveChanges();
     }
 }
