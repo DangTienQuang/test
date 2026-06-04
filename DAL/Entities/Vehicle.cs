@@ -6,8 +6,12 @@ namespace AutoWashPro.DAL.Entities
     public class Vehicle
     {
         [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int Id { get; set; } // THÊM CỘT NÀY LÀM KHÓA CHÍNH (Kiểu int)
+
+        [Required]
         [MaxLength(20)]
-        public string LicensePlate { get; set; }
+        public string LicensePlate { get; set; } // ĐÃ BỎ [Key] Ở ĐÂY
 
         [ForeignKey("User")]
         public int? UserId { get; set; }

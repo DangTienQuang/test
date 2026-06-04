@@ -36,6 +36,15 @@ namespace AutoWashPro.DAL.Data
         {
             base.OnModelCreating(modelBuilder);
 
+            modelBuilder.Entity<Vehicle>()
+                .HasIndex(v => v.LicensePlate)
+                .IsUnique();
+
+            modelBuilder.Entity<Booking>()
+                .HasOne(b => b.Vehicle)
+                .WithMany()
+                .HasForeignKey(b => b.VehicleId)
+                .OnDelete(DeleteBehavior.SetNull);
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.PhoneNumber)
                 .IsUnique();
