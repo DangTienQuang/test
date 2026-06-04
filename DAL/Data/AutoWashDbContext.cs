@@ -84,22 +84,22 @@ namespace AutoWashPro.DAL.Data
                 .HasForeignKey(bd => bd.ServiceId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            modelBuilder.Entity<BookingDetail>()
-                .HasOne(bd => bd.ActualVehicleType)
+            modelBuilder.Entity<Booking>()
+                .HasOne(b => b.ActualVehicleType)
                 .WithMany()
-                .HasForeignKey(bd => bd.ActualVehicleTypeId)
+                .HasForeignKey(b => b.ActualVehicleTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            modelBuilder.Entity<BookingDetail>()
-                .HasOne(bd => bd.ProcessingLane)
+            modelBuilder.Entity<Booking>()
+                .HasOne(b => b.ProcessingLane)
                 .WithMany(l => l.ProcessingBookings)
-                .HasForeignKey(bd => bd.ProcessingLaneId)
+                .HasForeignKey(b => b.ProcessingLaneId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            modelBuilder.Entity<BookingDetail>()
-                .HasOne(bd => bd.ProcessingStaff)
-                .WithMany(u => u.ProcessedBookingDetails)
-                .HasForeignKey(bd => bd.ProcessingStaffId)
+            modelBuilder.Entity<Booking>()
+                .HasOne(b => b.ProcessingStaff)
+                .WithMany(u => u.ProcessedBookings)
+                .HasForeignKey(b => b.ProcessingStaffId)
                 .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<Booking>()

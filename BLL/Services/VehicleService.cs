@@ -389,7 +389,7 @@ namespace AutoWashPro.BLL.Services
 
             var activeBooking = await _context.Bookings
                 .Include(b => b.BookingDetails)
-                .Where(b => b.BookingDetails.Any(bd => bd.LicensePlate == licensePlate)
+                .Where(b => b.LicensePlate == licensePlate
                          && (b.Status == "Pending" || b.Status == "CheckedIn")
                          && b.ScheduledTime.Date == today)
                 .OrderBy(b => b.ScheduledTime)

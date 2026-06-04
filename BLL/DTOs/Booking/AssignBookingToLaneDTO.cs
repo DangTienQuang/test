@@ -2,10 +2,10 @@ using System.ComponentModel.DataAnnotations;
 
 namespace AutoWashPro.BLL.DTOs
 {
-    public class AssignBookingDetailDTO
+    public class AssignBookingToLaneDTO
     {
         [Required]
-        public int BookingDetailId { get; set; }
+        public int BookingId { get; set; }
 
         [Required]
         public int LaneId { get; set; }

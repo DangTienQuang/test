@@ -38,15 +38,15 @@ namespace AutoWashPro.API.Controllers
         [HttpGet("tasks")]
         public async Task<IActionResult> GetAssignedTasks()
         {
-            var tasks = await _staffService.GetAssignedBookingDetailsAsync(GetUserId());
+            var tasks = await _staffService.GetAssignedBookingsAsync(GetUserId());
             return Ok(tasks);
         }
 
-        [HttpPut("bookings/details/{detailId}/status")]
-        public async Task<IActionResult> UpdateBookingDetailStatus(int detailId, [FromBody] UpdateBookingStatusDTO dto)
+        [HttpPut("bookings/{bookingId}/status")]
+        public async Task<IActionResult> UpdateBookingStatus(int bookingId, [FromBody] UpdateBookingStatusDTO dto)
         {
-            await _staffService.UpdateBookingDetailStatusAsync(GetUserId(), detailId, dto.Status);
-            return Ok(new { Message = $"Booking detail status updated to {dto.Status}." });
+            await _staffService.UpdateBookingDetailStatusAsync(GetUserId(), bookingId, dto.Status);
+            return Ok(new { Message = $"Booking status updated to {dto.Status}." });
         }
     }
 }

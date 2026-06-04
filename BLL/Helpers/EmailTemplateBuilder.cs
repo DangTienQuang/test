@@ -9,8 +9,6 @@ namespace AutoWashPro.BLL.Helpers
     {
         public static string BuildBookingConfirmationEmail(Booking booking, List<BookingDetail> details, string customerName)
         {
-            string plates = string.Join(", ", details.Select(d => d.LicensePlate));
-
             return $@"
             <div style='font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;'>
                 <h2 style='color: #007bff; text-align: center;'>SMARTWASH XÁC NHẬN ĐẶT LỊCH</h2>
@@ -27,8 +25,8 @@ namespace AutoWashPro.BLL.Helpers
                         <td style='padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;'>{booking.FallbackQrCode}</td>
                     </tr>
                     <tr>
-                        <td style='padding: 8px; border-bottom: 1px solid #eee;'><b>Số lượng xe:</b></td>
-                        <td style='padding: 8px; border-bottom: 1px solid #eee;'>{details.Count} ({plates})</td>
+                        <td style='padding: 8px; border-bottom: 1px solid #eee;'><b>Biển số xe:</b></td>
+                        <td style='padding: 8px; border-bottom: 1px solid #eee;'>{booking.LicensePlate}</td>
                     </tr>
                     <tr>
                         <td style='padding: 8px; border-bottom: 1px solid #eee;'><b>Thời gian:</b></td>

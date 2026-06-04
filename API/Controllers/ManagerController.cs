@@ -47,9 +47,9 @@ namespace AutoWashPro.API.Controllers
         }
 
         [HttpPost("bookings/{bookingId}/checkin-assign")]
-        public async Task<IActionResult> ConfirmCheckInAndAssignLane(int bookingId, [FromBody] List<AssignBookingDetailDTO> assignments)
+        public async Task<IActionResult> ConfirmCheckInAndAssignLane(int bookingId, [FromBody] AssignBookingToLaneDTO assignment)
         {
-            await _managerService.ConfirmCheckInAndAssignLaneAsync(GetUserId(), bookingId, assignments);
+            await _managerService.ConfirmCheckInAndAssignLaneAsync(GetUserId(), bookingId, assignment);
             return Ok(new { Message = "Booking checked in and lanes assigned successfully." });
         }
     }

@@ -33,17 +33,14 @@ namespace AutoWashPro.BLL.DTOs
         public DateTime TargetDate { get; set; }
 
         [Required]
-        public List<VehicleBookingItemDTO> Vehicles { get; set; } = new List<VehicleBookingItemDTO>();
-    }
-
-    public class VehicleBookingItemDTO
-    {
-        [Required]
         [MaxLength(20)]
         public required string LicensePlate { get; set; }
 
+        public int? VehicleId { get; set; }
+
         [Required]
-        public int ServiceId { get; set; }
+        [MinLength(1, ErrorMessage = "Vui lòng chọn ít nhất 1 dịch vụ.")]
+        public required List<int> ServiceIds { get; set; }
     }
     public class UpdateBookingStatusByPlateDTO
     {
@@ -65,21 +62,25 @@ namespace AutoWashPro.BLL.DTOs
         public DateTime TargetDate { get; set; }
 
         [Required]
-        public List<BookingVehicleItemDTO> BookingVehicles { get; set; } = new List<BookingVehicleItemDTO>();
-    }
-
-    public class BookingVehicleItemDTO
-    {
         public int VehicleTypeId { get; set; }
-        public int ServiceId { get; set; }
+
+        [Required]
+        public List<int> ServiceIds { get; set; } = new List<int>();
     }
     public class CreateBookingDTO
     {
         [Required]
         public int BranchId { get; set; }
 
-        [Required(ErrorMessage = "Vui lòng chọn ít nhất 1 xe.")]
-        public required List<VehicleBookingItemDTO> Vehicles { get; set; }
+        public int? VehicleId { get; set; }
+
+        [Required]
+        [MaxLength(20)]
+        public required string LicensePlate { get; set; }
+
+        [Required]
+        [MinLength(1, ErrorMessage = "Vui lòng chọn ít nhất 1 dịch vụ.")]
+        public required List<int> ServiceIds { get; set; }
 
         [Required]
         public DateTime ScheduledDate { get; set; }
@@ -97,8 +98,15 @@ namespace AutoWashPro.BLL.DTOs
         [Required]
         public int BranchId { get; set; }
 
-        [Required(ErrorMessage = "Vui lòng chọn ít nhất 1 xe.")]
-        public required List<VehicleBookingItemDTO> Vehicles { get; set; }
+        public int? VehicleId { get; set; }
+
+        [Required]
+        [MaxLength(20)]
+        public required string LicensePlate { get; set; }
+
+        [Required]
+        [MinLength(1, ErrorMessage = "Vui lòng chọn ít nhất 1 dịch vụ.")]
+        public required List<int> ServiceIds { get; set; }
 
         public int UserId { get; set; } // Walk-ins might have user ID provided by Staff
 
@@ -111,7 +119,7 @@ namespace AutoWashPro.BLL.DTOs
     {
         public int BookingId { get; set; }
         public required string LicensePlate { get; set; }
-        public required string ServiceName { get; set; }
+        public required List<string> ServiceNames { get; set; }
         public DateTime ScheduledTime { get; set; }
         public required string Status { get; set; }
         public decimal OriginalPrice { get; set; }
@@ -123,7 +131,7 @@ namespace AutoWashPro.BLL.DTOs
     public class UpdateVehicleConditionDTO
     {
         [Required]
-        public int DetailId { get; set; }
+        public int BookingId { get; set; }
 
         [Required]
         public DAL.Entities.VehicleCondition Condition { get; set; }

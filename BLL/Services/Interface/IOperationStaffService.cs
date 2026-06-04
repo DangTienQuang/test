@@ -7,7 +7,7 @@ namespace AutoWashPro.BLL.Services
     public interface IOperationStaffService
     {
         Task<StaffLaneTaskDTO?> GetTodayLaneAssignmentAsync(int staffUserId);
-        Task<List<StaffBookingDetailDTO>> GetAssignedBookingDetailsAsync(int staffUserId);
+        Task<List<StaffBookingDTO>> GetAssignedBookingsAsync(int staffUserId);
         Task<bool> UpdateBookingDetailStatusAsync(int staffUserId, int detailId, string newStatus);
     }
 }

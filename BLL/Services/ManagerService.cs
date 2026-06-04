@@ -97,11 +97,9 @@ namespace AutoWashPro.BLL.Services
                     .ThenInclude(u => u.CustomerProfile)
                 .Include(b => b.BookingDetails)
                     .ThenInclude(d => d.Service)
-                .Include(b => b.BookingDetails)
-                    .ThenInclude(d => d.ProcessingLane)
-                .Include(b => b.BookingDetails)
-                    .ThenInclude(d => d.ProcessingStaff)
-                        .ThenInclude(s => s.EmployeeProfile)
+                .Include(b => b.ProcessingLane)
+                .Include(b => b.ProcessingStaff)
+                    .ThenInclude(s => s.EmployeeProfile)
                 .Where(b => b.BranchId == managerProfile.BranchId && (b.Status == "CheckedIn" || b.Status == "Pending" || b.Status == "Processing"))
                 .ToListAsync();
 
@@ -112,25 +110,20 @@ namespace AutoWashPro.BLL.Services
                 ScheduledTime = b.ScheduledTime,
                 CustomerName = b.User?.CustomerProfile?.FullName,
                 CustomerPhone = b.User?.PhoneNumber,
-                Details = b.BookingDetails.Select(d => new ManagerBookingDetailDTO
-                {
-                    DetailId = d.DetailId,
-                    LicensePlate = d.LicensePlate,
-                    ServiceName = d.Service.ServiceName,
-                    ProcessingLaneId = d.ProcessingLaneId,
-                    ProcessingLaneName = d.ProcessingLane?.Name,
-                    ProcessingStaffId = d.ProcessingStaffId,
-                    ProcessingStaffName = d.ProcessingStaff?.EmployeeProfile?.FullName
-                }).ToList()
+                LicensePlate = b.LicensePlate,
+                ServiceNames = b.BookingDetails.Select(d => d.Service.ServiceName).ToList(),
+                ProcessingLaneId = b.ProcessingLaneId,
+                ProcessingLaneName = b.ProcessingLane?.Name,
+                ProcessingStaffId = b.ProcessingStaffId,
+                ProcessingStaffName = b.ProcessingStaff?.EmployeeProfile?.FullName
             }).ToList();
         }
 
-        public async Task<bool> ConfirmCheckInAndAssignLaneAsync(int managerUserId, int bookingId, List<AssignBookingDetailDTO> assignments)
+        public async Task<bool> ConfirmCheckInAndAssignLaneAsync(int managerUserId, int bookingId, AssignBookingToLaneDTO assignment)
         {
             var managerProfile = await GetManagerProfileAsync(managerUserId);
 
             var booking = await _context.Bookings
-                .Include(b => b.BookingDetails)
                 .FirstOrDefaultAsync(b => b.BookingId == bookingId && b.BranchId == managerProfile.BranchId);
 
             if (booking == null)
@@ -143,40 +136,17 @@ namespace AutoWashPro.BLL.Services
                 throw new BadRequestException("Booking is not in a valid state for check-in and assignment.");
             }
 
-            var laneIds = assignments.Select(a => a.LaneId).Distinct().ToList();
-            var staffIds = assignments.Select(a => a.StaffId).Distinct().ToList();
+            var validLane = await _context.Lanes
+                .AnyAsync(l => l.LaneId == assignment.LaneId && l.BranchId == managerProfile.BranchId);
 
-            var validLanes = await _context.Lanes
-                .Where(l => laneIds.Contains(l.LaneId) && l.BranchId == managerProfile.BranchId)
-                .Select(l => l.LaneId)
-                .ToListAsync();
-
-            var validStaff = await _context.EmployeeProfiles
-                .Where(e => staffIds.Contains(e.EmployeeId) && e.BranchId == managerProfile.BranchId)
-                .Select(e => e.EmployeeId)
-                .ToListAsync();
-
-            foreach (var detail in booking.BookingDetails)
+            if (!validLane)
             {
-                var assignInfo = assignments.FirstOrDefault(a => a.BookingDetailId == detail.DetailId);
-                if (assignInfo != null)
-                {
-                    if (!validLanes.Contains(assignInfo.LaneId) || !validStaff.Contains(assignInfo.StaffId))
-                    {
-                        throw new BadRequestException($"Invalid Lane or Staff for Detail {detail.DetailId}");
-                    }
-
-                    detail.ProcessingLaneId = assignInfo.LaneId;
-                    detail.ProcessingStaffId = assignInfo.StaffId;
-                    if (detail.Status == "Pending")
-                    {
-                        detail.Status = "CheckedIn";
-                    }
-                }
+                throw new BadRequestException("Làn (Lane) không hợp lệ hoặc không thuộc chi nhánh của bạn.");
             }
 
-            // Update status
+            booking.ProcessingLaneId = assignment.LaneId;
             booking.Status = "CheckedIn";
+
             await _context.SaveChangesAsync();
             return true;
         }
