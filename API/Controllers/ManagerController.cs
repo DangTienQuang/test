@@ -74,6 +74,13 @@ namespace AutoWashPro.API.Controllers
             return Ok(new { Message = "Staff assigned to lane successfully." });
         }
 
+        [HttpDelete("lanes/{laneId}/staff/{staffId}")]
+        public async Task<IActionResult> UnassignStaffFromLane(int laneId, int staffId)
+        {
+            await _managerService.UnassignStaffFromLaneAsync(GetUserId(), laneId, staffId);
+            return Ok(new { Message = "Staff unassigned from lane successfully." });
+        }
+
         [HttpGet("bookings")]
         public async Task<IActionResult> GetCheckInBookings()
         {
@@ -86,6 +93,41 @@ namespace AutoWashPro.API.Controllers
         {
             await _managerService.ConfirmCheckInAndAssignLaneAsync(GetUserId(), bookingId, assignment);
             return Ok(new { Message = "Booking checked in and lanes assigned successfully." });
+        }
+
+        [HttpPut("lanes/{laneId}")]
+        public async Task<IActionResult> UpdateLane(int laneId, [FromBody] UpdateLaneDTO dto)
+        {
+            var updatedLane = await _managerService.UpdateLaneAsync(GetUserId(), laneId, dto);
+            return Ok(updatedLane);
+        }
+
+        [HttpDelete("lanes/{laneId}")]
+        public async Task<IActionResult> DeleteLane(int laneId)
+        {
+            await _managerService.DeleteLaneAsync(GetUserId(), laneId);
+            return Ok(new { Message = "Lane deleted successfully." });
+        }
+
+        [HttpPut("timeslots/{slotId}")]
+        public async Task<IActionResult> UpdateTimeSlot(int slotId, [FromBody] UpdateTimeSlotDTO dto)
+        {
+            var updatedSlot = await _managerService.UpdateTimeSlotAsync(GetUserId(), slotId, dto);
+            return Ok(updatedSlot);
+        }
+
+        [HttpDelete("timeslots/{slotId}")]
+        public async Task<IActionResult> DeleteTimeSlot(int slotId)
+        {
+            await _managerService.DeleteTimeSlotAsync(GetUserId(), slotId);
+            return Ok(new { Message = "Time slot deleted successfully." });
+        }
+
+        [HttpDelete("staff/{userId}")]
+        public async Task<IActionResult> DeactivateStaff(int userId)
+        {
+            await _managerService.DeactivateStaffAsync(GetUserId(), userId);
+            return Ok(new { Message = "Staff deactivated successfully." });
         }
     }
 }

@@ -89,6 +89,33 @@ namespace AutoWashPro.BLL.Services
             return true;
         }
 
+        public async Task<bool> UnassignStaffFromLaneAsync(int managerUserId, int laneId, int staffId)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            // Verify the Lane belongs to managerProfile.BranchId
+            var lane = await _context.Lanes.FirstOrDefaultAsync(l => l.LaneId == laneId && l.BranchId == managerProfile.BranchId);
+            if (lane == null)
+            {
+                throw new NotFoundException("Lane not found in your branch.");
+            }
+
+            var today = System.DateTime.UtcNow.ToVnTime().Date;
+
+            // Find the active shift assignment for today
+            var assignment = await _context.StaffLaneAssignments
+                .FirstOrDefaultAsync(a => a.LaneId == laneId && a.StaffId == staffId && a.AssignedDate.Date == today);
+
+            if (assignment == null)
+            {
+                throw new NotFoundException("Active staff assignment not found for today in this lane.");
+            }
+
+            _context.StaffLaneAssignments.Remove(assignment);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<List<ManagerBookingListDTO>> GetCheckInBookingsInBranchAsync(int managerUserId)
         {
             var managerProfile = await GetManagerProfileAsync(managerUserId);
@@ -288,6 +315,140 @@ namespace AutoWashPro.BLL.Services
             booking.Status = "CheckedIn";
 
             await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<LaneDTO> UpdateLaneAsync(int managerUserId, int laneId, UpdateLaneDTO request)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            var lane = await _context.Lanes.FirstOrDefaultAsync(l => l.LaneId == laneId);
+            if (lane == null || lane.BranchId != managerProfile.BranchId)
+            {
+                throw new NotFoundException("Lane not found in your branch.");
+            }
+
+            request.BranchId = managerProfile.BranchId.Value;
+
+            lane.Name = request.Name;
+            lane.IsActive = request.IsActive;
+
+            await _context.SaveChangesAsync();
+
+            return new LaneDTO
+            {
+                LaneId = lane.LaneId,
+                Name = lane.Name,
+                BranchId = lane.BranchId,
+                IsActive = lane.IsActive
+            };
+        }
+
+        public async Task<bool> DeleteLaneAsync(int managerUserId, int laneId)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            var lane = await _context.Lanes.FirstOrDefaultAsync(l => l.LaneId == laneId);
+            if (lane == null || lane.BranchId != managerProfile.BranchId)
+            {
+                throw new NotFoundException("Lane not found in your branch.");
+            }
+
+            lane.IsActive = false;
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<TimeSlotAdminResponseDTO> UpdateTimeSlotAsync(int managerUserId, int slotId, UpdateTimeSlotDTO request)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            var timeSlot = await _context.TimeSlots.FindAsync(slotId);
+            if (timeSlot == null || timeSlot.BranchId != managerProfile.BranchId)
+            {
+                throw new NotFoundException("Không tìm thấy khung giờ trong chi nhánh của bạn.");
+            }
+
+            request.BranchId = managerProfile.BranchId.Value;
+
+            if (request.StartTime >= request.EndTime)
+            {
+                throw new BadRequestException("Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc.");
+            }
+
+            var isOverlap = await _context.TimeSlots.AnyAsync(ts =>
+                ts.SlotId != slotId &&
+                ts.BranchId == request.BranchId &&
+                ((request.StartTime >= ts.StartTime && request.StartTime < ts.EndTime) ||
+                 (request.EndTime > ts.StartTime && request.EndTime <= ts.EndTime) ||
+                 (request.StartTime <= ts.StartTime && request.EndTime >= ts.EndTime)));
+
+            if (isOverlap)
+            {
+                throw new BadRequestException("Khung giờ bị trùng lặp với một khung giờ đã tồn tại.");
+            }
+
+            timeSlot.StartTime = request.StartTime;
+            timeSlot.EndTime = request.EndTime;
+            timeSlot.MaxCapacity = request.MaxCapacity;
+            timeSlot.IsVipOnly = request.IsVipOnly;
+
+            await _context.SaveChangesAsync();
+
+            return new TimeSlotAdminResponseDTO
+            {
+                SlotId = timeSlot.SlotId,
+                BranchId = timeSlot.BranchId,
+                StartTime = timeSlot.StartTime,
+                EndTime = timeSlot.EndTime,
+                MaxCapacity = timeSlot.MaxCapacity,
+                IsVipOnly = timeSlot.IsVipOnly
+            };
+        }
+
+        public async Task<bool> DeleteTimeSlotAsync(int managerUserId, int slotId)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            var timeSlot = await _context.TimeSlots.FindAsync(slotId);
+            if (timeSlot == null || timeSlot.BranchId != managerProfile.BranchId)
+            {
+                throw new NotFoundException("Không tìm thấy khung giờ trong chi nhánh của bạn.");
+            }
+
+            var isBooked = await _context.DailySlotCapacities.AnyAsync(dsc => dsc.SlotId == slotId && dsc.BookedWeight > 0);
+            if (isBooked)
+            {
+                throw new BadRequestException("Không thể xoá khung giờ này vì đã có người đặt lịch. Vui lòng kiểm tra lại.");
+            }
+
+            _context.TimeSlots.Remove(timeSlot);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> DeactivateStaffAsync(int managerUserId, int staffUserId)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            var staffProfile = await _context.EmployeeProfiles
+                .Include(e => e.User)
+                .FirstOrDefaultAsync(e => e.EmployeeId == staffUserId && e.BranchId == managerProfile.BranchId && e.User.Role == "Staff");
+
+            if (staffProfile == null)
+            {
+                throw new NotFoundException("Staff not found in your branch.");
+            }
+
+            if (staffProfile.User.Status == "Inactive")
+            {
+                return true;
+            }
+
+            staffProfile.User.Status = "Inactive";
+            await _context.SaveChangesAsync();
+
             return true;
         }
     }
