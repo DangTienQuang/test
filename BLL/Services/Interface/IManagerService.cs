@@ -8,6 +8,7 @@ namespace AutoWashPro.BLL.Services
     {
         Task<List<ManagerStaffDTO>> GetStaffInBranchAsync(int managerUserId);
         Task<bool> AssignStaffToLaneAsync(int managerUserId, AssignStaffToLaneDTO assignDto);
+        Task<bool> UnassignStaffFromLaneAsync(int managerUserId, int laneId, int staffId);
         Task<List<ManagerBookingListDTO>> GetCheckInBookingsInBranchAsync(int managerUserId);
         Task<bool> ConfirmCheckInAndAssignLaneAsync(int managerUserId, int bookingId, AssignBookingToLaneDTO assignment);
         Task<List<LaneDTO>> GetLanesInBranchAsync(int managerUserId);
@@ -15,5 +16,10 @@ namespace AutoWashPro.BLL.Services
         Task<List<TimeSlotAdminResponseDTO>> GetTimeSlotsInBranchAsync(int managerUserId);
         Task<LaneDTO> CreateLaneAsync(int managerUserId, CreateLaneDTO request);
         Task<TimeSlotAdminResponseDTO> CreateTimeSlotAsync(int managerUserId, CreateTimeSlotDTO request);
+        Task<LaneDTO> UpdateLaneAsync(int managerUserId, int laneId, UpdateLaneDTO request);
+        Task<bool> DeleteLaneAsync(int managerUserId, int laneId);
+        Task<TimeSlotAdminResponseDTO> UpdateTimeSlotAsync(int managerUserId, int slotId, UpdateTimeSlotDTO request);
+        Task<bool> DeleteTimeSlotAsync(int managerUserId, int slotId);
+        Task<bool> DeactivateStaffAsync(int managerUserId, int staffUserId);
     }
 }
