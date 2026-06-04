@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoWashPro.BLL.Helpers;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -116,6 +117,51 @@ namespace AutoWashPro.BLL.Services
                 ProcessingLaneName = b.ProcessingLane?.Name,
                 ProcessingStaffId = b.ProcessingStaffId,
                 ProcessingStaffName = b.ProcessingStaff?.EmployeeProfile?.FullName
+            }).ToList();
+        }
+
+        public async Task<List<LaneDTO>> GetLanesInBranchAsync(int managerUserId)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            var lanes = await _context.Lanes
+                .Where(l => l.BranchId == managerProfile.BranchId)
+                .Select(l => new LaneDTO
+                {
+                    LaneId = l.LaneId,
+                    Name = l.Name,
+                    BranchId = l.BranchId,
+                    IsActive = l.IsActive
+                })
+                .ToListAsync();
+
+            return lanes;
+        }
+
+        public async Task<List<ManagerStaffDTO>> GetStaffAssignedToLaneAsync(int managerUserId, int laneId)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            var lane = await _context.Lanes.FirstOrDefaultAsync(l => l.LaneId == laneId && l.BranchId == managerProfile.BranchId);
+            if (lane == null)
+            {
+                throw new NotFoundException("Lane not found in your branch.");
+            }
+
+            var today = System.DateTime.UtcNow.ToVnTime().Date;
+
+            var assignments = await _context.StaffLaneAssignments
+                .Include(a => a.Staff)
+                    .ThenInclude(s => s.EmployeeProfile)
+                .Where(a => a.LaneId == laneId && a.AssignedDate.Date == today)
+                .ToListAsync();
+
+            return assignments.Select(a => new ManagerStaffDTO
+            {
+                UserId = a.Staff.UserId,
+                FullName = a.Staff.EmployeeProfile!.FullName,
+                PhoneNumber = a.Staff.PhoneNumber,
+                Status = a.Staff.Status
             }).ToList();
         }
 

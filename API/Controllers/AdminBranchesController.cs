@@ -45,5 +45,12 @@ namespace AutoWashPro.API.Controllers
             var branch = await _branchService.UpdateBranchAsync(id, dto);
             return Ok(branch);
         }
+
+        [HttpGet("{id}/employees")]
+        public async Task<IActionResult> GetBranchEmployees(int id)
+        {
+            var summary = await _branchService.GetBranchEmployeeSummaryAsync(id);
+            return Ok(summary);
+        }
     }
 }
