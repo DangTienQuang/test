@@ -45,7 +45,7 @@ namespace AutoWashPro.API.Controllers
         [HttpPut("bookings/{bookingId}/status")]
         public async Task<IActionResult> UpdateBookingStatus(int bookingId, [FromBody] UpdateBookingStatusDTO dto)
         {
-            await _staffService.UpdateBookingDetailStatusAsync(GetUserId(), bookingId, dto.Status);
+            await _staffService.UpdateBookingStatusAsync(GetUserId(), bookingId, dto.Status);
             return Ok(new { Message = $"Booking status updated to {dto.Status}." });
         }
     }

@@ -1,3 +1,4 @@
+using AutoWashPro.BLL.Constants;
 using AutoWashPro.BLL.DTOs;
 using AutoWashPro.BLL.Exceptions;
 using AutoWashPro.DAL.Data;
@@ -13,10 +14,12 @@ namespace AutoWashPro.BLL.Services
     public class OperationStaffService : IOperationStaffService
     {
         private readonly AutoWashDbContext _context;
+        private readonly IWalletService _walletService;
 
-        public OperationStaffService(AutoWashDbContext context)
+        public OperationStaffService(AutoWashDbContext context, IWalletService walletService)
         {
             _context = context;
+            _walletService = walletService;
         }
 
         public async Task<StaffLaneTaskDTO?> GetTodayLaneAssignmentAsync(int staffUserId)
@@ -74,7 +77,7 @@ namespace AutoWashPro.BLL.Services
             }).ToList();
         }
 
-        public async Task<bool> UpdateBookingDetailStatusAsync(int staffUserId, int bookingId, string newStatus)
+        public async Task<bool> UpdateBookingStatusAsync(int staffUserId, int bookingId, string newStatus)
         {
             if (newStatus != "Processing" && newStatus != "Completed")
             {
@@ -112,13 +115,20 @@ namespace AutoWashPro.BLL.Services
                         .Include(cp => cp.Tier)
                         .FirstOrDefaultAsync(cp => cp.UserId == booking.UserId);
 
-                 // This duplicates logic in BookingService.UpdateBookingStatusAsync for CRM Points,
-                 // but since we bypass it here, we add it. In a real system, we'd use a shared mediator/service.
                  if (userProfile?.Tier != null && booking.FinalAmount > 0)
                  {
-                        // Simplified point addition logic to fulfill requirement
-                        // We rely on the WalletService (needs DI injection, or we can just update the wallet/profile direct)
-                        userProfile.LastVisitDate = DateTime.UtcNow;
+                        int pointsEarned = (int)((booking.FinalAmount / PointConstants.VndPerEarnedPoint) * (decimal)userProfile.Tier.PointMultiplier);
+
+                        if (pointsEarned > 0)
+                        {
+                            await _walletService.AwardCompletionPointsAsync(
+                                booking.UserId.Value, pointsEarned, booking.BookingId);
+                        }
+                 }
+
+                 if (userProfile != null)
+                 {
+                     userProfile.LastVisitDate = DateTime.UtcNow;
                  }
             }
 
