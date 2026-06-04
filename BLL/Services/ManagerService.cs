@@ -120,6 +120,100 @@ namespace AutoWashPro.BLL.Services
             }).ToList();
         }
 
+        public async Task<List<TimeSlotAdminResponseDTO>> GetTimeSlotsInBranchAsync(int managerUserId)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            var timeSlots = await _context.TimeSlots
+                .Where(ts => ts.BranchId == managerProfile.BranchId)
+                .OrderBy(ts => ts.StartTime)
+                .Select(ts => new TimeSlotAdminResponseDTO
+                {
+                    SlotId = ts.SlotId,
+                    BranchId = ts.BranchId,
+                    StartTime = ts.StartTime,
+                    EndTime = ts.EndTime,
+                    MaxCapacity = ts.MaxCapacity,
+                    IsVipOnly = ts.IsVipOnly
+                })
+                .ToListAsync();
+
+            return timeSlots;
+        }
+
+        public async Task<LaneDTO> CreateLaneAsync(int managerUserId, CreateLaneDTO request)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            // Override BranchId to manager's branch
+            request.BranchId = managerProfile.BranchId!.Value;
+
+            var lane = new Lane
+            {
+                Name = request.Name,
+                BranchId = request.BranchId,
+                IsActive = true
+            };
+
+            _context.Lanes.Add(lane);
+            await _context.SaveChangesAsync();
+
+            return new LaneDTO
+            {
+                LaneId = lane.LaneId,
+                Name = lane.Name,
+                BranchId = lane.BranchId,
+                IsActive = lane.IsActive
+            };
+        }
+
+        public async Task<TimeSlotAdminResponseDTO> CreateTimeSlotAsync(int managerUserId, CreateTimeSlotDTO request)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            // Override BranchId to manager's branch
+            request.BranchId = managerProfile.BranchId!.Value;
+
+            if (request.StartTime >= request.EndTime)
+            {
+                throw new BadRequestException("Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc.");
+            }
+
+            // Kiểm tra trùng lặp thời gian trong chi nhánh của manager
+            var isOverlap = await _context.TimeSlots.AnyAsync(ts =>
+                ts.BranchId == request.BranchId &&
+                ((request.StartTime >= ts.StartTime && request.StartTime < ts.EndTime) ||
+                (request.EndTime > ts.StartTime && request.EndTime <= ts.EndTime) ||
+                (request.StartTime <= ts.StartTime && request.EndTime >= ts.EndTime)));
+
+            if (isOverlap)
+            {
+                throw new BadRequestException("Khung giờ bị trùng lặp với một khung giờ đã tồn tại.");
+            }
+
+            var timeSlot = new TimeSlot
+            {
+                BranchId = request.BranchId,
+                StartTime = request.StartTime,
+                EndTime = request.EndTime,
+                MaxCapacity = request.MaxCapacity,
+                IsVipOnly = request.IsVipOnly
+            };
+
+            _context.TimeSlots.Add(timeSlot);
+            await _context.SaveChangesAsync();
+
+            return new TimeSlotAdminResponseDTO
+            {
+                SlotId = timeSlot.SlotId,
+                BranchId = timeSlot.BranchId,
+                StartTime = timeSlot.StartTime,
+                EndTime = timeSlot.EndTime,
+                MaxCapacity = timeSlot.MaxCapacity,
+                IsVipOnly = timeSlot.IsVipOnly
+            };
+        }
+
         public async Task<List<LaneDTO>> GetLanesInBranchAsync(int managerUserId)
         {
             var managerProfile = await GetManagerProfileAsync(managerUserId);
