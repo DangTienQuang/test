@@ -10,5 +10,7 @@ namespace AutoWashPro.BLL.Services
         Task<bool> AssignStaffToLaneAsync(int managerUserId, AssignStaffToLaneDTO assignDto);
         Task<List<ManagerBookingListDTO>> GetCheckInBookingsInBranchAsync(int managerUserId);
         Task<bool> ConfirmCheckInAndAssignLaneAsync(int managerUserId, int bookingId, AssignBookingToLaneDTO assignment);
+        Task<List<LaneDTO>> GetLanesInBranchAsync(int managerUserId);
+        Task<List<ManagerStaffDTO>> GetStaffAssignedToLaneAsync(int managerUserId, int laneId);
     }
 }

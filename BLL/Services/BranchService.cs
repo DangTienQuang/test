@@ -85,5 +85,53 @@ namespace AutoWashPro.BLL.Services
                 IsActive = branch.IsActive
             };
         }
+
+        public async Task<BranchEmployeeSummaryDTO> GetBranchEmployeeSummaryAsync(int branchId)
+        {
+            var branchExists = await _context.Branches.AnyAsync(b => b.BranchId == branchId);
+            if (!branchExists)
+            {
+                throw new NotFoundException("Branch not found.");
+            }
+
+            var employees = await _context.EmployeeProfiles
+                .Include(e => e.User)
+                .Where(e => e.BranchId == branchId)
+                .ToListAsync();
+
+            var managers = employees
+                .Where(e => e.User.Role == "Manager")
+                .Select(e => new EmployeeProfileDTO
+                {
+                    UserId = e.EmployeeId,
+                    PhoneNumber = e.User.PhoneNumber,
+                    FullName = e.FullName,
+                    Role = e.User.Role,
+                    Status = e.User.Status,
+                    BranchId = e.BranchId
+                })
+                .ToList();
+
+            var staff = employees
+                .Where(e => e.User.Role == "Staff")
+                .Select(e => new EmployeeProfileDTO
+                {
+                    UserId = e.EmployeeId,
+                    PhoneNumber = e.User.PhoneNumber,
+                    FullName = e.FullName,
+                    Role = e.User.Role,
+                    Status = e.User.Status,
+                    BranchId = e.BranchId
+                })
+                .ToList();
+
+            return new BranchEmployeeSummaryDTO
+            {
+                TotalManagers = managers.Count,
+                TotalStaff = staff.Count,
+                Managers = managers,
+                Staff = staff
+            };
+        }
     }
 }

@@ -32,6 +32,20 @@ namespace AutoWashPro.API.Controllers
             return Ok(staffList);
         }
 
+        [HttpGet("lanes")]
+        public async Task<IActionResult> GetLanesInBranch()
+        {
+            var lanes = await _managerService.GetLanesInBranchAsync(GetUserId());
+            return Ok(lanes);
+        }
+
+        [HttpGet("lanes/{laneId}/staff")]
+        public async Task<IActionResult> GetStaffAssignedToLane(int laneId)
+        {
+            var staffList = await _managerService.GetStaffAssignedToLaneAsync(GetUserId(), laneId);
+            return Ok(staffList);
+        }
+
         [HttpPost("lanes/assign-staff")]
         public async Task<IActionResult> AssignStaffToLane([FromBody] AssignStaffToLaneDTO dto)
         {

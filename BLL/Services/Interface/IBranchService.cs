@@ -10,5 +10,6 @@ namespace AutoWashPro.BLL.Services
         Task<BranchDTO> GetBranchByIdAsync(int branchId);
         Task<BranchDTO> CreateBranchAsync(CreateBranchDTO createDto);
         Task<BranchDTO> UpdateBranchAsync(int branchId, UpdateBranchDTO updateDto);
+        Task<BranchEmployeeSummaryDTO> GetBranchEmployeeSummaryAsync(int branchId);
     }
 }
