@@ -67,18 +67,42 @@ namespace AutoWashPro.BLL.Services
             var existingTypesCount = await _context.VehicleTypes.CountAsync(vt => vehicleTypeIds.Contains(vt.Id));
             if (existingTypesCount != vehicleTypeIds.Count) throw new Exception("Một hoặc nhiều loại xe không hợp lệ.");
 
+            var activeBranches = await _context.Branches.Where(b => b.IsActive).ToListAsync();
+
+            var servicePrices = new List<ServicePrice>();
+            foreach (var p in request.Prices)
+            {
+                if (p.BranchId == null || p.BranchId == 0)
+                {
+                    foreach (var branch in activeBranches)
+                    {
+                        servicePrices.Add(new ServicePrice
+                        {
+                            VehicleTypeId = p.VehicleTypeId,
+                            BranchId = branch.BranchId,
+                            Price = p.Price,
+                            EstimatedDurationMinutes = p.EstimatedDurationMinutes
+                        });
+                    }
+                }
+                else
+                {
+                    servicePrices.Add(new ServicePrice
+                    {
+                        VehicleTypeId = p.VehicleTypeId,
+                        BranchId = p.BranchId.Value,
+                        Price = p.Price,
+                        EstimatedDurationMinutes = p.EstimatedDurationMinutes
+                    });
+                }
+            }
+
             var service = new Service
             {
                 ServiceName = request.ServiceName,
                 Description = request.Description,
                 IsActive = true,
-                ServicePrices = request.Prices.Select(p => new ServicePrice
-                {
-                    VehicleTypeId = p.VehicleTypeId,
-                    BranchId = p.BranchId,
-                    Price = p.Price,
-                    EstimatedDurationMinutes = p.EstimatedDurationMinutes
-                }).ToList()
+                ServicePrices = servicePrices
             };
 
             _context.Services.Add(service);
@@ -99,18 +123,42 @@ namespace AutoWashPro.BLL.Services
             var existingTypesCount = await _context.VehicleTypes.CountAsync(vt => vehicleTypeIds.Contains(vt.Id));
             if (existingTypesCount != vehicleTypeIds.Count) throw new Exception("Một hoặc nhiều loại xe không hợp lệ.");
 
+            var activeBranches = await _context.Branches.Where(b => b.IsActive).ToListAsync();
+
             service.ServiceName = request.ServiceName;
             service.Description = request.Description;
 
             _context.ServicePrices.RemoveRange(service.ServicePrices);
 
-            service.ServicePrices = request.Prices.Select(p => new ServicePrice
+            var servicePrices = new List<ServicePrice>();
+            foreach (var p in request.Prices)
             {
-                VehicleTypeId = p.VehicleTypeId,
-                BranchId = p.BranchId,
-                Price = p.Price,
-                EstimatedDurationMinutes = p.EstimatedDurationMinutes
-            }).ToList();
+                if (p.BranchId == null || p.BranchId == 0)
+                {
+                    foreach (var branch in activeBranches)
+                    {
+                        servicePrices.Add(new ServicePrice
+                        {
+                            VehicleTypeId = p.VehicleTypeId,
+                            BranchId = branch.BranchId,
+                            Price = p.Price,
+                            EstimatedDurationMinutes = p.EstimatedDurationMinutes
+                        });
+                    }
+                }
+                else
+                {
+                    servicePrices.Add(new ServicePrice
+                    {
+                        VehicleTypeId = p.VehicleTypeId,
+                        BranchId = p.BranchId.Value,
+                        Price = p.Price,
+                        EstimatedDurationMinutes = p.EstimatedDurationMinutes
+                    });
+                }
+            }
+
+            service.ServicePrices = servicePrices;
 
             await _context.SaveChangesAsync();
             return true;

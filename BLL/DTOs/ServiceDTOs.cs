@@ -37,8 +37,7 @@ namespace AutoWashPro.BLL.DTOs
         [Required]
         public int VehicleTypeId { get; set; }
 
-        [Required]
-        public int BranchId { get; set; }
+        public int? BranchId { get; set; }
 
         [Required]
         [Range(0, double.MaxValue, ErrorMessage = "Giá tiền không hợp lệ.")]
