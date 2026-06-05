@@ -71,13 +71,7 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<TierUpgradeResultDTO?> EvaluateAndUpgradeTierAsync(int userId)
         {
-            var profile = await _context.CustomerProfiles
-                .Include(cp => cp.Tier)
-                .FirstOrDefaultAsync(cp => cp.UserId == userId);
-
-            if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
-
-            var result = await EvaluateTierForProfileAsync(profile);
+            var result = await EvaluateTierForProfileAsync(userId);
             if (result != null)
             {
                 await _context.SaveChangesAsync();
@@ -86,8 +80,13 @@ namespace AutoWashPro.BLL.Services
             return result;
         }
 
-        public async Task<TierUpgradeResultDTO?> EvaluateTierForProfileAsync(CustomerProfile profile)
+        public async Task<TierUpgradeResultDTO?> EvaluateTierForProfileAsync(int userId)
         {
+            var profile = await _context.CustomerProfiles
+                .Include(cp => cp.Tier)
+                .FirstOrDefaultAsync(cp => cp.UserId == userId);
+
+            if (profile == null) throw new NotFoundException("Không tìm thấy hồ sơ khách hàng.");
             if (profile.Tier == null && profile.TierId > 0)
             {
                 profile.Tier = await _context.Tiers.FindAsync(profile.TierId);
