@@ -972,12 +972,12 @@ namespace AutoWashPro.BLL.Services
             return price;
         }
 
-        public async Task ReportMismatchAsync(int bookingId, VehicleCondition condition, int actualTypeId)
+        public async Task ReportMismatchAsync(int bookingId, AutoWashPro.BLL.DTOs.VehicleConditionEnum condition, int actualTypeId)
         {
             var booking = await _context.Bookings.Include(b => b.BookingDetails).FirstOrDefaultAsync(b => b.BookingId == bookingId);
             if (booking == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy Booking.");
 
-            booking.VehicleCondition = condition;
+            booking.VehicleCondition = (AutoWashPro.DAL.Entities.VehicleCondition)condition;
             booking.ActualVehicleTypeId = actualTypeId;
 
             decimal totalNewPrice = 0;
@@ -985,7 +985,7 @@ namespace AutoWashPro.BLL.Services
             foreach (var detail in booking.BookingDetails)
             {
                 totalOldPrice += detail.Price;
-                totalNewPrice += await GetPriceFromDb(detail.ServiceId, actualTypeId, condition, booking.BranchId);
+                totalNewPrice += await GetPriceFromDb(detail.ServiceId, actualTypeId, (AutoWashPro.DAL.Entities.VehicleCondition)condition, booking.BranchId);
             }
 
             if (totalNewPrice > totalOldPrice)
