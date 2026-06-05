@@ -1,6 +1,126 @@
 @API_HostAddress = http://localhost:5030
+@token = your_token_here
 
 GET {{API_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+# ==============================================================================
+# MANAGER CONTROLLER TESTS
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. LANES
+# ------------------------------------------------------------------------------
+
+### Get all Lanes in Branch
+GET {{API_HostAddress}}/api/v1/manager/lanes
+Authorization: Bearer {{token}}
+
+### Create a new Lane
+POST {{API_HostAddress}}/api/v1/manager/lanes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Lane 1 - Fast Wash",
+  "branchId": 0
+}
+
+### Update an existing Lane
+# Replace {laneId} with an actual ID from the GET response
+@laneId = 1
+PUT {{API_HostAddress}}/api/v1/manager/lanes/{{laneId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Lane 1 - Premium Wash",
+  "branchId": 0,
+  "isActive": true
+}
+
+### Delete a Lane
+DELETE {{API_HostAddress}}/api/v1/manager/lanes/{{laneId}}
+Authorization: Bearer {{token}}
+
+
+# ------------------------------------------------------------------------------
+# 2. TIMESLOTS
+# ------------------------------------------------------------------------------
+
+### Get all TimeSlots in Branch
+GET {{API_HostAddress}}/api/v1/manager/timeslots
+Authorization: Bearer {{token}}
+
+### Create a new TimeSlot
+POST {{API_HostAddress}}/api/v1/manager/timeslots
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "branchId": 0,
+  "startTime": "08:00:00",
+  "endTime": "09:00:00",
+  "maxCapacity": 5,
+  "isVipOnly": false
+}
+
+### Update an existing TimeSlot
+# Replace {slotId} with an actual ID from the GET response
+@slotId = 1
+PUT {{API_HostAddress}}/api/v1/manager/timeslots/{{slotId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "branchId": 0,
+  "startTime": "08:00:00",
+  "endTime": "09:00:00",
+  "maxCapacity": 10,
+  "isVipOnly": true
+}
+
+### Delete a TimeSlot
+DELETE {{API_HostAddress}}/api/v1/manager/timeslots/{{slotId}}
+Authorization: Bearer {{token}}
+
+
+# ------------------------------------------------------------------------------
+# 3. STAFF
+# ------------------------------------------------------------------------------
+
+### Get all Staff in Branch
+GET {{API_HostAddress}}/api/v1/manager/staff
+Authorization: Bearer {{token}}
+
+### Deactivate Staff
+# Replace {userId} with an actual ID from the GET response
+@staffUserId = 2
+DELETE {{API_HostAddress}}/api/v1/manager/staff/{{staffUserId}}
+Authorization: Bearer {{token}}
+
+
+# ------------------------------------------------------------------------------
+# 4. ASSIGNMENTS (STAFF TO LANE)
+# ------------------------------------------------------------------------------
+
+### Assign Staff to Lane
+POST {{API_HostAddress}}/api/v1/manager/lanes/assign-staff
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "laneId": {{laneId}},
+  "staffId": {{staffUserId}},
+  "assignedDate": "2023-10-27T00:00:00Z"
+}
+
+### Get Staff assigned to a specific Lane
+GET {{API_HostAddress}}/api/v1/manager/lanes/{{laneId}}/staff
+Authorization: Bearer {{token}}
+
+### Unassign Staff from Lane
+DELETE {{API_HostAddress}}/api/v1/manager/lanes/{{laneId}}/staff/{{staffUserId}}
+Authorization: Bearer {{token}}
