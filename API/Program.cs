@@ -228,10 +228,18 @@ app.MapControllers();
 // ==============================================================================
 // 10. DATABASE MIGRATION & SEEDING ON STARTUP
 // ==============================================================================
-using (var scope = app.Services.CreateScope())
+_ = Task.Run(async () =>
 {
-    var seedingService = scope.ServiceProvider.GetRequiredService<IDatabaseSeedingService>();
-    await seedingService.InitializeAndSeedAsync();
-}
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var seedingService = scope.ServiceProvider.GetRequiredService<IDatabaseSeedingService>();
+        await seedingService.InitializeAndSeedAsync();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Seeding Background Task] Error initializing database: {ex.Message}");
+    }
+});
 
 app.Run();
