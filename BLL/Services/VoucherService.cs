@@ -39,8 +39,8 @@ namespace AutoWashPro.BLL.Services
                     RemainingUsage = Math.Max(uv.Voucher.MaxUsagePerUser - uv.UsageCount, 0),
                     MinOrderAmount = uv.Voucher.MinOrderAmount,
                     IsActive = uv.Voucher.IsActive,
-                    CampaignType = uv.Voucher.CampaignType,
-                    VoucherType = uv.Voucher.VoucherType,
+                    CampaignType = (AutoWashPro.BLL.Enums.VoucherCampaignTypeEnum)uv.Voucher.CampaignType,
+                    VoucherType = (AutoWashPro.BLL.Enums.VoucherTypeEnum)uv.Voucher.VoucherType,
                     ImageUrl = uv.Voucher.ImageUrl,
                     RequiredTierId = uv.Voucher.RequiredTierId,
                     RequiredTierName = uv.Voucher.RequiredTier != null ? uv.Voucher.RequiredTier.TierName : null,
@@ -136,7 +136,7 @@ namespace AutoWashPro.BLL.Services
                 StartDate = request.StartDate?.ToUniversalTime(),
                 CreatedAt = DateTime.UtcNow,
                 PointsRequired = request.PointsRequired,
-                VoucherType = request.VoucherType,
+                VoucherType = (AutoWashPro.DAL.Enums.VoucherType)request.VoucherType,
                 CampaignType = VoucherCampaignType.Manual,
                 ImageUrl = request.ImageUrl,
                 MinOrderAmount = request.MinOrderAmount,
@@ -174,7 +174,7 @@ namespace AutoWashPro.BLL.Services
             voucher.ExpiryDate = request.ExpiryDate.ToUniversalTime();
             voucher.StartDate = request.StartDate?.ToUniversalTime();
             voucher.PointsRequired = request.PointsRequired;
-            voucher.VoucherType = request.VoucherType;
+            voucher.VoucherType = (AutoWashPro.DAL.Enums.VoucherType)request.VoucherType;
             voucher.CampaignType = VoucherCampaignType.Manual;
             voucher.ImageUrl = request.ImageUrl;
             voucher.MinOrderAmount = request.MinOrderAmount;
@@ -305,8 +305,8 @@ namespace AutoWashPro.BLL.Services
             StartDate = v.StartDate,
             PointsRequired = v.PointsRequired,
             RedeemedCount = redeemedCount,
-            VoucherType = v.VoucherType,
-            CampaignType = v.CampaignType,
+            VoucherType = (AutoWashPro.BLL.Enums.VoucherTypeEnum)v.VoucherType,
+            CampaignType = (AutoWashPro.BLL.Enums.VoucherCampaignTypeEnum)v.CampaignType,
             ImageUrl = v.ImageUrl,
             MinOrderAmount = v.MinOrderAmount,
             IsActive = v.IsActive,

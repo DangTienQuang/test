@@ -406,7 +406,7 @@ namespace AutoWashPro.BLL.Services
                 // LUỒNG 2: Danh vọng (Cộng thẳng vào điểm xét hạng năm nay)
                 profile.CurrentYearTierPoints += pointsEarned;
 
-                await _tierService.EvaluateTierForProfileAsync(profile);
+                await _tierService.EvaluateTierForProfileAsync(profile.UserId);
 
                 await _context.SaveChangesAsync();
                 return pointsEarned;
