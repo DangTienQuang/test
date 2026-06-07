@@ -43,5 +43,13 @@ namespace AutoWashPro.API.Controllers
             var statusVn = request.Status == "Active" ? "Mở khóa" : "Khóa";
             return Ok(new { statusCode = 200, message = $"{statusVn} tài khoản thành công." });
         }
+
+        [HttpPost("sync-points")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> SyncCustomerPoints()
+        {
+            await _userService.SyncCustomerProfilePointsAsync();
+            return Ok(new { statusCode = 200, message = "Đồng bộ điểm khách hàng thành công." });
+        }
     }
 }

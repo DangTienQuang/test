@@ -18,7 +18,6 @@ namespace AutoWashPro.BLL.Services
         public async Task InitializeAndSeedAsync()
         {
             await _context.Database.MigrateAsync();
-            SyncCustomerProfilePoints();
 
             var now = DateTime.UtcNow;
 
@@ -166,34 +165,5 @@ namespace AutoWashPro.BLL.Services
             }
         }
 
-        private void SyncCustomerProfilePoints()
-        {
-            const string completionPrefix = "Hoàn thành dịch vụ";
-            var now = DateTime.UtcNow;
-
-            var profiles = _context.CustomerProfiles.ToList();
-            var allLedgers = _context.PointLedgers.ToList();
-            var groupedLedgers = allLedgers.GroupBy(p => p.UserId).ToDictionary(g => g.Key, g => g.ToList());
-            foreach (var profile in profiles)
-            {
-                if (!groupedLedgers.TryGetValue(profile.UserId, out var ledgers) || !ledgers.Any()) continue;
-
-                var totalAdded = ledgers
-                    .Where(p => p.PointsAdded > 0 && (p.ExpiryDate == null || p.ExpiryDate > now))
-                    .Sum(p => p.PointsAdded);
-                var totalDeducted = ledgers.Where(p => p.PointsDeducted > 0).Sum(p => p.PointsDeducted);
-                var promotionFromLedger = ledgers
-                    .Where(p => p.PointsAdded > 0 && p.Reason.StartsWith(completionPrefix))
-                    .Sum(p => p.PointsAdded);
-
-                if (profile.TotalPoint == 0 && profile.PromotionPoint == 0)
-                {
-                    profile.TotalPoint = Math.Max(0, totalAdded - totalDeducted);
-                    profile.PromotionPoint = promotionFromLedger;
-                }
-            }
-
-            _context.SaveChanges();
-        }
     }
 }
