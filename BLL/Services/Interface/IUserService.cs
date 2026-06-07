@@ -13,5 +13,7 @@ namespace AutoWashPro.BLL.Services
         Task<PagedResultDTO<UserAdminSummaryDTO>> GetAllCustomersAsync(int page, int pageSize, string? searchKeyword, string? statusFilter);
         Task<UserProfileDTO> GetCustomerDetailByAdminAsync(int customerId);
         Task<bool> UpdateCustomerStatusAsync(int customerId, string newStatus);
+
+        Task SyncCustomerProfilePointsAsync();
     }
 }

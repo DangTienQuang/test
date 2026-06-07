@@ -172,5 +172,47 @@ namespace AutoWashPro.BLL.Services
             await _context.SaveChangesAsync();
             return true;
         }
+
+        public async Task SyncCustomerProfilePointsAsync()
+        {
+            const string completionPrefix = "Hoàn thành dịch vụ";
+            var now = DateTime.UtcNow;
+
+            // Get users with 0 TotalPoint & 0 PromotionPoint
+            var targetUsersQuery = _context.CustomerProfiles
+                .Where(p => p.TotalPoint == 0 && p.PromotionPoint == 0)
+                .Select(p => p.UserId);
+
+            // Using grouped queries to efficiently calculate sums on the DB side
+            var pointCalculations = await _context.PointLedgers
+                .Where(pl => targetUsersQuery.Contains(pl.UserId))
+                .GroupBy(pl => pl.UserId)
+                .Select(g => new
+                {
+                    UserId = g.Key,
+                    TotalAdded = g.Where(p => p.PointsAdded > 0 && (p.ExpiryDate == null || p.ExpiryDate > now)).Sum(p => p.PointsAdded),
+                    TotalDeducted = g.Where(p => p.PointsDeducted > 0).Sum(p => p.PointsDeducted),
+                    PromotionFromLedger = g.Where(p => p.PointsAdded > 0 && p.Reason != null && p.Reason.StartsWith(completionPrefix)).Sum(p => p.PointsAdded)
+                })
+                .ToListAsync();
+
+            if (!pointCalculations.Any())
+                return;
+
+            // Load just the profiles that need updating
+            var userIdsToUpdate = pointCalculations.Select(p => p.UserId).ToList();
+            var profilesToUpdate = await _context.CustomerProfiles
+                .Where(p => userIdsToUpdate.Contains(p.UserId))
+                .ToListAsync();
+
+            foreach (var profile in profilesToUpdate)
+            {
+                var calc = pointCalculations.First(c => c.UserId == profile.UserId);
+                profile.TotalPoint = Math.Max(0, calc.TotalAdded - calc.TotalDeducted);
+                profile.PromotionPoint = calc.PromotionFromLedger;
+            }
+
+            await _context.SaveChangesAsync();
+        }
     }
 }
