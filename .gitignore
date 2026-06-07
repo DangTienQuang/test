@@ -1,34 +1,70 @@
 ## -----------------------------------------------------------------------------
-## .GITIGNORE CHUẨN CHO DỰ ÁN C# / .NET / VISUAL STUDIO
+## .GITIGNORE CHUẨN CHO DỰ ÁN C# / .NET / VISUAL STUDIO / VS CODE / RIDER
 ## -----------------------------------------------------------------------------
 
-# 1. Bỏ qua các thư mục chứa code đã biên dịch (Cực kỳ quan trọng)
+# 1. Thư mục build và file biên dịch (BẮT BUỘC)
 [Bb]in/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
 [Oo]ut/
 [Pp]ublish/
+*.dll
+*.exe
+*.pdb
 
-# 2. Bỏ qua các file cấu hình cá nhân của Visual Studio / Rider
+# 2. File cấu hình cá nhân của IDE (Visual Studio, VS Code, Rider)
 .vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 *.user
 *.suo
 *.rsuser
 *.sln.docstates
 *.userprefs
 .idea/
+*.iml
 
-# 3. Bỏ qua các file rác của Hệ điều hành (phòng khi có mem xài Mac)
+# 3. Rác hệ điều hành (Windows / macOS)
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
-# 4. Bỏ qua các file Test coverage (Nếu sau này nhóm viết Unit Test)
+# 4. File Test & Coverage
 *.coverage
 *.coveragexml
 TestResults/
 
-# 5. BẢO MẬT: Không đẩy các file chứa cấu hình Database / Secret lên Git
+# 5. File bảo mật & Cấu hình môi trường (KHÔNG ĐƯỢC ĐẨY LÊN GIT)
 appsettings.Development.json
 appsettings.Local.json
+appsettings.Staging.json
 .env
+.env.*
+secrets.json
+
+# 6. Database cục bộ (Nếu có test bằng SQLite/LocalDB)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.mdf
+*.ldf
+
+# 7. File tạm, log, cache và các file rác khác
+*.tmp
+*.bak
+*.swp
+*.log
+*.cache
+API/appsettings.json
+/API
+*.json

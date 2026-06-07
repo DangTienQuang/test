@@ -9,6 +9,7 @@ using AutoWashPro.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 using PayOS;
 using PayOS.Models.V2.PaymentRequests;
+using PayOS.Models.Webhooks;
 using Microsoft.Extensions.Logging;
 using AutoWashPro.BLL.Exceptions;
 
@@ -51,56 +52,164 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<TopUpResponseDTO> CreateTopUpLinkAsync(int userId, TopUpRequestDTO request)
         {
+            var result = await CreatePaymentQrAsync(userId, new PaymentQrRequestDTO
+            {
+                PaymentType = "Topup",
+                Amount = request.Amount,
+                CancelUrl = request.CancelUrl,
+                ReturnUrl = request.ReturnUrl
+            });
+
+            return new TopUpResponseDTO
+            {
+                PaymentUrl = result.PaymentUrl,
+                OrderCode = result.OrderCode
+            };
+        }
+
+        public async Task<PaymentQrResponseDTO> CreatePaymentQrAsync(int userId, PaymentQrRequestDTO request)
+        {
+            var userExists = await _context.Users.AnyAsync(u => u.UserId == userId);
+            if (!userExists)
+                throw new NotFoundException("Không tìm thấy người dùng tương ứng với token. Vui lòng đăng nhập lại.");
+
             var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userId);
             if (wallet == null)
             {
                 wallet = new Wallet { UserId = userId, Balance = 0, Status = "Active" };
                 _context.Wallets.Add(wallet);
-                await _context.SaveChangesAsync();
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateException ex)
+                {
+                    throw new BadRequestException($"Không thể tạo ví cho người dùng. Lỗi DB: {ex.InnerException?.Message ?? ex.Message}");
+                }
             }
 
-            var orderCode = DateTimeOffset.Now.ToUnixTimeSeconds();
+            var paymentType = NormalizePaymentType(request.PaymentType);
+            decimal amount;
+            int? referenceBookingId = null;
+            string transactionType;
+            string transactionDescription;
+            string paymentDescription;
+
+            if (paymentType == "Topup")
+            {
+                if (!request.Amount.HasValue || request.Amount.Value <= 0)
+                    throw new BadRequestException("Vui lòng nhập số tiền nạp ví hợp lệ.");
+
+                amount = request.Amount.Value;
+                transactionType = "Topup";
+                transactionDescription = "Yeu cau nap tien";
+                paymentDescription = "Topup wallet";
+            }
+            else
+            {
+                if (!request.BookingId.HasValue)
+                    throw new BadRequestException("Vui lòng truyền BookingId khi thanh toán booking.");
+
+                var booking = await _context.Bookings
+                    .FirstOrDefaultAsync(b => b.BookingId == request.BookingId.Value && b.UserId == userId);
+
+                if (booking == null)
+                    throw new NotFoundException("Không tìm thấy lịch hẹn hoặc bạn không có quyền thanh toán.");
+
+                if (booking.Status == "Cancelled" || booking.Status == "CancelledBySystem" || booking.Status == "NoShow")
+                    throw new BadRequestException("Không thể thanh toán cho lịch hẹn đã hủy hoặc no-show.");
+
+                if (await HasCompletedBookingPaymentAsync(booking.BookingId))
+                    throw new BadRequestException("Lịch hẹn này đã được thanh toán.");
+
+                if (booking.FinalAmount <= 0)
+                {
+                    return new PaymentQrResponseDTO
+                    {
+                        PaymentUrl = "",
+                        OrderCode = "",
+                        PaymentType = "BookingPayment",
+                        Amount = 0,
+                        BookingId = booking.BookingId
+                    };
+                }
+
+                amount = booking.FinalAmount;
+                referenceBookingId = booking.BookingId;
+                transactionType = "BookingPayment";
+                transactionDescription = $"Yeu cau thanh toan booking #{booking.BookingId}";
+                paymentDescription = $"Booking #{booking.BookingId}";
+            }
+
+            var orderCode = GenerateOrderCode();
 
             var transaction = new Transaction
             {
                 WalletId = wallet.WalletId,
-                Amount = request.Amount,
-                TransactionType = "Topup",
-                Description = "Yêu cầu nạp tiền",
+                Amount = amount,
+                TransactionType = transactionType,
+                Description = transactionDescription,
+                ReferenceBookingId = referenceBookingId,
                 OrderCode = orderCode.ToString(),
                 Status = "Pending",
                 CreatedAt = DateTime.UtcNow
             };
             _context.Transactions.Add(transaction);
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                throw new BadRequestException($"Không thể tạo giao dịch thanh toán. Kiểm tra bảng Transactions đã có các cột OrderCode, ReferenceBookingId, Status chưa. Lỗi DB: {ex.InnerException?.Message ?? ex.Message}");
+            }
 
             var paymentRequest = new CreatePaymentLinkRequest
             {
                 OrderCode = orderCode,
-                Amount = (int)request.Amount,
-                Description = $"Topup wallet",
+                Amount = (int)amount,
+                Description = paymentDescription,
                 CancelUrl = request.CancelUrl,
                 ReturnUrl = request.ReturnUrl
             };
 
             var createPaymentResult = await _payOSClient.PaymentRequests.CreateAsync(paymentRequest);
 
-            return new TopUpResponseDTO
+            return new PaymentQrResponseDTO
             {
                 PaymentUrl = createPaymentResult.CheckoutUrl,
-                OrderCode = orderCode.ToString()
+                OrderCode = orderCode.ToString(),
+                PaymentType = transactionType,
+                Amount = amount,
+                BookingId = referenceBookingId
             };
         }
 
-        public async Task ProcessPaymentWebhookAsync(WebhookTopUpDTO webhookData)
+        public async Task ProcessPayOsWebhookAsync(WebhookTopUpDTO webhookData)
         {
-            if (webhookData.Code != "00" || webhookData.Data == null)
+            if (webhookData.Data == null)
             {
-                _logger.LogWarning("Webhook báo lỗi hoặc không có dữ liệu. Code: {Code}", webhookData.Code);
+                _logger.LogWarning("Webhook khong co du lieu. Code: {Code}", webhookData.Code);
                 return;
             }
 
-            var data = webhookData.Data;
+            WebhookData data;
+            try
+            {
+                data = await VerifyPayOsWebhookAsync(webhookData);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Webhook PayOS khong hop le.");
+                throw new UnauthorizedException("Webhook PayOS không hợp lệ.");
+            }
+
+            if (webhookData.Code != "00" || !webhookData.Success)
+            {
+                _logger.LogWarning("Webhook bao thanh toan khong thanh cong. Code: {Code}", webhookData.Code);
+                return;
+            }
+
             var orderCodeStr = data.OrderCode.ToString();
 
             using var dbTransaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
@@ -108,35 +217,68 @@ namespace AutoWashPro.BLL.Services
             {
                 var transaction = await _context.Transactions
                     .Include(t => t.Wallet)
-                    .FirstOrDefaultAsync(t => t.OrderCode == orderCodeStr && t.TransactionType == "Topup");
+                    .FirstOrDefaultAsync(t => t.OrderCode == orderCodeStr);
 
                 if (transaction == null)
                 {
-                    _logger.LogWarning("Không tìm thấy giao dịch với OrderCode: {OrderCode}", data.OrderCode);
+                    _logger.LogWarning("Khong tim thay giao dich voi OrderCode: {OrderCode}", data.OrderCode);
+                    throw new NotFoundException("Không tìm thấy giao dịch PayOS tương ứng với orderCode.");
+                }
+
+                if (transaction.Status != "Pending")
+                {
+                    _logger.LogInformation("Giao dich {OrderCode} dang o trang thai {Status}.", data.OrderCode, transaction.Status);
                     return;
                 }
 
-                if (transaction.Status == "Completed")
+                if (transaction.Amount != data.Amount)
                 {
-                    _logger.LogInformation("Giao dịch {OrderCode} đã được xử lý trước đó.", data.OrderCode);
-                    return;
+                    throw new BadRequestException("Số tiền webhook không khớp với giao dịch đang chờ.");
                 }
 
                 transaction.Status = "Completed";
-                transaction.Description = $"Nạp tiền thành công (Mã: {data.OrderCode})";
-                transaction.Amount = data.Amount; // Ensure amount matches webhook data
+                transaction.Description = transaction.TransactionType == "Topup"
+                    ? $"Nạp tiền thành công (Mã: {data.OrderCode})"
+                    : $"Thanh toán booking thành công (Mã: {data.OrderCode})";
 
-                transaction.Wallet.Balance += data.Amount;
+                if (transaction.TransactionType == "Topup")
+                {
+                    transaction.Wallet.Balance += data.Amount;
+                }
+                else if (transaction.TransactionType == "BookingPayment")
+                {
+                    if (!transaction.ReferenceBookingId.HasValue)
+                        throw new BadRequestException("Giao dịch thanh toán booking thiếu mã booking.");
+
+                    var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.BookingId == transaction.ReferenceBookingId.Value);
+                    if (booking == null)
+                        throw new NotFoundException("Không tìm thấy booking cần xác nhận thanh toán.");
+
+                    booking.UpdatedAt = DateTime.UtcNow;
+
+                    var otherPendingBookingPayments = await _context.Transactions
+                        .Where(t => t.ReferenceBookingId == booking.BookingId
+                                 && t.TransactionId != transaction.TransactionId
+                                 && t.TransactionType == "BookingPayment"
+                                 && t.Status == "Pending")
+                        .ToListAsync();
+
+                    foreach (var pendingPayment in otherPendingBookingPayments)
+                    {
+                        pendingPayment.Status = "Expired";
+                    }
+                }
+                else
+                {
+                    throw new BadRequestException("Loại giao dịch webhook không được hỗ trợ.");
+                }
 
                 await _context.SaveChangesAsync();
                 await dbTransaction.CommitAsync();
-
-                _logger.LogInformation("Cập nhật số dư thành công cho Wallet {WalletId}. Số tiền: {Amount}", transaction.WalletId, data.Amount);
             }
-            catch (Exception ex)
+            catch
             {
                 await dbTransaction.RollbackAsync();
-                _logger.LogError(ex, "Lỗi khi xử lý webhook thanh toán cho OrderCode: {OrderCode}", data.OrderCode);
                 throw;
             }
         }
@@ -155,6 +297,9 @@ namespace AutoWashPro.BLL.Services
                     Amount = t.Amount,
                     TransactionType = t.TransactionType,
                     Description = t.Description,
+                    Status = t.Status,
+                    OrderCode = t.OrderCode,
+                    ReferenceBookingId = t.ReferenceBookingId,
                     CreatedAt = t.CreatedAt
                 }).ToListAsync();
         }
@@ -261,7 +406,7 @@ namespace AutoWashPro.BLL.Services
                 // LUỒNG 2: Danh vọng (Cộng thẳng vào điểm xét hạng năm nay)
                 profile.CurrentYearTierPoints += pointsEarned;
 
-                await _tierService.EvaluateTierForProfileAsync(userId);
+                await _tierService.EvaluateTierForProfileAsync(profile);
 
                 await _context.SaveChangesAsync();
                 return pointsEarned;
@@ -292,6 +437,89 @@ namespace AutoWashPro.BLL.Services
 
             _context.Transactions.Add(transaction);
             await _context.SaveChangesAsync();
+        }
+
+        private static long GenerateOrderCode()
+        {
+            var timestampPart = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % 1_000_000_000_000;
+            var randomPart = Random.Shared.Next(10, 99);
+            return timestampPart * 100 + randomPart;
+        }
+
+        private static string NormalizePaymentType(string paymentType)
+        {
+            if (string.Equals(paymentType, "Topup", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(paymentType, "TopUp", StringComparison.OrdinalIgnoreCase))
+                return "Topup";
+
+            if (string.Equals(paymentType, "BookingPayment", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(paymentType, "Booking", StringComparison.OrdinalIgnoreCase))
+                return "BookingPayment";
+
+            throw new BadRequestException("PaymentType chỉ hỗ trợ Topup hoặc BookingPayment.");
+        }
+
+        private Task<bool> HasCompletedBookingPaymentAsync(int bookingId)
+        {
+            return _context.Transactions.AnyAsync(t =>
+                t.ReferenceBookingId == bookingId
+                && t.Status == "Completed"
+                && (t.TransactionType == "Payment" || t.TransactionType == "BookingPayment"));
+        }
+
+        private async Task<WebhookData> VerifyPayOsWebhookAsync(WebhookTopUpDTO webhookData)
+        {
+            var data = new WebhookData
+            {
+                OrderCode = webhookData.Data!.OrderCode,
+                Amount = webhookData.Data.Amount,
+                Description = webhookData.Data.Description,
+                AccountNumber = webhookData.Data.AccountNumber ?? "",
+                Reference = webhookData.Data.Reference ?? "",
+                TransactionDateTime = webhookData.Data.TransactionDateTime ?? "",
+                Currency = webhookData.Data.Currency ?? "VND",
+                PaymentLinkId = webhookData.Data.PaymentLinkId ?? "",
+                Code = webhookData.Data.Code ?? ""
+            };
+
+            SetWebhookDataPropertyIfExists(data, "Desc", webhookData.Data.Desc ?? "");
+            SetWebhookDataPropertyIfExists(data, "VirtualAccountNumber", webhookData.Data.VirtualAccountNumber ?? "");
+            SetWebhookDataPropertyIfExists(data, "CounterAccountBankId", webhookData.Data.CounterAccountBankId ?? "");
+            SetWebhookDataPropertyIfExists(data, "CounterAccountBankName", webhookData.Data.CounterAccountBankName ?? "");
+            SetWebhookDataPropertyIfExists(data, "CounterAccountName", webhookData.Data.CounterAccountName ?? "");
+            SetWebhookDataPropertyIfExists(data, "CounterAccountNumber", webhookData.Data.CounterAccountNumber ?? "");
+            SetWebhookDataPropertyIfExists(data, "VirtualAccountName", webhookData.Data.VirtualAccountName ?? "");
+
+            var webhook = new Webhook
+            {
+                Code = webhookData.Code,
+                Description = webhookData.Desc ?? webhookData.Description ?? "",
+                Success = webhookData.Success,
+                Signature = webhookData.Signature,
+                Data = data
+            };
+
+            SetWebhookPropertyIfExists(webhook, "Desc", webhookData.Desc ?? webhookData.Description ?? "");
+
+            return await _payOSClient.Webhooks.VerifyAsync(webhook);
+        }
+
+        private static void SetWebhookPropertyIfExists(Webhook webhook, string propertyName, string value)
+        {
+            var property = typeof(Webhook).GetProperty(propertyName);
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(webhook, value);
+            }
+        }
+
+        private static void SetWebhookDataPropertyIfExists(WebhookData data, string propertyName, string value)
+        {
+            var property = typeof(WebhookData).GetProperty(propertyName);
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(data, value);
+            }
         }
     }
 }

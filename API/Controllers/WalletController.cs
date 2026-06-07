@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using AutoWashPro.BLL.DTOs;
 using AutoWashPro.BLL.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -35,13 +33,13 @@ namespace AutoWashPro.API.Controllers
         {
             var userId = ClaimHelper.GetUserId(User);
             var result = await _walletService.CreateTopUpLinkAsync(userId, request);
-            return Ok(new { statusCode = 200, message = "Success", data = result });
+            return Ok(new { statusCode = 200, message = "Tạo QR nạp tiền thành công.", data = result });
         }
 
         [HttpPost("top-up/callback")]
-        public async Task<IActionResult> PayOSWebhook([FromBody] WebhookTopUpDTO webhookData)
+        public async Task<IActionResult> PayOsTopUpCallback([FromBody] WebhookTopUpDTO webhookData)
         {
-            await _walletService.ProcessPaymentWebhookAsync(webhookData);
+            await _walletService.ProcessPayOsWebhookAsync(webhookData);
             return Ok(new { statusCode = 200, message = "Success" });
         }
     }

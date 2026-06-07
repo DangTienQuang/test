@@ -1,6 +1,6 @@
 using System;
 
-namespace AutoWashPro.BLL.Helpers
+namespace BLL.Helpers
 {
     public static class DateTimeExtensions
     {

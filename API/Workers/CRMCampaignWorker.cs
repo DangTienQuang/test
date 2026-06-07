@@ -1,11 +1,8 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+using AutoWashPro.BLL.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using AutoWashPro.BLL.Services;
-using AutoWashPro.BLL.Helpers;
 
 namespace AutoWashPro.API.Workers
 {
@@ -13,42 +10,73 @@ namespace AutoWashPro.API.Workers
     {
         private readonly ILogger<CRMCampaignWorker> _logger;
         private readonly IServiceProvider _serviceProvider;
+        private readonly IConfiguration _configuration;
 
-        public CRMCampaignWorker(ILogger<CRMCampaignWorker> logger, IServiceProvider serviceProvider)
+        public CRMCampaignWorker(ILogger<CRMCampaignWorker> logger, IServiceProvider serviceProvider, IConfiguration configuration)
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
+            _configuration = configuration;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("CRM Campaign Worker bắt đầu khởi chạy.");
+            _logger.LogInformation("CRM Campaign Worker started.");
+            var intervalSeconds = _configuration.GetValue<int?>("VoucherCampaignWorker:IntervalSeconds");
+
+            if (intervalSeconds.HasValue && intervalSeconds.Value > 0)
+            {
+                await ExecuteIntervalModeAsync(TimeSpan.FromSeconds(intervalSeconds.Value), stoppingToken);
+                return;
+            }
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 var now = DateTime.UtcNow;
 
-                if (now.Hour == 17 && now.Minute == 0) // Chạy vào lúc 0h00 giờ VN (UTC+7) -> 17h00 UTC
+                if (now.Hour == 17 && now.Minute == 0)
                 {
-                    _logger.LogInformation("Đến giờ chạy CRM Campaign hằng ngày...");
-
-                    try
-                    {
-                        using var scope = _serviceProvider.CreateScope();
-                        var campaignService = scope.ServiceProvider.GetRequiredService<ICRMCampaignService>();
-
-                        await campaignService.RunBirthdayCampaignAsync();
-                        await campaignService.RunWinbackCampaignAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Lỗi khi chạy CRM Campaign Worker.");
-                    }
-
-                    await Task.Delay(TimeSpan.FromHours(23), stoppingToken); // Chờ 23h để tránh chạy lại trong cùng 1 phút, sau đó vòng lặp sẽ check mỗi phút
+                    await ProcessDailyCampaignsAsync();
+                    await Task.Delay(TimeSpan.FromHours(23), stoppingToken);
                 }
 
                 await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+            }
+        }
+
+        private async Task ExecuteIntervalModeAsync(TimeSpan interval, CancellationToken stoppingToken)
+        {
+            _logger.LogInformation("CRM Campaign Worker interval mode enabled. Interval: {IntervalSeconds}s", interval.TotalSeconds);
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await ProcessDailyCampaignsAsync();
+                await Task.Delay(interval, stoppingToken);
+            }
+        }
+
+        private async Task ProcessDailyCampaignsAsync()
+        {
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var campaignService = scope.ServiceProvider.GetRequiredService<IVoucherCampaignService>();
+                var results = await campaignService.ProcessDailyCampaignsAsync();
+
+                foreach (var result in results)
+                {
+                    _logger.LogInformation(
+                        "Processed voucher campaign {CampaignType}/{Code}: scanned={Scanned}, granted={Granted}, skipped={Skipped}",
+                        result.CampaignType,
+                        result.VoucherCode,
+                        result.ScannedUsers,
+                        result.GrantedCount,
+                        result.SkippedCount);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while processing daily voucher campaigns.");
             }
         }
     }

@@ -17,10 +17,11 @@ namespace AutoWashPro.BLL.Services
 
         private readonly IEmailService _emailService;
         private readonly IPhotoService _photoService;
-        public VehicleService(AutoWashDbContext context, IPhotoService photoService)
+        public VehicleService(AutoWashDbContext context, IPhotoService photoService, IEmailService emailService)
         {
             _context = context;
             _photoService = photoService;
+            _emailService = emailService;
         }
 
         public async Task<List<VehicleDTO>> GetMyVehiclesAsync(int userId)

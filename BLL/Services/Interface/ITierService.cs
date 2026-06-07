@@ -11,6 +11,6 @@ namespace AutoWashPro.BLL.Services
 
         Task<TierResponseDTO> UpdateTierAsync(int id, UpdateTierDTO request);
         Task<TierUpgradeResultDTO?> EvaluateAndUpgradeTierAsync(int userId);
-        Task<TierUpgradeResultDTO?> EvaluateTierForProfileAsync(int userId);
+        Task<TierUpgradeResultDTO?> EvaluateTierForProfileAsync(AutoWashPro.DAL.Entities.CustomerProfile profile);
     }
 }

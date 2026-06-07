@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoWashPro.BLL.Helpers;
+using BLL.Helpers;
 
 namespace AutoWashPro.BLL.Services
 {

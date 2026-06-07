@@ -84,7 +84,19 @@ namespace AutoWashPro.API.Controllers
         {
             int userId = GetUserId();
             var result = await _bookingService.CreateBookingAsync(userId, request);
-            return Created("", new { statusCode = 201, message = "Đặt lịch và thanh toán cọc thành công.", data = result });
+            var message = string.Equals(request.PaymentMethod, "PayOS", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(request.PaymentMethod, "QR", StringComparison.OrdinalIgnoreCase)
+                ? "Đặt lịch thành công. Vui lòng tạo QR để thanh toán."
+                : "Đặt lịch và thanh toán bằng ví thành công.";
+            return Created("", new { statusCode = 201, message, data = result });
+        }
+
+        [HttpPost("{id}/payment-link")]
+        public async Task<IActionResult> CreateBookingPaymentLink(int id, [FromBody] CreateBookingPaymentLinkDTO request)
+        {
+            int userId = GetUserId();
+            var result = await _bookingService.CreateBookingPaymentLinkAsync(userId, id, request);
+            return Ok(new { statusCode = 200, message = "Tạo QR thanh toán booking thành công.", data = result });
         }
 
         [Authorize(Roles = "Staff,Manager,Admin")]

@@ -9,7 +9,7 @@ namespace AutoWashPro.API.Controllers
 {
     [Route("api/v1/admin/users")]
     [ApiController]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Manager,Staff")]
     public class AdminUserController : ControllerBase
     {
         private readonly IUserService _userService;

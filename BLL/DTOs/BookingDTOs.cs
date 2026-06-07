@@ -91,6 +91,27 @@ namespace AutoWashPro.BLL.DTOs
         public int PointsToUse { get; set; } = 0;
 
         public int? VoucherId { get; set; }
+
+        public string PaymentMethod { get; set; } = "Wallet";
+    }
+
+    public class CreateBookingPaymentLinkDTO
+    {
+        [Required]
+        [MaxLength(2000)]
+        public required string CancelUrl { get; set; }
+
+        [Required]
+        [MaxLength(2000)]
+        public required string ReturnUrl { get; set; }
+    }
+
+    public class BookingPaymentLinkResponseDTO
+    {
+        public required string PaymentUrl { get; set; }
+        public required string OrderCode { get; set; }
+        public int BookingId { get; set; }
+        public decimal Amount { get; set; }
     }
 
     public class CreateWalkInBookingDTO

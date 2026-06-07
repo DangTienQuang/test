@@ -24,5 +24,10 @@ namespace AutoWashPro.DAL.Entities
 
         public bool IsUsed { get; set; }
         public DateTime? UsedDate { get; set; }
+        public int UsageCount { get; set; } = 0;
+        public DateTime ReceivedDate { get; set; } = DateTime.UtcNow;
+        public DateTime ExpiryDate { get; set; }
+        public DateTime? LastUsedDate { get; set; }
+        public string? TriggerKey { get; set; }
     }
 }

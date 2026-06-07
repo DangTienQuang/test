@@ -26,6 +26,12 @@ namespace AutoWashPro.DAL.Data
         public DbSet<DailySlotCapacity> DailySlotCapacities { get; set; }
         public DbSet<AIConversationLog> AIConversationLogs { get; set; }
         public DbSet<AIKnowledgeBase> AIKnowledgeBases { get; set; }
+        public DbSet<StaffProfile> StaffProfiles { get; set; }
+        public DbSet<ManagerProfile> ManagerProfiles { get; set; }
+        public DbSet<WorkShift> WorkShifts { get; set; }
+        public DbSet<StaffShiftAssignment> StaffShiftAssignments { get; set; }
+        public DbSet<OvertimeRequest> OvertimeRequests { get; set; }
+        public DbSet<ShiftSwapRequest> ShiftSwapRequests { get; set; }
         public DbSet<CarModel> CarModels { get; set; }
         public DbSet<Branch> Branches { get; set; }
         public DbSet<Lane> Lanes { get; set; }
@@ -49,10 +55,62 @@ namespace AutoWashPro.DAL.Data
                 .HasIndex(u => u.PhoneNumber)
                 .IsUnique();
 
+            modelBuilder.Entity<Voucher>()
+                .HasIndex(v => v.Code)
+                .IsUnique();
+
+            modelBuilder.Entity<UserVoucher>()
+                .HasIndex(uv => new { uv.UserId, uv.VoucherId, uv.TriggerKey })
+                .IsUnique();
+
             modelBuilder.Entity<User>()
                 .HasOne(u => u.CustomerProfile)
                 .WithOne(c => c.User)
                 .HasForeignKey<CustomerProfile>(c => c.UserId);
+
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.StaffProfile)
+                .WithOne(s => s.User)
+                .HasForeignKey<StaffProfile>(s => s.UserId);
+
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.ManagerProfile)
+                .WithOne(m => m.User)
+                .HasForeignKey<ManagerProfile>(m => m.UserId);
+
+            modelBuilder.Entity<StaffShiftAssignment>()
+                .HasIndex(s => new { s.StaffUserId, s.WorkShiftId, s.WorkDate })
+                .IsUnique();
+
+            modelBuilder.Entity<StaffShiftAssignment>()
+                .HasOne(s => s.StaffUser)
+                .WithMany()
+                .HasForeignKey(s => s.StaffUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<StaffShiftAssignment>()
+                .HasOne(s => s.WorkShift)
+                .WithMany(w => w.Assignments)
+                .HasForeignKey(s => s.WorkShiftId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<OvertimeRequest>()
+                .HasOne(o => o.StaffUser)
+                .WithMany()
+                .HasForeignKey(o => o.StaffUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ShiftSwapRequest>()
+                .HasOne(s => s.FromAssignment)
+                .WithMany()
+                .HasForeignKey(s => s.FromAssignmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ShiftSwapRequest>()
+                .HasOne(s => s.ToAssignment)
+                .WithMany()
+                .HasForeignKey(s => s.ToAssignmentId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<User>()
                 .HasOne(u => u.EmployeeProfile)

@@ -20,14 +20,22 @@ namespace AutoWashPro.DAL.Entities
 
         public decimal DiscountAmount { get; set; }
         public int MaxUsages { get; set; }
+        public int CurrentUsageCount { get; set; } = 0;
+        public int MaxUsagePerUser { get; set; } = 1;
 
         public DateTime ExpiryDate { get; set; }
+        public int? ExpiryDays { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public bool IsActive { get; set; } = true;
 
         public int PointsRequired { get; set; }
 
         public AutoWashPro.DAL.Enums.VoucherType VoucherType { get; set; } = AutoWashPro.DAL.Enums.VoucherType.Discount;
+        public AutoWashPro.DAL.Enums.VoucherCampaignType CampaignType { get; set; } = AutoWashPro.DAL.Enums.VoucherCampaignType.Manual;
 
         public string? ImageUrl { get; set; }
+        public decimal MinOrderAmount { get; set; } = 0;
 
         public int? RequiredTierId { get; set; }
 
@@ -36,5 +44,9 @@ namespace AutoWashPro.DAL.Entities
 
         public TimeSpan? ValidStartTime { get; set; }
         public TimeSpan? ValidEndTime { get; set; }
+        public int? TargetAge { get; set; }
+        public int? InactiveDays { get; set; }
+        public int? ResendAfterDays { get; set; }
+        public int? MilestoneUsageCount { get; set; }
     }
 }

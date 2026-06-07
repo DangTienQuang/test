@@ -21,19 +21,35 @@ namespace AutoWashPro.BLL.Services
     {
         private readonly AutoWashDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IEmailService _emailService;
 
-        public AuthService(AutoWashDbContext context, IConfiguration configuration)
+        public AuthService(AutoWashDbContext context, IConfiguration configuration, IEmailService emailService)
         {
             _context = context;
             _configuration = configuration;
+            _emailService = emailService;
         }
-        public async Task<AuthResponseDTO> RegisterAsync(RegisterDTO request)
+        public async Task<RegisterPendingResponseDTO> RegisterAsync(RegisterDTO request)
         {
             using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
             try
             {
-                var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber);
-                if (existingUser != null) throw new BadRequestException("Số điện thoại này đã được đăng ký.");
+                var normalizedEmail = request.Email.Trim().ToLower();
+                var existingUser = await _context.Users
+                    .Include(u => u.CustomerProfile)
+                    .FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber || (u.Email != null && u.Email.ToLower() == normalizedEmail));
+
+                if (existingUser != null && existingUser.Status != UserStatuses.Pending)
+                {
+                    if (existingUser.PhoneNumber == request.PhoneNumber) throw new BadRequestException("Số điện thoại này đã được đăng ký.");
+                    throw new BadRequestException("Email này đã được đăng ký.");
+                }
+
+                var emailUsedByOtherUser = await _context.Users.AnyAsync(u =>
+                    u.Email != null
+                    && u.Email.ToLower() == normalizedEmail
+                    && (existingUser == null || u.UserId != existingUser.UserId));
+                if (emailUsedByOtherUser) throw new BadRequestException("Email này đã được đăng ký.");
 
                 var defaultTier = await _context.Tiers.FirstOrDefaultAsync(t => t.MinAccumulatedPoints == 0);
 
@@ -50,44 +66,80 @@ namespace AutoWashPro.BLL.Services
                     await _context.SaveChangesAsync();
                 }
 
-                var user = new User
+                var otp = GenerateOtp();
+                var otpHash = HashOtp(otp);
+                var otpExpiresAt = DateTime.UtcNow.AddMinutes(10);
+
+                User user;
+                if (existingUser != null)
                 {
-                    PhoneNumber = request.PhoneNumber,
-                    Email = request.Email,
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                    Role = UserRoles.Customer,
-                    Status = UserStatuses.Active 
-                };
-                _context.Users.Add(user);
+                    if (existingUser.PhoneNumber != request.PhoneNumber && string.Equals(existingUser.Email, normalizedEmail, StringComparison.OrdinalIgnoreCase))
+                        throw new BadRequestException("Email này đang chờ xác thực cho tài khoản khác.");
+
+                    user = existingUser;
+                    user.Email = normalizedEmail;
+                    user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+                    user.Role = UserRoles.Customer;
+                    user.Status = UserStatuses.Pending;
+                    user.EmailVerificationOtpHash = otpHash;
+                    user.EmailVerificationOtpExpiresAt = otpExpiresAt;
+
+                    if (user.CustomerProfile != null)
+                    {
+                        user.CustomerProfile.FullName = request.FullName;
+                    }
+                }
+                else
+                {
+                    user = new User
+                    {
+                        PhoneNumber = request.PhoneNumber,
+                        Email = normalizedEmail,
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                        Role = UserRoles.Customer,
+                        Status = UserStatuses.Pending,
+                        EmailVerificationOtpHash = otpHash,
+                        EmailVerificationOtpExpiresAt = otpExpiresAt
+                    };
+                    _context.Users.Add(user);
+                    await _context.SaveChangesAsync();
+
+                    var profile = new CustomerProfile
+                    {
+                        UserId = user.UserId,
+                        FullName = request.FullName,
+                        TierId = defaultTier.TierId,
+                        ChurnScore = 0,
+                        TotalPoint = 0,
+                        PromotionPoint = 0
+                    };
+                    _context.CustomerProfiles.Add(profile);
+
+                    var wallet = new Wallet
+                    {
+                        UserId = user.UserId,
+                        Balance = 0,
+                        Status = "Active"
+                    };
+                    _context.Wallets.Add(wallet);
+                }
+
                 await _context.SaveChangesAsync();
-
-                var profile = new CustomerProfile
-                {
-                    UserId = user.UserId,
-                    FullName = request.FullName,
-                    TierId = defaultTier.TierId,
-                    ChurnScore = 0,
-                    TotalPoint = 0,
-                    PromotionPoint = 0
-                };
-                _context.CustomerProfiles.Add(profile);
-
-                var wallet = new Wallet
-                {
-                    UserId = user.UserId,
-                    Balance = 0,
-                    Status = "Active"
-                };
-                _context.Wallets.Add(wallet);
-
-                await _context.SaveChangesAsync();
+                await SendRegistrationOtpEmailAsync(normalizedEmail, request.FullName, otp, otpExpiresAt);
                 await transaction.CommitAsync();
-                return await LoginAsync(new LoginDTO { PhoneOrEmail = request.PhoneNumber, Password = request.Password });
+
+                return new RegisterPendingResponseDTO
+                {
+                    UserId = user.UserId,
+                    Email = normalizedEmail,
+                    Status = user.Status,
+                    OtpExpiresAt = otpExpiresAt
+                };
             }
             catch (DbUpdateException)
             {
                 await transaction.RollbackAsync();
-                throw new BadRequestException("Số điện thoại này đã được đăng ký.");
+                throw new BadRequestException("Số điện thoại hoặc email này đã được đăng ký.");
             }
             catch
             {
@@ -100,12 +152,17 @@ namespace AutoWashPro.BLL.Services
             var loginInput = request.PhoneOrEmail.Trim().ToLower();
             var user = await _context.Users
                 .Include(u => u.CustomerProfile)
+                .Include(u => u.StaffProfile)
+                .Include(u => u.ManagerProfile)
                 .FirstOrDefaultAsync(u => u.PhoneNumber == loginInput || (u.Email != null && u.Email.ToLower() == loginInput));
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
                 throw new UnauthorizedException("Số điện thoại/Email hoặc mật khẩu không chính xác.");
 
-            if (user.Status != "Active")
+            if (user.Status == UserStatuses.Pending)
+                throw new UnauthorizedException("Tài khoản chưa xác thực email. Vui lòng nhập mã OTP đã gửi tới email.");
+
+            if (user.Status != UserStatuses.Active)
                 throw new UnauthorizedException("Tài khoản đã bị khóa hoặc không hoạt động.");
 
             var token = CreateJwtToken(user);
@@ -113,6 +170,44 @@ namespace AutoWashPro.BLL.Services
 
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            await _context.SaveChangesAsync();
+
+            return new AuthResponseDTO
+            {
+                UserId = user.UserId,
+                PhoneNumber = user.PhoneNumber,
+                FullName = GetFullName(user),
+                Role = user.Role,
+                Token = token,
+                RefreshToken = refreshToken
+            };
+        }
+
+        public async Task<AuthResponseDTO> VerifyOtpAsync(VerifyOtpDTO request)
+        {
+            var normalizedEmail = request.Email.Trim().ToLower();
+            var user = await _context.Users
+                .Include(u => u.CustomerProfile)
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == normalizedEmail);
+
+            if (user == null) throw new NotFoundException("Không tìm thấy tài khoản với email này.");
+            if (user.Status != UserStatuses.Pending) throw new BadRequestException("Tài khoản này không ở trạng thái chờ xác thực.");
+            if (string.IsNullOrWhiteSpace(user.EmailVerificationOtpHash) || user.EmailVerificationOtpExpiresAt == null)
+                throw new BadRequestException("Tài khoản chưa có mã OTP xác thực. Vui lòng đăng ký lại.");
+            if (user.EmailVerificationOtpExpiresAt <= DateTime.UtcNow)
+                throw new BadRequestException("Mã OTP đã hết hạn. Vui lòng đăng ký lại để nhận mã mới.");
+            if (!string.Equals(user.EmailVerificationOtpHash, HashOtp(request.Otp), StringComparison.Ordinal))
+                throw new BadRequestException("Mã OTP không chính xác.");
+
+            user.Status = UserStatuses.Active;
+            user.EmailVerificationOtpHash = null;
+            user.EmailVerificationOtpExpiresAt = null;
+
+            var token = CreateJwtToken(user);
+            var refreshToken = GenerateRefreshToken();
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+
             await _context.SaveChangesAsync();
 
             return new AuthResponseDTO
@@ -137,6 +232,8 @@ namespace AutoWashPro.BLL.Services
             int userId = int.Parse(userIdClaim);
             var user = await _context.Users
                 .Include(u => u.CustomerProfile)
+                .Include(u => u.StaffProfile)
+                .Include(u => u.ManagerProfile)
                 .FirstOrDefaultAsync(u => u.UserId == userId);
 
             if (user == null || user.RefreshToken != request.RefreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
@@ -152,7 +249,7 @@ namespace AutoWashPro.BLL.Services
             {
                 UserId = user.UserId,
                 PhoneNumber = user.PhoneNumber,
-                FullName = user.CustomerProfile?.FullName,
+                FullName = GetFullName(user),
                 Role = user.Role,
                 Token = newAccessToken,
                 RefreshToken = newRefreshToken
@@ -195,6 +292,20 @@ namespace AutoWashPro.BLL.Services
             return tokenHandler.WriteToken(token);
         }
 
+        private static string GetFullName(User user)
+        {
+            return user.Role switch
+            {
+                UserRoles.Manager => user.ManagerProfile?.FullName ?? user.PhoneNumber,
+                UserRoles.Staff => user.StaffProfile?.FullName ?? user.PhoneNumber,
+                UserRoles.Customer => user.CustomerProfile?.FullName ?? user.PhoneNumber,
+                _ => user.CustomerProfile?.FullName
+                    ?? user.ManagerProfile?.FullName
+                    ?? user.StaffProfile?.FullName
+                    ?? user.PhoneNumber
+            };
+        }
+
         private string GenerateRefreshToken()
         {
             var randomNumber = new byte[32];
@@ -203,6 +314,33 @@ namespace AutoWashPro.BLL.Services
                 rng.GetBytes(randomNumber);
                 return Convert.ToBase64String(randomNumber);
             }
+        }
+
+        private string GenerateOtp()
+        {
+            return RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        }
+
+        private string HashOtp(string otp)
+        {
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(otp));
+            return Convert.ToHexString(bytes);
+        }
+
+        private Task SendRegistrationOtpEmailAsync(string email, string fullName, string otp, DateTime otpExpiresAt)
+        {
+            var html = $@"
+                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;'>
+                    <h2 style='color: #007bff; text-align: center;'>SMARTWASH XÁC THỰC EMAIL</h2>
+                    <p>Xin chào <b>{fullName}</b>,</p>
+                    <p>Mã OTP đăng ký tài khoản SmartWash của bạn là:</p>
+                    <div style='font-size: 32px; font-weight: bold; letter-spacing: 6px; text-align: center; padding: 16px; background: #f3f7ff; border-radius: 8px;'>{otp}</div>
+                    <p>Mã này có hiệu lực trong 10 phút, đến <b>{otpExpiresAt.ToLocalTime():dd/MM/yyyy HH:mm}</b>.</p>
+                    <p>Nếu bạn không thực hiện đăng ký, vui lòng bỏ qua email này.</p>
+                    <p>Trân trọng,<br><b>Đội ngũ SmartWash</b></p>
+                </div>";
+
+            return _emailService.SendEmailAsync(email, "[SmartWash] Mã OTP xác thực đăng ký", html);
         }
 
         private ClaimsPrincipal GetPrincipalFromExpiredToken(string token)

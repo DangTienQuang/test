@@ -1,6 +1,7 @@
-using AutoWashPro.BLL.Constants;
+﻿using AutoWashPro.BLL.Constants;
 using AutoWashPro.BLL.DTOs;
 using AutoWashPro.BLL.Exceptions;
+using BLL.Helpers;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -24,7 +25,7 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<StaffLaneTaskDTO?> GetTodayLaneAssignmentAsync(int staffUserId)
         {
-            var today = DateTime.UtcNow.Date; // Should use VN time normally, simplifying for now
+            var today = DateTime.UtcNow.Date;
 
             var assignment = await _context.StaffLaneAssignments
                 .Include(a => a.Lane)
@@ -42,11 +43,44 @@ namespace AutoWashPro.BLL.Services
             };
         }
 
+        public async Task<bool> CheckInBookingAsync(int staffUserId, int bookingId)
+        {
+            var today = System.DateTime.UtcNow.ToVnTime().Date;
+            var assignment = await _context.StaffLaneAssignments
+                .Where(a => a.StaffId == staffUserId && a.AssignedDate == today)
+                .OrderByDescending(a => a.AssignmentId)
+                .FirstOrDefaultAsync();
+
+            if (assignment == null)
+            {
+                throw new BadRequestException("Bạn chưa được phân công vào làn nào trong hôm nay. Không thể check-in.");
+            }
+
+            var booking = await _context.Bookings
+                .FirstOrDefaultAsync(b => b.BookingId == bookingId);
+
+            if (booking == null)
+            {
+                throw new NotFoundException("Không tìm thấy thông tin đặt lịch.");
+            }
+
+            if (booking.Status != "Pending")
+            {
+                throw new BadRequestException("Chỉ có thể check-in cho xe đang ở trạng thái chờ (Pending).");
+            }
+
+            booking.ProcessingLaneId = assignment.LaneId;
+            booking.ProcessingStaffId = staffUserId;
+            booking.Status = "CheckedIn";
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<List<StaffBookingDTO>> GetAssignedBookingsAsync(int staffUserId)
         {
             var today = DateTime.UtcNow.Date;
 
-            // Find lane assignment for today
             var assignment = await _context.StaffLaneAssignments
                 .Where(a => a.StaffId == staffUserId && a.AssignedDate == today)
                 .FirstOrDefaultAsync();
@@ -56,14 +90,12 @@ namespace AutoWashPro.BLL.Services
                 return new List<StaffBookingDTO>();
             }
 
-            // Find all bookings assigned to this lane and staff
             var bookings = await _context.Bookings
                 .Include(b => b.BookingDetails)
                 .ThenInclude(d => d.Service)
                 .Include(b => b.ActualVehicleType)
                 .Where(b => b.ProcessingLaneId == assignment.LaneId
-                         && (b.ProcessingStaffId == staffUserId || b.ProcessingStaffId == null) // Show checked-in cars assigned to lane, or cars already processing by this staff
-                         && b.ScheduledTime.Date == today
+                         && (b.ProcessingStaffId == staffUserId || b.ProcessingStaffId == null)
                          && (b.Status == "CheckedIn" || b.Status == "Processing"))
                 .ToListAsync();
 
@@ -88,8 +120,6 @@ namespace AutoWashPro.BLL.Services
                 .FirstOrDefaultAsync(b => b.BookingId == bookingId);
 
             if (booking == null) throw new NotFoundException("Booking not found.");
-
-            // Assign staff if they are starting the process
             if (newStatus == "Processing")
             {
                  if (booking.Status != "CheckedIn" && booking.Status != "Processing")
@@ -108,7 +138,6 @@ namespace AutoWashPro.BLL.Services
 
             booking.Status = newStatus;
 
-            // Trigger completion logic if applicable (e.g. points calculation)
             if (newStatus == "Completed" && booking.UserId > 0)
             {
                  var userProfile = await _context.CustomerProfiles

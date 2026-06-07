@@ -30,6 +30,25 @@ namespace AutoWashPro.BLL.DTOs
         public string Password { get; set; }
     }
 
+    public class RegisterPendingResponseDTO
+    {
+        public int UserId { get; set; }
+        public string Email { get; set; }
+        public string Status { get; set; }
+        public DateTime OtpExpiresAt { get; set; }
+    }
+
+    public class VerifyOtpDTO
+    {
+        [Required(ErrorMessage = "Email không được để trống.")]
+        [EmailAddress(ErrorMessage = "Email không đúng định dạng.")]
+        public string Email { get; set; }
+
+        [Required(ErrorMessage = "Mã OTP không được để trống.")]
+        [RegularExpression(@"^\d{6}$", ErrorMessage = "Mã OTP phải gồm 6 chữ số.")]
+        public string Otp { get; set; }
+    }
+
     public class AuthResponseDTO
     {
         public int UserId { get; set; }
