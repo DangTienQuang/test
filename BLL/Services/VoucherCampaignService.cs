@@ -115,7 +115,7 @@ namespace AutoWashPro.BLL.Services
             var eligibleUsers = await GetEligibleUsersAsync(campaign, targetDate, specificUserId);
             var result = new VoucherCampaignProcessResultDTO
             {
-                CampaignType = campaign.CampaignType,
+                CampaignType = (AutoWashPro.BLL.Enums.VoucherCampaignTypeEnum)campaign.CampaignType,
                 VoucherCode = campaign.Code,
                 ScannedUsers = eligibleUsers.Count
             };

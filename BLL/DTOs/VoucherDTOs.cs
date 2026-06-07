@@ -19,8 +19,8 @@ namespace AutoWashPro.BLL.DTOs
         public int RemainingUsage { get; set; }
         public decimal MinOrderAmount { get; set; }
         public bool IsActive { get; set; }
-        public AutoWashPro.DAL.Enums.VoucherCampaignType CampaignType { get; set; }
-        public AutoWashPro.DAL.Enums.VoucherType VoucherType { get; set; }
+        public AutoWashPro.BLL.Enums.VoucherCampaignTypeEnum CampaignType { get; set; }
+        public AutoWashPro.BLL.Enums.VoucherTypeEnum VoucherType { get; set; }
         public string? ImageUrl { get; set; }
         public int? RequiredTierId { get; set; }
         public string? RequiredTierName { get; set; }
@@ -58,8 +58,8 @@ namespace AutoWashPro.BLL.DTOs
         public bool IsActive { get; set; }
         public DateTime? StartDate { get; set; }
         public int? ExpiryDays { get; set; }
-        public AutoWashPro.DAL.Enums.VoucherCampaignType CampaignType { get; set; }
-        public AutoWashPro.DAL.Enums.VoucherType VoucherType { get; set; }
+        public AutoWashPro.BLL.Enums.VoucherCampaignTypeEnum CampaignType { get; set; }
+        public AutoWashPro.BLL.Enums.VoucherTypeEnum VoucherType { get; set; }
         public string? ImageUrl { get; set; }
         public int? RequiredTierId { get; set; }
         public string? RequiredTierName { get; set; }
@@ -91,7 +91,7 @@ namespace AutoWashPro.BLL.DTOs
         [Range(0, int.MaxValue)]
         public int PointsRequired { get; set; }
 
-        public AutoWashPro.DAL.Enums.VoucherType VoucherType { get; set; } = AutoWashPro.DAL.Enums.VoucherType.Discount;
+        public AutoWashPro.BLL.Enums.VoucherTypeEnum VoucherType { get; set; } = AutoWashPro.BLL.Enums.VoucherTypeEnum.Discount;
         public string? ImageUrl { get; set; }
         [Range(typeof(decimal), "0", "1000000000", ErrorMessage = "Giá trị đơn tối thiểu không hợp lệ.")]
         public decimal MinOrderAmount { get; set; } = 0;
@@ -194,7 +194,7 @@ namespace AutoWashPro.BLL.DTOs
 
     public class VoucherCampaignProcessResultDTO
     {
-        public AutoWashPro.DAL.Enums.VoucherCampaignType CampaignType { get; set; }
+        public AutoWashPro.BLL.Enums.VoucherCampaignTypeEnum CampaignType { get; set; }
         public required string VoucherCode { get; set; }
         public int ScannedUsers { get; set; }
         public int GrantedCount { get; set; }

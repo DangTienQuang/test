@@ -1,4 +1,5 @@
 using AutoWashPro.BLL.DTOs;
+
 using AutoWashPro.BLL.Services;    
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -53,7 +54,7 @@ namespace AutoWashPro.API.Controllers
         }
 
         [HttpPut("{detailId}/report-mismatch")]
-        public async Task<IActionResult> ReportMismatch(int detailId, [FromQuery] AutoWashPro.DAL.Entities.VehicleCondition condition, [FromQuery] int actualTypeId)
+        public async Task<IActionResult> ReportMismatch(int detailId, [FromQuery] AutoWashPro.BLL.Enums.VehicleConditionEnum condition, [FromQuery] int actualTypeId)
         {
             await _bookingService.ReportMismatchAsync(detailId, condition, actualTypeId);
             return Ok(new { statusCode = 200, message = "Đã cập nhật tình trạng xe và tính lại phụ phí thành công." });

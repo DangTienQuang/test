@@ -1,11 +1,9 @@
+using AutoWashPro.BLL.Extensions;
 using AutoWashPro.BLL.Services;
-using AutoWashPro.DAL.Data;
 using BLL.Helpers;
 using BLL.Services;
-using DAL.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using PayOS;
@@ -64,9 +62,7 @@ builder.Services.AddCors(options =>
 // ==============================================================================
 // 3. DATABASE CONFIGURATION
 // ==============================================================================
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-builder.Services.AddDbContext<AutoWashDbContext>(options =>
-    options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 4, 0))));
+builder.Services.AddDatabaseInfrastructure(builder.Configuration);
 
 // ==============================================================================
 // 4. AUTHENTICATION & SECURITY (JWT)
@@ -123,7 +119,8 @@ builder.Services.AddSingleton(sp =>
 
 // 5.2. AI & OCR Models Integration
 var modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Models/license_plate.onnx");
-builder.Services.AddSingleton(new OnnxInferenceEngine(modelPath));
+builder.Services.AddSingleton(new DAL.Data.OnnxInferenceEngine(modelPath));
+
 
 builder.Services.AddSingleton<PaddleOcrService>(sp =>
 {
@@ -166,6 +163,9 @@ builder.Services.AddScoped<IOperationStaffService, OperationStaffService>();
 // 7. BACKGROUND WORKERS
 // ==============================================================================
 builder.Services.AddScoped<IStaffManagementService, StaffManagementService>();
+builder.Services.AddScoped<ICRMCampaignService, CRMCampaignService>();
+builder.Services.AddScoped<IAnnualTierService, AnnualTierService>();
+builder.Services.AddScoped<IDatabaseSeedingService, DatabaseSeedingService>();
 
 builder.Services.AddHostedService<AutoWashPro.API.Workers.AnnualTierResetWorker>();
 builder.Services.AddHostedService<AutoWashPro.API.Workers.CRMCampaignWorker>();
@@ -228,198 +228,10 @@ app.MapControllers();
 // ==============================================================================
 // 10. DATABASE MIGRATION & SEEDING ON STARTUP
 // ==============================================================================
-//using (var scope = app.Services.CreateScope())
-//{
-//    var context = scope.ServiceProvider.GetRequiredService<AutoWashDbContext>();
-
-//    context.Database.Migrate();
-//    SyncCustomerProfilePoints(context);
-
-//    // 10.1 Khởi tạo Hạng (Tier) cơ bản
-//    var firstTier = context.Tiers.FirstOrDefault(t => t.MinAccumulatedPoints == 0);
-//    if (firstTier == null)
-//    {
-//        firstTier = new AutoWashPro.DAL.Entities.Tier
-//        {
-//            TierName = "Standard",
-//            PointMultiplier = 1.0,
-//            BookingWindowDays = 7,
-//            MinAccumulatedPoints = 0
-//        };
-//        context.Tiers.Add(firstTier);
-//        context.SaveChanges();
-//    }
-
-//    // 10.2 Khởi tạo Chi nhánh & Làn rửa xe (Đã sửa theo cấu trúc hiện tại)
-//    var defaultBranch = context.Branches.FirstOrDefault();
-//    if (defaultBranch == null)
-//    {
-//        defaultBranch = new AutoWashPro.DAL.Entities.Branch
-//        {
-//            Name = "Chi nhánh Trung Tâm",
-//            Address = "123 Lê Lợi, Quận 1, TP.HCM",
-//            IsActive = true
-//        };
-//        context.Branches.Add(defaultBranch);
-//        context.SaveChanges();
-
-//        context.Lanes.Add(new AutoWashPro.DAL.Entities.Lane
-//        {
-//            BranchId = defaultBranch.BranchId,
-//            Name = "Làn 1 - VIP",
-//            IsActive = true
-//        });
-//        context.SaveChanges();
-//    }
-
-//    // 10.3 Khởi tạo ADMIN
-//    if (!context.Users.Any(u => u.Role == "Admin"))
-//    {
-//        var admin = new AutoWashPro.DAL.Entities.User
-//        {
-//            PhoneNumber = "0999999999",
-//            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123"),
-//            Role = "Admin",
-//            Status = "Active"
-//        };
-//        context.Users.Add(admin);
-//        context.SaveChanges();
-
-//        context.CustomerProfiles.Add(new AutoWashPro.DAL.Entities.CustomerProfile
-//        {
-//            UserId = admin.UserId,
-//            FullName = "System Admin",
-//            TierId = firstTier.TierId,
-//            ChurnScore = 0,
-//            TotalPoint = 0,
-//            PromotionPoint = 0
-//        });
-//        context.SaveChanges();
-//    }
-
-//    // 10.4 Khởi tạo MANAGER (Thuộc chi nhánh)
-//    if (!context.Users.Any(u => u.Role == "Manager"))
-//    {
-//        var manager = new AutoWashPro.DAL.Entities.User
-//        {
-//            PhoneNumber = "0888888888",
-//            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Manager@123"),
-//            Role = "Manager",
-//            Status = "Active"
-//        };
-//        context.Users.Add(manager);
-//        context.SaveChanges();
-
-//        // Gán vào EmployeeProfile
-//        context.EmployeeProfiles.Add(new AutoWashPro.DAL.Entities.EmployeeProfile
-//        {
-//            EmployeeId = manager.UserId,
-//            BranchId = defaultBranch.BranchId,
-//            FullName = "Quản lý Nguyễn Văn A"
-//        });
-//        context.SaveChanges();
-//    }
-
-//    // 10.5 Khởi tạo STAFF (Thuộc chi nhánh)
-//    if (!context.Users.Any(u => u.Role == "Staff"))
-//    {
-//        var staff = new AutoWashPro.DAL.Entities.User
-//        {
-//            PhoneNumber = "0777777777",
-//            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Staff@123"),
-//            Role = "Staff",
-//            Status = "Active"
-//        };
-//        context.Users.Add(staff);
-//        context.SaveChanges();
-
-//        // Gán vào EmployeeProfile
-//        context.EmployeeProfiles.Add(new AutoWashPro.DAL.Entities.EmployeeProfile
-//        {
-//            EmployeeId = staff.UserId,
-//            BranchId = defaultBranch.BranchId,
-//            FullName = "Nhân viên Trần Văn B"
-//        });
-//        context.SaveChanges();
-//    }
-
-//    // 10.6 Khởi tạo CUSTOMER test với ví 1.000.000đ
-//    if (!context.Users.Any(u => u.Role == "Customer" && u.PhoneNumber == "0666666666"))
-//    {
-//        var customer = new AutoWashPro.DAL.Entities.User
-//        {
-//            PhoneNumber = "0666666666",
-//            PasswordHash = BCrypt.Net.BCrypt.HashPassword("User@123"),
-//            Role = "Customer",
-//            Status = "Active"
-//        };
-//        context.Users.Add(customer);
-//        context.SaveChanges();
-
-//        context.CustomerProfiles.Add(new AutoWashPro.DAL.Entities.CustomerProfile
-//        {
-//            UserId = customer.UserId,
-//            FullName = "Khách Hàng VIP",
-//            TierId = firstTier.TierId,
-//            ChurnScore = 0,
-//            TotalPoint = 0,
-//            PromotionPoint = 0
-//        });
-//        context.SaveChanges();
-
-//        // Nạp sẵn 1 triệu vào ví
-//        var wallet = new AutoWashPro.DAL.Entities.Wallet
-//        {
-//            UserId = customer.UserId,
-//            Balance = 1000000
-//        };
-//        context.Wallets.Add(wallet);
-//        context.SaveChanges();
-
-//        // Ghi lại lịch sử nạp
-//        context.Transactions.Add(new AutoWashPro.DAL.Entities.Transaction
-//        {
-//            WalletId = wallet.WalletId,
-//            Amount = 1000000,
-//            TransactionType = "Topup",
-//            Description = "Hệ thống tặng tiền trải nghiệm",
-//            Status = "Completed"
-//        });
-//        context.SaveChanges();
-//    }
-//}
+using (var scope = app.Services.CreateScope())
+{
+    var seedingService = scope.ServiceProvider.GetRequiredService<IDatabaseSeedingService>();
+    await seedingService.InitializeAndSeedAsync();
+}
 
 app.Run();
-
-// ==============================================================================
-// 11. LOCAL HELPER FUNCTIONS
-// ==============================================================================
-static void SyncCustomerProfilePoints(AutoWashDbContext context)
-{
-    const string completionPrefix = "Hoàn thành dịch vụ";
-    var now = DateTime.UtcNow;
-
-    var profiles = context.CustomerProfiles.ToList();
-    var allLedgers = context.PointLedgers.ToList();
-    var groupedLedgers = allLedgers.GroupBy(p => p.UserId).ToDictionary(g => g.Key, g => g.ToList());
-    foreach (var profile in profiles)
-    {
-        if (!groupedLedgers.TryGetValue(profile.UserId, out var ledgers) || !ledgers.Any()) continue;
-
-        var totalAdded = ledgers
-            .Where(p => p.PointsAdded > 0 && (p.ExpiryDate == null || p.ExpiryDate > now))
-            .Sum(p => p.PointsAdded);
-        var totalDeducted = ledgers.Where(p => p.PointsDeducted > 0).Sum(p => p.PointsDeducted);
-        var promotionFromLedger = ledgers
-            .Where(p => p.PointsAdded > 0 && p.Reason.StartsWith(completionPrefix))
-            .Sum(p => p.PointsAdded);
-
-        if (profile.TotalPoint == 0 && profile.PromotionPoint == 0)
-        {
-            profile.TotalPoint = Math.Max(0, totalAdded - totalDeducted);
-            profile.PromotionPoint = promotionFromLedger;
-        }
-    }
-
-    context.SaveChanges();
-}
