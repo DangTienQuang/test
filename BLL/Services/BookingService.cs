@@ -463,11 +463,11 @@ namespace AutoWashPro.BLL.Services
                 );
 
                 // 4. Gọi Service Gửi mail
-                await _emailService.SendEmailAsync(
+                _ = Task.Run(() => _emailService.SendEmailAsync(
                     booking.User.Email,
                     $"[SmartWash] Đặt lịch thành công - #{booking.BookingId}",
                     emailHtml
-                );
+                ));
 
                 return true;
             }
