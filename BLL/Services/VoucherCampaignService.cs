@@ -192,22 +192,20 @@ namespace AutoWashPro.BLL.Services
             return result;
         }
 
-        private Task SendVoucherEmailAsync(User user, Voucher voucher, DateTime userExpiryDate)
+        private async Task SendVoucherEmailAsync(User user, Voucher voucher, DateTime userExpiryDate)
         {
-            if (string.IsNullOrWhiteSpace(user.Email)) return Task.CompletedTask;
+            if (string.IsNullOrWhiteSpace(user.Email)) return;
 
             try
             {
                 var customerName = user.CustomerProfile?.FullName ?? "Quý khách";
                 var html = EmailTemplateBuilder.BuildVoucherCampaignEmail(voucher, customerName, userExpiryDate);
-                _ = Task.Run(() => _emailService.SendEmailAsync(user.Email, $"[SmartWash] Voucher mới: {voucher.Code}", html));
+                await _emailService.SendEmailAsync(user.Email, $"[SmartWash] Voucher mới: {voucher.Code}", html);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[Voucher email error] User #{user.UserId}, Voucher #{voucher.VoucherId}: {ex.Message}");
             }
-
-            return Task.CompletedTask;
         }
 
         private async Task<List<User>> GetEligibleUsersAsync(Voucher campaign, DateTime targetDate, int? specificUserId)

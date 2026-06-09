@@ -377,8 +377,7 @@ namespace AutoWashPro.BLL.Services
                     <p>Trân trọng,<br><b>Đội ngũ SmartWash</b></p>
                 </div>";
 
-            _ = Task.Run(() => _emailService.SendEmailAsync(email, "[SmartWash] Mã OTP xác thực đăng ký", html));
-            return Task.CompletedTask;
+            return _emailService.SendEmailAsync(email, "[SmartWash] Mã OTP xác thực đăng ký", html);
         }
 
         private ClaimsPrincipal GetPrincipalFromExpiredToken(string token)

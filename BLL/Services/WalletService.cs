@@ -337,10 +337,10 @@ namespace AutoWashPro.BLL.Services
                     booking.BookingDetails.ToList(),
                     customerName);
 
-                _ = Task.Run(() => _emailService.SendEmailAsync(
+                await _emailService.SendEmailAsync(
                     booking.User.Email,
                     $"[SmartWash] Dat lich thanh cong - #{booking.BookingId}",
-                    emailHtml));
+                    emailHtml);
             }
             catch (Exception ex)
             {
