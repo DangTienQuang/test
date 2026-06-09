@@ -20,6 +20,7 @@ namespace AutoWashPro.DAL.Entities
         public Branch Branch { get; set; } = null!;
 
         public bool IsActive { get; set; } = true;
+        public bool IsBusinessLane { get; set; }
 
         public ICollection<StaffLaneAssignment> StaffAssignments { get; set; } = new List<StaffLaneAssignment>();
         public ICollection<Booking> ProcessingBookings { get; set; } = new List<Booking>();

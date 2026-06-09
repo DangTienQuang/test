@@ -26,8 +26,14 @@ namespace AutoWashPro.BLL.Services
             email.Body = builder.ToMessageBody();
 
             using var smtp = new SmtpClient();
-            // Kết nối SMTP của Google
-            await smtp.ConnectAsync(_config["EmailSettings:SmtpServer"], int.Parse(_config["EmailSettings:Port"]), SecureSocketOptions.StartTls);
+
+            smtp.ServerCertificateValidationCallback = (s, c, h, e) => true;
+
+            await smtp.ConnectAsync(
+                _config["EmailSettings:SmtpServer"],
+                int.Parse(_config["EmailSettings:Port"]),
+                SecureSocketOptions.Auto);
+
             await smtp.AuthenticateAsync(_config["EmailSettings:SenderEmail"], _config["EmailSettings:Password"]);
 
             await smtp.SendAsync(email);

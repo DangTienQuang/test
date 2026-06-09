@@ -2,7 +2,7 @@
 using AutoWashPro.BLL.Exceptions;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
-using BLL.Services;
+using BLL.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;

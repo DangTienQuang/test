@@ -4,12 +4,19 @@ using BLL.Helpers;
 using BLL.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
+using BLL.Services.Interface;
+using CloudinaryDotNet;
+using DAL.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using OfficeOpenXml;
 using PayOS;
 using System.Linq;
 using System.Text;
 using System.Threading.RateLimiting;
+using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -117,6 +124,8 @@ builder.Services.AddSingleton(sp =>
     );
 });
 
+ExcelPackage.License.SetNonCommercialPersonal("AutoWashPro");
+
 // 5.2. AI & OCR Models Integration
 var modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Models/license_plate.onnx");
 builder.Services.AddSingleton(new DAL.Data.OnnxInferenceEngine(modelPath));
@@ -129,6 +138,8 @@ builder.Services.AddSingleton<PaddleOcrService>(sp =>
     var logger = sp.GetRequiredService<ILogger<PaddleOcrService>>();
     return new PaddleOcrService(recModelPath, dictPath, logger);
 });
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 // ==============================================================================
 // 6. DEPENDENCY INJECTION (BLL Services)
@@ -151,14 +162,17 @@ builder.Services.AddScoped<IAIModerationService, AIModerationService>();
 builder.Services.AddHttpClient<ILLMService, GeminiAIService>();
 builder.Services.AddScoped<IAIIntentService, AIIntentService>();
 builder.Services.AddScoped<ILicensePlateService, LicensePlateService>();
-builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
+builder.Services.Configure<BLL.Helpers.CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();
 builder.Services.AddScoped<IBranchService, BranchService>();
 builder.Services.AddScoped<ILaneService, LaneService>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IManagerService, ManagerService>();
 builder.Services.AddScoped<IOperationStaffService, OperationStaffService>();
+builder.Services.AddScoped<IBusinessBookingService, BusinessBookingService>();
+builder.Services.AddScoped<IInvoicePdfService, InvoicePdfService>();
 
+builder.Services.AddScoped<IFleetService, FleetService>();
 // ==============================================================================
 // 7. BACKGROUND WORKERS
 // ==============================================================================
@@ -205,6 +219,29 @@ builder.Services.AddSwaggerGen(c =>
 // ==============================================================================
 // 9. BUILD APP & MIDDLEWARE PIPELINE
 // ==============================================================================
+builder.Services.AddScoped<IBusinessService, BusinessService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IBookingAttendanceService, BookingAttendanceService>();
+builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
+builder.Services.Configure<BLL.Helpers.CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
+
+builder.Services.AddHostedService<AutoWashPro.API.Workers.AnnualTierResetWorker>();
+
+builder.Services.AddSingleton(provider =>
+{
+    var settings =
+        provider.GetRequiredService<
+            IOptions<BLL.Helpers.CloudinarySettings>>()
+        .Value;
+
+    var account = new Account(
+        settings.CloudName,
+        settings.ApiKey,
+        settings.ApiSecret);
+
+    return new Cloudinary(account);
+});
+
 var app = builder.Build();
 
 app.UseMiddleware<AutoWashPro.API.Middlewares.ExceptionMiddleware>();

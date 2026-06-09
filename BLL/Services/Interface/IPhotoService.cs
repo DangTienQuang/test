@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 
-namespace BLL.Services
+namespace BLL.Services.Interface
 {
     public interface IPhotoService
     {
