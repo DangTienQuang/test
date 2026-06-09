@@ -49,7 +49,17 @@ namespace AutoWashPro.BLL.Services
         {
             if (!request.RequiredTierId.HasValue) throw new BadRequestException("Vui lòng chọn hạng VIP áp dụng.");
             var voucher = await CreateCampaignVoucherAsync(request, VoucherCampaignType.Vip, v => v.RequiredTierId = request.RequiredTierId);
-            return MapCampaignDto(voucher);
+            var response = MapCampaignDto(voucher);
+
+            if (CanProcessCampaignNow(voucher))
+            {
+                var result = await ProcessCampaignAsync(voucher, DateTime.UtcNow.ToVnTime().Date);
+                response.ScannedUsers = result.ScannedUsers;
+                response.GrantedCount = result.GrantedCount;
+                response.SkippedCount = result.SkippedCount;
+            }
+
+            return response;
         }
 
         public async Task<CampaignVoucherResponseDTO> CreateMilestoneVouchersAsync(CreateMilestoneVouchersDTO request)
@@ -326,6 +336,16 @@ namespace AutoWashPro.BLL.Services
                 VoucherCampaignType.Milestone => $"MILESTONE-{campaign.MilestoneUsageCount}",
                 _ => $"MANUAL-{targetDate:yyyyMMdd}"
             };
+        }
+
+        private static bool CanProcessCampaignNow(Voucher campaign)
+        {
+            var now = DateTime.UtcNow;
+            return campaign.IsActive
+                && campaign.VoucherType == VoucherType.Discount
+                && (campaign.StartDate == null || campaign.StartDate <= now)
+                && campaign.ExpiryDate >= now
+                && (campaign.MaxUsages <= 0 || campaign.CurrentUsageCount < campaign.MaxUsages);
         }
 
         private static int CalculateAge(DateTime dateOfBirth, DateTime targetDate)

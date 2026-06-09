@@ -1,13 +1,20 @@
-﻿using MailKit.Net.Smtp;
-using MailKit.Security;
 using Microsoft.Extensions.Configuration;
-using MimeKit;
+using System;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace AutoWashPro.BLL.Services
 {
     public class EmailService : IEmailService
     {
+        private static readonly HttpClient SendGridHttpClient = new()
+        {
+            BaseAddress = new Uri("https://api.sendgrid.com"),
+            Timeout = TimeSpan.FromSeconds(20)
+        };
+
         private readonly IConfiguration _config;
 
         public EmailService(IConfiguration config)
@@ -17,27 +24,67 @@ namespace AutoWashPro.BLL.Services
 
         public async Task SendEmailAsync(string toEmail, string subject, string htmlMessage)
         {
-            var email = new MimeMessage();
-            email.From.Add(new MailboxAddress(_config["EmailSettings:SenderName"], _config["EmailSettings:SenderEmail"]));
-            email.To.Add(MailboxAddress.Parse(toEmail));
-            email.Subject = subject;
+            var sendGridApiKey = _config["SendGridSettings:ApiKey"];
+            if (string.IsNullOrWhiteSpace(sendGridApiKey))
+                throw new InvalidOperationException("SendGrid API key is not configured.");
 
-            var builder = new BodyBuilder { HtmlBody = htmlMessage };
-            email.Body = builder.ToMessageBody();
-
-            using var smtp = new SmtpClient();
-
-            smtp.ServerCertificateValidationCallback = (s, c, h, e) => true;
-
-            await smtp.ConnectAsync(
-                _config["EmailSettings:SmtpServer"],
-                int.Parse(_config["EmailSettings:Port"]),
-                SecureSocketOptions.Auto);
-
-            await smtp.AuthenticateAsync(_config["EmailSettings:SenderEmail"], _config["EmailSettings:Password"]);
-
-            await smtp.SendAsync(email);
-            await smtp.DisconnectAsync(true);
+            await SendWithSendGridAsync(sendGridApiKey, toEmail, subject, htmlMessage);
         }
+
+        private async Task SendWithSendGridAsync(string apiKey, string toEmail, string subject, string htmlMessage)
+        {
+            var senderName = _config["SendGridSettings:SenderName"] ?? _config["EmailSettings:SenderName"] ?? "SmartWash System";
+            var senderEmail = _config["SendGridSettings:SenderEmail"] ?? _config["EmailSettings:SenderEmail"];
+
+            if (string.IsNullOrWhiteSpace(senderEmail))
+                throw new InvalidOperationException("SendGrid sender email is not configured.");
+
+            var payload = new
+            {
+                personalizations = new[]
+                {
+                    new
+                    {
+                        to = new[]
+                        {
+                            new
+                            {
+                                email = toEmail
+                            }
+                        }
+                    }
+                },
+                from = new
+                {
+                    email = senderEmail,
+                    name = senderName
+                },
+                subject,
+                content = new[]
+                {
+                    new
+                    {
+                        type = "text/html",
+                        value = htmlMessage
+                    }
+                }
+            };
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/v3/mail/send");
+            request.Headers.Add("Authorization", $"Bearer {apiKey}");
+            request.Headers.Add("accept", "application/json");
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(payload),
+                Encoding.UTF8,
+                "application/json");
+
+            using var response = await SendGridHttpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException($"SendGrid email failed with status {(int)response.StatusCode}: {error}");
+            }
+        }
+
     }
 }

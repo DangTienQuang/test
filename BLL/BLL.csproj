@@ -17,7 +17,6 @@
     <PackageReference Include="EPPlus" Version="8.6.0" />
     <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.3.10" />
     <PackageReference Include="payOS" Version="2.1.0" />
-    <PackageReference Include="MailKit" Version="4.16.0" />
     <PackageReference Include="OpenAI" Version="2.10.0" />
     <PackageReference Include="QuestPDF" Version="2026.5.0" />
     <PackageReference Include="SkiaSharp" Version="3.119.2" />

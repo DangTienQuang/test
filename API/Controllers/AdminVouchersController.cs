@@ -81,5 +81,11 @@ namespace AutoWashPro.API.Controllers
             var result = await _voucherCampaignService.CreateMilestoneVouchersAsync(request);
             return Created("", new { statusCode = 201, message = "Tạo rule voucher kỷ niệm số lần sử dụng thành công.", data = result });
         }
+        [HttpPost("process-campaigns")]
+        public async Task<IActionResult> ProcessCampaignsNow()
+        {
+            var result = await _voucherCampaignService.ProcessDailyCampaignsAsync();
+            return Ok(new { statusCode = 200, message = "Success", data = result });
+        }
     }
 }

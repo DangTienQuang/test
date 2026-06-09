@@ -666,6 +666,8 @@ namespace AutoWashPro.BLL.Services
                 await transaction.CommitAsync();
 
                 // PHASE 6: Post-Processing
+                if (!isPayOsPayment)
+                {
                 try
                 {
                     var user = await _context.Users.Include(u => u.CustomerProfile).FirstOrDefaultAsync(u => u.UserId == userId);
@@ -678,6 +680,8 @@ namespace AutoWashPro.BLL.Services
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[Lỗi gửi mail]: {ex.Message}");
+                }
+
                 }
 
                 var serviceNames = await _context.Services.Where(s => request.ServiceIds.Contains(s.ServiceId)).Select(s => s.ServiceName).ToListAsync();

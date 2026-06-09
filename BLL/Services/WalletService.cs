@@ -12,6 +12,7 @@ using PayOS.Models.V2.PaymentRequests;
 using PayOS.Models.Webhooks;
 using Microsoft.Extensions.Logging;
 using AutoWashPro.BLL.Exceptions;
+using BLL.Helpers;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -21,13 +22,15 @@ namespace AutoWashPro.BLL.Services
         private readonly PayOSClient _payOSClient;
         private readonly ILogger<WalletService> _logger;
         private readonly ITierService _tierService;
+        private readonly IEmailService _emailService;
 
-        public WalletService(AutoWashDbContext context, PayOSClient payOSClient, ILogger<WalletService> logger, ITierService tierService)
+        public WalletService(AutoWashDbContext context, PayOSClient payOSClient, ILogger<WalletService> logger, ITierService tierService, IEmailService emailService)
         {
             _context = context;
             _payOSClient = payOSClient;
             _logger = logger;
             _tierService = tierService;
+            _emailService = emailService;
         }
 
         public async Task<WalletResponseDTO> GetWalletInfoAsync(int userId)
@@ -212,6 +215,7 @@ namespace AutoWashPro.BLL.Services
 
             var orderCodeStr = data.OrderCode.ToString();
 
+            int? paidBookingId = null;
             using var dbTransaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
             try
             {
@@ -255,6 +259,7 @@ namespace AutoWashPro.BLL.Services
                         throw new NotFoundException("Không tìm thấy booking cần xác nhận thanh toán.");
 
                     booking.UpdatedAt = DateTime.UtcNow;
+                    paidBookingId = booking.BookingId;
 
                     var otherPendingBookingPayments = await _context.Transactions
                         .Where(t => t.ReferenceBookingId == booking.BookingId
@@ -281,6 +286,11 @@ namespace AutoWashPro.BLL.Services
                 await dbTransaction.RollbackAsync();
                 throw;
             }
+
+            if (paidBookingId.HasValue)
+            {
+                await SendBookingPaymentConfirmationEmailAsync(paidBookingId.Value);
+            }
         }
 
         public async Task<List<TransactionResponseDTO>> GetTransactionsAsync(int userId)
@@ -302,6 +312,40 @@ namespace AutoWashPro.BLL.Services
                     ReferenceBookingId = t.ReferenceBookingId,
                     CreatedAt = t.CreatedAt
                 }).ToListAsync();
+        }
+
+        private async Task SendBookingPaymentConfirmationEmailAsync(int bookingId)
+        {
+            try
+            {
+                var booking = await _context.Bookings
+                    .Include(b => b.BookingDetails)
+                        .ThenInclude(bd => bd.Service)
+                    .Include(b => b.User)
+                        .ThenInclude(u => u.CustomerProfile)
+                    .FirstOrDefaultAsync(b => b.BookingId == bookingId);
+
+                if (booking?.User == null || string.IsNullOrWhiteSpace(booking.User.Email))
+                {
+                    _logger.LogWarning("Khong the gui email booking #{BookingId}: user/email khong hop le.", bookingId);
+                    return;
+                }
+
+                var customerName = booking.User.CustomerProfile?.FullName ?? "Quy khach";
+                var emailHtml = EmailTemplateBuilder.BuildBookingConfirmationEmail(
+                    booking,
+                    booking.BookingDetails.ToList(),
+                    customerName);
+
+                await _emailService.SendEmailAsync(
+                    booking.User.Email,
+                    $"[SmartWash] Dat lich thanh cong - #{booking.BookingId}",
+                    emailHtml);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Khong the gui email xac nhan booking #{BookingId} sau khi thanh toan QR.", bookingId);
+            }
         }
 
         public async Task<List<PointHistoryResponseDTO>> GetPointsHistoryAsync(int userId)

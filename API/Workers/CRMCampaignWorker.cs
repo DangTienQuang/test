@@ -1,5 +1,4 @@
 using AutoWashPro.BLL.Services;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -13,48 +12,24 @@ namespace AutoWashPro.API.Workers
     {
         private readonly ILogger<CRMCampaignWorker> _logger;
         private readonly IServiceProvider _serviceProvider;
-        private readonly IConfiguration _configuration;
 
-        public CRMCampaignWorker(ILogger<CRMCampaignWorker> logger, IServiceProvider serviceProvider, IConfiguration configuration)
+        public CRMCampaignWorker(ILogger<CRMCampaignWorker> logger, IServiceProvider serviceProvider)
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
-            _configuration = configuration;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("CRM Campaign Worker started.");
-            var intervalSeconds = _configuration.GetValue<int?>("VoucherCampaignWorker:IntervalSeconds");
-
-            if (intervalSeconds.HasValue && intervalSeconds.Value > 0)
-            {
-                await ExecuteIntervalModeAsync(TimeSpan.FromSeconds(intervalSeconds.Value), stoppingToken);
-                return;
-            }
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                var now = DateTime.UtcNow;
+                var delay = GetDelayUntilNextVnMidnight();
+                _logger.LogInformation("Next CRM Campaign scan scheduled in {Delay}.", delay);
 
-                if (now.Hour == 17 && now.Minute == 0)
-                {
-                    await ProcessDailyCampaignsAsync();
-                    await Task.Delay(TimeSpan.FromHours(23), stoppingToken);
-                }
-
-                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
-            }
-        }
-
-        private async Task ExecuteIntervalModeAsync(TimeSpan interval, CancellationToken stoppingToken)
-        {
-            _logger.LogInformation("CRM Campaign Worker interval mode enabled. Interval: {IntervalSeconds}s", interval.TotalSeconds);
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
+                await Task.Delay(delay, stoppingToken);
                 await ProcessDailyCampaignsAsync();
-                await Task.Delay(interval, stoppingToken);
             }
         }
 
@@ -80,6 +55,29 @@ namespace AutoWashPro.API.Workers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while processing daily voucher campaigns.");
+            }
+        }
+
+        private static TimeSpan GetDelayUntilNextVnMidnight()
+        {
+            var vnTimeZone = GetVnTimeZone();
+            var nowUtc = DateTime.UtcNow;
+            var nowVn = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, vnTimeZone);
+            var nextVnMidnight = nowVn.Date.AddDays(1);
+            var nextUtc = TimeZoneInfo.ConvertTimeToUtc(nextVnMidnight, vnTimeZone);
+
+            return nextUtc - nowUtc;
+        }
+
+        private static TimeZoneInfo GetVnTimeZone()
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
             }
         }
     }

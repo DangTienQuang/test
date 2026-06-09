@@ -190,6 +190,12 @@ namespace AutoWashPro.BLL.DTOs
         public int? ResendAfterDays { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? MilestoneUsageCount { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? ScannedUsers { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? GrantedCount { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? SkippedCount { get; set; }
     }
 
     public class VoucherCampaignProcessResultDTO
