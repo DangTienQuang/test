@@ -42,6 +42,10 @@ namespace AutoWashPro.DAL.Entities
         [ForeignKey("RequiredTierId")]
         public Tier? RequiredTier { get; set; }
 
+        public int? VehicleTypeId { get; set; }
+        [ForeignKey("VehicleTypeId")]
+        public VehicleType? VehicleType { get; set; }
+
         public TimeSpan? ValidStartTime { get; set; }
         public TimeSpan? ValidEndTime { get; set; }
         public int? TargetAge { get; set; }

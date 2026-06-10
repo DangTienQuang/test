@@ -45,7 +45,7 @@ namespace AutoWashPro.BLL.Services
                     RequiredTierId = uv.Voucher.RequiredTierId,
                     RequiredTierName = uv.Voucher.RequiredTier != null ? uv.Voucher.RequiredTier.TierName : null,
                     ValidStartTime = uv.Voucher.ValidStartTime,
-                    ValidEndTime = uv.Voucher.ValidEndTime
+                    ValidEndTime = uv.Voucher.ValidEndTime, VehicleTypeId = uv.Voucher.VehicleTypeId
                 })
                 .ToListAsync();
         }
@@ -76,7 +76,10 @@ namespace AutoWashPro.BLL.Services
                     .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == voucherId && uv.TriggerKey == null);
                 if (existingUserVoucher != null) throw new BadRequestException("Bạn đã sở hữu voucher này rồi.");
 
-                await _walletService.DeductSpendablePointsAsync(userId, voucher.PointsRequired, $"Đổi voucher: {voucher.Code}");
+                if (voucher.PointsRequired > 0)
+                {
+                    await _walletService.DeductSpendablePointsAsync(userId, voucher.PointsRequired, $"Đổi voucher: {voucher.Code}");
+                }
 
                 _context.UserVouchers.Add(new UserVoucher
                 {
@@ -114,6 +117,35 @@ namespace AutoWashPro.BLL.Services
             return vouchers.Select(v => MapAdminDto(v, redeemCounts.GetValueOrDefault(v.VoucherId, 0))).ToList();
         }
 
+        public async Task GrantVouchersAsync(int voucherId, List<int> userIds)
+        {
+            if (userIds == null || !userIds.Any()) return;
+
+            var voucher = await _context.Vouchers.FindAsync(voucherId);
+            if (voucher == null) throw new NotFoundException("Voucher không tồn tại.");
+
+            var existingUserIds = await _context.UserVouchers
+                .Where(uv => uv.VoucherId == voucherId && userIds.Contains(uv.UserId) && uv.TriggerKey == null)
+                .Select(uv => uv.UserId)
+                .ToListAsync();
+
+            var userIdsToGrant = userIds.Except(existingUserIds).Distinct().ToList();
+            if (!userIdsToGrant.Any()) return;
+
+            var userVouchers = userIdsToGrant.Select(userId => new UserVoucher
+            {
+                UserId = userId,
+                VoucherId = voucherId,
+                IsUsed = false,
+                UsageCount = 0,
+                ReceivedDate = DateTime.UtcNow,
+                ExpiryDate = CalculateUserVoucherExpiry(voucher, DateTime.UtcNow)
+            });
+
+            _context.UserVouchers.AddRange(userVouchers);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<AdminVoucherDTO> CreateVoucherAsync(CreateOrUpdateVoucherDTO request)
         {
             if (request.ExpiryDate.ToUniversalTime() <= DateTime.UtcNow)
@@ -143,7 +175,7 @@ namespace AutoWashPro.BLL.Services
                 IsActive = request.IsActive,
                 RequiredTierId = request.RequiredTierId,
                 ValidStartTime = request.ValidStartTime,
-                ValidEndTime = request.ValidEndTime
+                ValidEndTime = request.ValidEndTime, VehicleTypeId = request.VehicleTypeId
             };
 
             _context.Vouchers.Add(voucher);
@@ -182,6 +214,7 @@ namespace AutoWashPro.BLL.Services
             voucher.RequiredTierId = request.RequiredTierId;
             voucher.ValidStartTime = request.ValidStartTime;
             voucher.ValidEndTime = request.ValidEndTime;
+            voucher.VehicleTypeId = request.VehicleTypeId;
 
             await _context.SaveChangesAsync();
 
@@ -313,7 +346,7 @@ namespace AutoWashPro.BLL.Services
             RequiredTierId = v.RequiredTierId,
             RequiredTierName = v.RequiredTier?.TierName,
             ValidStartTime = v.ValidStartTime,
-            ValidEndTime = v.ValidEndTime
+            ValidEndTime = v.ValidEndTime, VehicleTypeId = v.VehicleTypeId
         };
     }
 }

@@ -7,6 +7,7 @@ namespace AutoWashPro.DAL.Enums
         Age = 2,
         Winback = 3,
         Vip = 4,
-        Milestone = 5
+        Milestone = 5,
+        Welcome = 6
     }
 }

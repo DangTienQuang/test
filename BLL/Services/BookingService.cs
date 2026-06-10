@@ -569,7 +569,7 @@ namespace AutoWashPro.BLL.Services
 
             // PHASE 4: Financial Math
             var (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher) =
-                await CalculateBookingPricingAsync(userId, totalOriginalPrice, request.VoucherId, request.PointsToUse, targetDateTime);
+                await CalculateBookingPricingAsync(userId, totalOriginalPrice, request.VoucherId, request.PointsToUse, targetDateTime, vehicleTypeQuery.VehicleTypeId);
 
             // PHASE 5: Transaction
             var paymentMethod = request.PaymentMethod?.Trim() ?? "Wallet";
@@ -856,7 +856,7 @@ namespace AutoWashPro.BLL.Services
         }
 
         private async Task<(decimal voucherDiscount, decimal pointDiscount, int pointsUsed, decimal finalAmount, UserVoucher? userVoucher)>
-            CalculateBookingPricingAsync(int userId, decimal originalPrice, int? voucherId, int pointsToUseRequest, DateTime scheduledTime)
+            CalculateBookingPricingAsync(int userId, decimal originalPrice, int? voucherId, int pointsToUseRequest, DateTime scheduledTime, int vehicleTypeId)
         {
             decimal voucherDiscount = 0;
             UserVoucher? userVoucher = null;
@@ -868,6 +868,10 @@ namespace AutoWashPro.BLL.Services
                     .FirstOrDefaultAsync(uv => uv.VoucherId == voucherId.Value && uv.UserId == userId);
 
                 if (userVoucher == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Bạn không sở hữu Voucher này.");
+                if (userVoucher.Voucher.VehicleTypeId.HasValue && userVoucher.Voucher.VehicleTypeId.Value != vehicleTypeId)
+                {
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Voucher này không áp dụng cho loại xe của bạn.");
+                }
                 if (!userVoucher.Voucher.IsActive) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Voucher này chưa được kích hoạt.");
                 if (userVoucher.Voucher.StartDate.HasValue && userVoucher.Voucher.StartDate.Value > DateTime.UtcNow) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Voucher này chưa đến thời gian áp dụng.");
                 if (userVoucher.UsageCount >= userVoucher.Voucher.MaxUsagePerUser) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Voucher này đã hết lượt sử dụng của bạn.");
@@ -1165,7 +1169,7 @@ namespace AutoWashPro.BLL.Services
             }
 
             var (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher) =
-                await CalculateBookingPricingAsync(customerUserId, totalOriginalPrice, request.VoucherId, request.PointsToUse, targetDateTime);
+                await CalculateBookingPricingAsync(customerUserId, totalOriginalPrice, request.VoucherId, request.PointsToUse, targetDateTime, vehicleTypeQuery.VehicleTypeId);
 
             var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == customerUserId);
             if (wallet == null || wallet.Balance < finalAmount)
