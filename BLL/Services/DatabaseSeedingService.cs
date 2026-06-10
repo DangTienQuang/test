@@ -163,6 +163,61 @@ namespace AutoWashPro.BLL.Services
                 });
                 await _context.SaveChangesAsync();
             }
+
+            if (!await _context.Vouchers.AnyAsync())
+            {
+                var vouchers = new[]
+                {
+                    new AutoWashPro.DAL.Entities.Voucher
+                    {
+                        Code = "WELCOME10",
+                        DiscountAmount = 10000,
+                        MaxUsages = 1000,
+                        MaxUsagePerUser = 1,
+                        ExpiryDate = DateTime.UtcNow.AddMonths(1),
+                        StartDate = DateTime.UtcNow,
+                        IsActive = true,
+                        PointsRequired = 0,
+                        VoucherType = AutoWashPro.DAL.Enums.VoucherType.Discount,
+                        CampaignType = AutoWashPro.DAL.Enums.VoucherCampaignType.Welcome,
+                        MinOrderAmount = 50000,
+                        RequiredTierId = firstTier.TierId
+                    },
+                    new AutoWashPro.DAL.Entities.Voucher
+                    {
+                        Code = "HAPPYHOUR",
+                        DiscountAmount = 20000,
+                        MaxUsages = 500,
+                        MaxUsagePerUser = 2,
+                        ExpiryDate = DateTime.UtcNow.AddMonths(2),
+                        StartDate = DateTime.UtcNow,
+                        IsActive = true,
+                        PointsRequired = 50,
+                        VoucherType = AutoWashPro.DAL.Enums.VoucherType.Discount,
+                        CampaignType = AutoWashPro.DAL.Enums.VoucherCampaignType.Manual,
+                        ValidStartTime = new TimeSpan(14, 0, 0), // 2 PM
+                        ValidEndTime = new TimeSpan(16, 0, 0),   // 4 PM
+                        MinOrderAmount = 100000,
+                        RequiredTierId = firstTier.TierId
+                    },
+                    new AutoWashPro.DAL.Entities.Voucher
+                    {
+                        Code = "FREECOFFEE",
+                        DiscountAmount = 0, // Physical gift doesn't have financial discount
+                        MaxUsages = 100,
+                        MaxUsagePerUser = 1,
+                        ExpiryDate = DateTime.UtcNow.AddMonths(6),
+                        StartDate = DateTime.UtcNow,
+                        IsActive = true,
+                        PointsRequired = 200,
+                        VoucherType = AutoWashPro.DAL.Enums.VoucherType.PhysicalGift,
+                        CampaignType = AutoWashPro.DAL.Enums.VoucherCampaignType.Manual,
+                        RequiredTierId = firstTier.TierId
+                    }
+                };
+                _context.Vouchers.AddRange(vouchers);
+                await _context.SaveChangesAsync();
+            }
         }
 
     }
