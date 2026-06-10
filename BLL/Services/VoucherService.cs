@@ -45,7 +45,7 @@ namespace AutoWashPro.BLL.Services
                     RequiredTierId = uv.Voucher.RequiredTierId,
                     RequiredTierName = uv.Voucher.RequiredTier != null ? uv.Voucher.RequiredTier.TierName : null,
                     ValidStartTime = uv.Voucher.ValidStartTime,
-                    ValidEndTime = uv.Voucher.ValidEndTime
+                    ValidEndTime = uv.Voucher.ValidEndTime, VehicleTypeId = uv.Voucher.VehicleTypeId
                 })
                 .ToListAsync();
         }
@@ -175,7 +175,7 @@ namespace AutoWashPro.BLL.Services
                 IsActive = request.IsActive,
                 RequiredTierId = request.RequiredTierId,
                 ValidStartTime = request.ValidStartTime,
-                ValidEndTime = request.ValidEndTime
+                ValidEndTime = request.ValidEndTime, VehicleTypeId = request.VehicleTypeId
             };
 
             _context.Vouchers.Add(voucher);
@@ -214,6 +214,7 @@ namespace AutoWashPro.BLL.Services
             voucher.RequiredTierId = request.RequiredTierId;
             voucher.ValidStartTime = request.ValidStartTime;
             voucher.ValidEndTime = request.ValidEndTime;
+            voucher.VehicleTypeId = request.VehicleTypeId;
 
             await _context.SaveChangesAsync();
 
@@ -345,7 +346,7 @@ namespace AutoWashPro.BLL.Services
             RequiredTierId = v.RequiredTierId,
             RequiredTierName = v.RequiredTier?.TierName,
             ValidStartTime = v.ValidStartTime,
-            ValidEndTime = v.ValidEndTime
+            ValidEndTime = v.ValidEndTime, VehicleTypeId = v.VehicleTypeId
         };
     }
 }
