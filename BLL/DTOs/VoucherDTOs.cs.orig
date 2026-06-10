@@ -217,10 +217,10 @@ namespace AutoWashPro.BLL.DTOs
         public DateTime ReceivedDate { get; set; }
         public DateTime ExpiryDate { get; set; }
     }
+}
 
     public class GrantVoucherRequestDTO
     {
         [Required(ErrorMessage = "Danh sách User ID không được để trống.")]
         public List<int> UserIds { get; set; } = new();
     }
-}

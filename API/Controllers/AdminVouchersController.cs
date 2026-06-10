@@ -47,6 +47,13 @@ namespace AutoWashPro.API.Controllers
             return Ok(new { statusCode = 200, message = "Xóa voucher thành công." });
         }
 
+        [HttpPost("{id}/grant")]
+        public async Task<IActionResult> GrantVouchers(int id, [FromBody] GrantVoucherRequestDTO request)
+        {
+            await _voucherService.GrantVouchersAsync(id, request.UserIds);
+            return Ok(new { statusCode = 200, message = "Cấp voucher thành công." });
+        }
+
         [HttpPost("birthday")]
         public async Task<IActionResult> CreateBirthdayVouchers([FromBody] CreateBirthdayVouchersDTO request)
         {
