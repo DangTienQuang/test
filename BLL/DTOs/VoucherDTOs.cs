@@ -26,7 +26,6 @@ namespace AutoWashPro.BLL.DTOs
         public string? RequiredTierName { get; set; }
         public TimeSpan? ValidStartTime { get; set; }
         public TimeSpan? ValidEndTime { get; set; }
-        public int? VehicleTypeId { get; set; }
     }
 
     public class RedeemVoucherRequestDTO
@@ -66,7 +65,6 @@ namespace AutoWashPro.BLL.DTOs
         public string? RequiredTierName { get; set; }
         public TimeSpan? ValidStartTime { get; set; }
         public TimeSpan? ValidEndTime { get; set; }
-        public int? VehicleTypeId { get; set; }
     }
 
     public class CreateOrUpdateVoucherDTO
@@ -101,7 +99,6 @@ namespace AutoWashPro.BLL.DTOs
         public int? RequiredTierId { get; set; }
         public TimeSpan? ValidStartTime { get; set; }
         public TimeSpan? ValidEndTime { get; set; }
-        public int? VehicleTypeId { get; set; }
     }
 
     public abstract class CreateAutomatedVoucherBaseDTO
@@ -219,11 +216,5 @@ namespace AutoWashPro.BLL.DTOs
         public required string TriggerKey { get; set; }
         public DateTime ReceivedDate { get; set; }
         public DateTime ExpiryDate { get; set; }
-    }
-
-    public class GrantVoucherRequestDTO
-    {
-        [Required(ErrorMessage = "Danh sách User ID không được để trống.")]
-        public List<int> UserIds { get; set; } = new();
     }
 }
