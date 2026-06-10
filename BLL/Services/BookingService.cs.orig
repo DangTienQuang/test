@@ -437,7 +437,7 @@ namespace AutoWashPro.BLL.Services
         {
             try
             {
-                // 1. Lấy thông tin Booking và User. 
+                // 1. Lấy thông tin Booking và User.
                 // Phải Include đầy đủ vì context này chạy hoàn toàn độc lập với luồng CreateBooking
                 var booking = await _context.Bookings
                     .Include(b => b.BookingDetails)
@@ -473,7 +473,7 @@ namespace AutoWashPro.BLL.Services
             }
             catch (Exception ex)
             {
-                // Trong Background Task, KHÔNG ĐƯỢC throw exception làm crash app. 
+                // Trong Background Task, KHÔNG ĐƯỢC throw exception làm crash app.
                 // Chỉ ghi Log để Developer trace lỗi.
                 Console.WriteLine($"[Lỗi Background Task - Email] Booking #{bookingId}: {ex.Message}");
                 return false;
@@ -552,7 +552,7 @@ namespace AutoWashPro.BLL.Services
                 {
                     await _context.SaveChangesAsync();
                 }
-                catch (DbUpdateException ex)
+                catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("Duplicate entry") == true)
                 {
                     _context.Entry(dailyCapacity).State = EntityState.Detached;
                     dailyCapacity = await _context.DailySlotCapacities.FirstAsync(dc => dc.SlotId == slot.SlotId && dc.BranchId == request.BranchId && dc.Date == targetDateTime.Date);
@@ -1155,7 +1155,7 @@ namespace AutoWashPro.BLL.Services
                     };
                     _context.DailySlotCapacities.Add(dailyCapacity);
                     try { await _context.SaveChangesAsync(); }
-                    catch (DbUpdateException ex)
+                    catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("Duplicate entry") == true)
                     {
                         _context.Entry(dailyCapacity).State = EntityState.Detached;
                         dailyCapacity = await _context.DailySlotCapacities.FirstAsync(dc => dc.SlotId == slot.SlotId && dc.BranchId == slot.BranchId && dc.Date == targetDateTime.Date);
