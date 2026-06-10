@@ -73,11 +73,6 @@ namespace AutoWashPro.BLL.Services
                     _context.Lanes.Add(new AutoWashPro.DAL.Entities.Lane { BranchId = branch.BranchId, Name = "Lane 1 - Normal", IsActive = true });
                     _context.Lanes.Add(new AutoWashPro.DAL.Entities.Lane { BranchId = branch.BranchId, Name = "Lane 2 - VIP", IsActive = true });
                     await _context.SaveChangesAsync();
-                }
-
-                var hasTimeSlots = await _context.TimeSlots.AnyAsync(ts => ts.BranchId == branch.BranchId);
-                if (!hasTimeSlots)
-                {
 
                     for (int hour = 8; hour < 17; hour++)
                     {
