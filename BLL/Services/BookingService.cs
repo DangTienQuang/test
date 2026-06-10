@@ -500,7 +500,7 @@ namespace AutoWashPro.BLL.Services
 
             var vehicleTypeQuery = await _context.Vehicles
                 .Where(v => v.LicensePlate == request.LicensePlate && v.UserId == userId && !v.IsDeleted)
-                .Select(v => new { v.LicensePlate, v.VehicleType.BaseWeight, v.VehicleTypeId })
+                .Select(v => new { VehicleId = v.Id, v.LicensePlate, v.VehicleType.BaseWeight, v.VehicleTypeId })
                 .FirstOrDefaultAsync();
 
             if (vehicleTypeQuery == null)
@@ -637,7 +637,7 @@ namespace AutoWashPro.BLL.Services
                 var booking = new Booking
                 {
                     UserId = userId,
-                    VehicleId = request.VehicleId,
+                    VehicleId = vehicleTypeQuery.VehicleId,
                     LicensePlate = request.LicensePlate,
                     CapacityWeight = maxCapacityWeight,
                     VehicleCondition = VehicleCondition.Clean,
@@ -1098,7 +1098,7 @@ namespace AutoWashPro.BLL.Services
 
             var vehicleTypeQuery = await _context.Vehicles
                 .Where(v => v.LicensePlate == request.LicensePlate && !v.IsDeleted)
-                .Select(v => new { v.LicensePlate, v.VehicleType.BaseWeight, v.VehicleTypeId })
+                .Select(v => new { VehicleId = v.Id, v.LicensePlate, v.VehicleType.BaseWeight, v.VehicleTypeId })
                 .FirstOrDefaultAsync();
 
             if (vehicleTypeQuery == null)
@@ -1209,7 +1209,7 @@ namespace AutoWashPro.BLL.Services
                 var booking = new Booking
                 {
                     UserId = customerUserId,
-                    VehicleId = request.VehicleId,
+                    VehicleId = vehicleTypeQuery.VehicleId,
                     LicensePlate = request.LicensePlate,
                     CapacityWeight = maxCapacityWeight,
                     VehicleCondition = VehicleCondition.Clean,
