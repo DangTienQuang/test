@@ -20,60 +20,86 @@ namespace BLL.Services
             _context = context;
             _cloudinaryService = cloudinaryService;
         }
-
-        public async Task<BusinessProfileResponseDTO> CreateBusinessProfileAsync(int userId, CreateBusinessProfileRequest request)
+    
+        public async Task<RegisterBusinessUserResponse> RegisterBusinessUserAsync(RegisterBusinessUserRequest request)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(x => x.UserId == userId);
+            // 1. Check phone
+            var phoneExists = await _context.Users
+                .AnyAsync(u => u.PhoneNumber == request.PhoneNumber);
+            if (phoneExists) throw new BadRequestException("Số điện thoại này đã được đăng ký.");
 
-            if (user == null)
-            {
-                throw new NotFoundException("User not found.");
-            }
+            // 2. Check email
+            var emailExists = await _context.Users.AnyAsync(u => u.Email == request.Email);
+            if (emailExists) throw new BadRequestException("Email này đã được dùng để đăng ký.");
 
-            var existingBusiness = await _context.BusinessProfiles.FirstOrDefaultAsync(x => x.UserId == userId);
+            // 3. Upload documents
+            var businessLicenseUrl = await _cloudinaryService
+                .UploadFileAsync(request.BusinessLicense, "business-documents");
 
-            if (existingBusiness != null)
-            {
-                throw new BadRequestException("Business profile already exists.");
-            }
-
-            // Upload Business License
-            var businessLicenseUrl = await _cloudinaryService.UploadFileAsync(request.BusinessLicense, "business-documents");
-
-            // Upload Authorization Letter (optional)
             string? authorizationLetterUrl = null;
-
             if (request.AuthorizationLetter != null)
             {
-                authorizationLetterUrl = await _cloudinaryService.UploadFileAsync(request.AuthorizationLetter, "business-documents");
+                authorizationLetterUrl = await _cloudinaryService
+                    .UploadFileAsync(request.AuthorizationLetter, "business-documents");
             }
 
-            var entity = new BusinessProfile
+            // 4. Create User + BusinessProfile
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                UserId = userId,
-                CompanyName = request.CompanyName,
-                TaxCode = request.TaxCode,
-                BusinessAddress = request.BusinessAddress,
-                BillingEmail = request.BillingEmail,
-                RepresentativeName = request.RepresentativeName,
-                PaymentTermDays = request.PaymentTermDays,
-                ApprovalStatus = "Pending",
-                BusinessLicenseFileUrl = businessLicenseUrl,
-                AuthorizationLetterFileUrl = authorizationLetterUrl,
-                CreatedAt = DateTime.UtcNow
-            };
+                var user = new User
+                {
+                    PhoneNumber = request.PhoneNumber,
+                    Email = request.Email,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                    Role = "Business",
+                    Status = "Active",
+                };
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
 
-            _context.BusinessProfiles.Add(entity);
+                var profile = new BusinessProfile
+                {
+                    UserId = user.UserId,
+                    CompanyName = request.CompanyName,
+                    TaxCode = request.TaxCode,
+                    BusinessAddress = request.BusinessAddress,
+                    BillingEmail = request.BillingEmail,
+                    RepresentativeName = request.RepresentativeName,
+                    PaymentTermDays = request.PaymentTermDays,
+                    ApprovalStatus = "Pending",
+                    BusinessLicenseFileUrl = businessLicenseUrl,
+                    AuthorizationLetterFileUrl = authorizationLetterUrl,
+                    CreatedAt = DateTime.UtcNow,
+                    MonthlyCreditLimit = 0,
+                    CurrentMonthUsage = 0,
+                    DiscountPercent = 0,
+                    ContractStartDate = DateTime.UtcNow,
+                    ContractEndDate = DateTime.UtcNow.AddYears(1),
+                    IsContractActive = false, // activated after approval
+                };
+                _context.BusinessProfiles.Add(profile);
+                await _context.SaveChangesAsync();
 
-            await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
 
-            return new BusinessProfileResponseDTO
+                return new RegisterBusinessUserResponse
+                {
+                    UserId = user.UserId,
+                    PhoneNumber = user.PhoneNumber,
+                    Role = user.Role,
+                    BusinessProfileId = profile.BusinessProfileId,
+                    CompanyName = profile.CompanyName,
+                    ApprovalStatus = profile.ApprovalStatus,
+                    BusinessLicenseFileUrl = profile.BusinessLicenseFileUrl,
+                    AuthorizationLetterFileUrl = profile.AuthorizationLetterFileUrl,
+                };
+            }
+            catch
             {
-                BusinessProfileId = entity.BusinessProfileId,
-                CompanyName = entity.CompanyName,
-                TaxCode = entity.TaxCode,
-                BusinessAddress = entity.BusinessAddress
-            };
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<BusinessProfileResponseDTO?> GetByUserIdAsync(int userId)
@@ -102,12 +128,12 @@ namespace BLL.Services
 
             if (profile == null)
             {
-                throw new NotFoundException("Business profile not found.");
+                throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
             }
 
             if (profile.ApprovalStatus != "Pending")
             {
-                throw new BadRequestException("Application already reviewed.");
+                throw new BadRequestException("Hồ sơ đã được xét duyệt trước đó.");
             }
 
             profile.ReviewedByUserId = reviewerId;
@@ -153,7 +179,7 @@ namespace BLL.Services
 
             if (profile == null)
             {
-                throw new NotFoundException("Business application not found.");
+                throw new NotFoundException("Không tìm thấy đơn đăng ký doanh nghiệp.");
             }
 
             return new PendingBusinessApplicationDTO
@@ -186,7 +212,7 @@ namespace BLL.Services
 
             if (invoice == null)
             {
-                throw new NotFoundException("Invoice not found.");
+                throw new NotFoundException("Không tìm thấy hoá đơn.");
             }
 
             return new InvoiceExportDTO
@@ -233,7 +259,7 @@ namespace BLL.Services
 
             if (business == null)
             {
-                throw new NotFoundException("Business profile not found.");
+                throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
             }
 
             var invoiceCode = $"MONTHLY-{businessProfileId}-{year}{month:00}";
@@ -244,7 +270,7 @@ namespace BLL.Services
 
             if (existingInvoice != null)
             {
-                throw new BadRequestException("Monthly invoice already generated.");
+                throw new BadRequestException("Hoá đơn theo tháng đã được tạo trước đó.");
             }
 
             var startDate = new DateTime(year, month, 1);
@@ -265,7 +291,7 @@ namespace BLL.Services
 
             if (!completedWashes.Any())
             {
-                throw new BadRequestException("No completed washs found for this period.");
+                throw new BadRequestException("Không có lần rửa xe nào hoàn thành trong khoảng thời gian này.");
             }
 
             var invoice = new Invoice
@@ -306,7 +332,7 @@ namespace BLL.Services
 
             if (!invoiceItems.Any())
             {
-                throw new BadRequestException("No invoice items generated.");
+                throw new BadRequestException("Không tạo được mục nào cho hoá đơn.");
             }
 
             await _context.InvoiceItems.AddRangeAsync(invoiceItems);

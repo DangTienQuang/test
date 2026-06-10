@@ -39,7 +39,12 @@ namespace AutoWashPro.API.Controllers
             var result = await _authService.VerifyOtpAsync(request);
             return Ok(new { statusCode = 200, message = "Xác thực email thành công.", data = result });
         }
-
+        [HttpPost("resend-otp")]
+        public async Task<IActionResult> ResendOtp([FromBody] ResendOtpDTO request)
+        {
+            var response = await _authService.ResendOtpAsync(request);
+            return Ok(new { statusCode = 200, message = "Gửi lại mã OTP thành công", data = response });
+        }
         [HttpPost("refresh-token")]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDTO request)
         {

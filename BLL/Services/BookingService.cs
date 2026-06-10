@@ -668,20 +668,23 @@ namespace AutoWashPro.BLL.Services
                 // PHASE 6: Post-Processing
                 if (!isPayOsPayment)
                 {
-                try
-                {
                     var user = await _context.Users.Include(u => u.CustomerProfile).FirstOrDefaultAsync(u => u.UserId == userId);
                     if (user != null && !string.IsNullOrEmpty(user.Email))
                     {
                         var emailHtml = EmailTemplateBuilder.BuildBookingConfirmationEmail(booking, pendingDetails, user.CustomerProfile?.FullName ?? "Quý khách");
-                        _ = Task.Run(() => _emailService.SendEmailAsync(user.Email, $"[SmartWash] Đặt lịch thành công - #{booking.BookingId}", emailHtml));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Lỗi gửi mail]: {ex.Message}");
-                }
 
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _emailService.SendEmailAsync(user.Email, $"[SmartWash] Đặt lịch thành công - #{booking.BookingId}", emailHtml);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[Lỗi Background Email]: {ex.Message}");
+                            }
+                        });
+                    }
                 }
 
                 var serviceNames = await _context.Services.Where(s => request.ServiceIds.Contains(s.ServiceId)).Select(s => s.ServiceName).ToListAsync();

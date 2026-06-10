@@ -16,6 +16,8 @@ namespace AutoWashPro.BLL.DTOs
         public double ChurnScore { get; set; }
         public List<VehicleDTO> Vehicles { get; set; }
         public DateTime? DateOfBirth { get; set; }
+        public string? Email { get; internal set; }
+        public string Status { get; internal set; }
     }
 
     public class VehicleDTO
@@ -88,6 +90,7 @@ namespace AutoWashPro.BLL.DTOs
         public string TierName { get; set; }
         public string Status { get; set; }
         public DateTime? LastVisitDate { get; set; }
+        public string? Email { get; internal set; }
     }
 
     public class VehicleRecognitionDTO

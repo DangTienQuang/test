@@ -11,7 +11,7 @@ namespace BLL.Services.Interface
 {
     public interface IBusinessService
     {
-        Task<BusinessProfileResponseDTO> CreateBusinessProfileAsync(int userId, CreateBusinessProfileRequest request);
+        Task<RegisterBusinessUserResponse> RegisterBusinessUserAsync(RegisterBusinessUserRequest request);
         Task<BusinessProfileResponseDTO?> GetByUserIdAsync(int userId);
         Task ReviewBusinessProfileAsync(int reviewerId, ReviewBusinessProfileDTO dto);
         Task<List<PendingBusinessApplicationDTO>> GetPendingBusinessApplicationsAsync();

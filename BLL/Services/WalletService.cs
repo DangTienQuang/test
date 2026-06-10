@@ -526,7 +526,7 @@ namespace AutoWashPro.BLL.Services
                 Code = webhookData.Data.Code ?? ""
             };
 
-            SetWebhookDataPropertyIfExists(data, "Desc", webhookData.Data.Desc ?? "");
+            SetWebhookDataPropertyIfExists(data, "Description2", webhookData.Data.Desc ?? "");
             SetWebhookDataPropertyIfExists(data, "VirtualAccountNumber", webhookData.Data.VirtualAccountNumber ?? "");
             SetWebhookDataPropertyIfExists(data, "CounterAccountBankId", webhookData.Data.CounterAccountBankId ?? "");
             SetWebhookDataPropertyIfExists(data, "CounterAccountBankName", webhookData.Data.CounterAccountBankName ?? "");

@@ -66,7 +66,6 @@ namespace AutoWashPro.BLL.Services
                     await _context.SaveChangesAsync();
                 }
 
-                // Vẫn giữ nguyên logic tạo biến OTP ở đây để không bị đỏ code
                 var otp = GenerateOtp();
                 var otpHash = HashOtp(otp);
                 var otpExpiresAt = DateTime.UtcNow.AddMinutes(10);
@@ -81,19 +80,9 @@ namespace AutoWashPro.BLL.Services
                     user.Email = normalizedEmail;
                     user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
                     user.Role = UserRoles.Customer;
-
-                    // ==============================================================
-                    // [TẠM THỜI BYPASS OTP] - CẤP QUYỀN ACTIVE LUÔN CHO USER
-                    // ==============================================================
-                    user.Status = UserStatuses.Active;
-                    user.EmailVerificationOtpHash = null;
-                    user.EmailVerificationOtpExpiresAt = null;
-
-                    // [KHI NÀO SỬA ĐƯỢC MAIL THÌ XÓA 3 DÒNG TRÊN VÀ MỞ LẠI 3 DÒNG DƯỚI NÀY]
-                    // user.Status = UserStatuses.Pending;
-                    // user.EmailVerificationOtpHash = otpHash;
-                    // user.EmailVerificationOtpExpiresAt = otpExpiresAt;
-                    // ==============================================================
+                    user.Status = UserStatuses.Pending;
+                    user.EmailVerificationOtpHash = otpHash;
+                    user.EmailVerificationOtpExpiresAt = otpExpiresAt;
 
                     if (user.CustomerProfile != null)
                     {
@@ -108,19 +97,9 @@ namespace AutoWashPro.BLL.Services
                         Email = normalizedEmail,
                         PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
                         Role = UserRoles.Customer,
-
-                        // ==============================================================
-                        // [TẠM THỜI BYPASS OTP] - CẤP QUYỀN ACTIVE LUÔN CHO USER
-                        // ==============================================================
-                        Status = UserStatuses.Active,
-                        EmailVerificationOtpHash = null,
-                        EmailVerificationOtpExpiresAt = null
-
-                        // [KHI NÀO SỬA ĐƯỢC MAIL THÌ XÓA 3 DÒNG TRÊN VÀ MỞ LẠI 3 DÒNG DƯỚI NÀY]
-                        // Status = UserStatuses.Pending,
-                        // EmailVerificationOtpHash = otpHash,
-                        // EmailVerificationOtpExpiresAt = otpExpiresAt
-                        // ==============================================================
+                        Status = UserStatuses.Pending,
+                        EmailVerificationOtpHash = otpHash,
+                        EmailVerificationOtpExpiresAt = otpExpiresAt
                     };
                     _context.Users.Add(user);
                     await _context.SaveChangesAsync();
@@ -147,21 +126,14 @@ namespace AutoWashPro.BLL.Services
 
                 await _context.SaveChangesAsync();
 
-                // ==============================================================
-                // [TẠM THỜI ĐÓNG GỬI EMAIL] ĐỂ KHÔNG BỊ TIME OUT TRÊN RENDER
-                // Khi nào có API gửi mail khác thì bỏ comment (dấu /* */) đoạn này
-                // ==============================================================
-                /*
                 try
                 {
                     await SendRegistrationOtpEmailAsync(normalizedEmail, request.FullName, otp, otpExpiresAt);
                 }
                 catch (Exception ex)
                 {
-                    throw new BadRequestException($"Đăng ký bị từ chối do không thể gửi email OTP. Lỗi: {ex.Message}");
+                    throw new BadRequestException($"Đăng ký bị từ chối do không thể gửi email OTP. Lỗi máy chủ Email: {ex.Message}");
                 }
-                */
-                // ==============================================================
 
                 await transaction.CommitAsync();
 
@@ -169,8 +141,8 @@ namespace AutoWashPro.BLL.Services
                 {
                     UserId = user.UserId,
                     Email = normalizedEmail,
-                    Status = user.Status,
-                    OtpExpiresAt = otpExpiresAt 
+                    Status = user.Status, 
+                    OtpExpiresAt = otpExpiresAt
                 };
             }
             catch (DbUpdateException)
@@ -379,7 +351,51 @@ namespace AutoWashPro.BLL.Services
 
             return _emailService.SendEmailAsync(email, "[SmartWash] Mã OTP xác thực đăng ký", html);
         }
+        public async Task<RegisterPendingResponseDTO> ResendOtpAsync(ResendOtpDTO request)
+        {
+            var normalizedEmail = request.Email.Trim().ToLower();
 
+            // Tìm user dựa trên email
+            var user = await _context.Users
+                .Include(u => u.CustomerProfile)
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == normalizedEmail);
+
+            if (user == null)
+                throw new NotFoundException("Không tìm thấy tài khoản nào đăng ký bằng email này.");
+
+            if (user.Status != UserStatuses.Pending)
+                throw new BadRequestException("Tài khoản đã được xác thực hoặc đang ở trạng thái không hợp lệ.");
+
+            // Sinh OTP mới và set lại thời gian 10 phút
+            var otp = GenerateOtp();
+            var otpHash = HashOtp(otp);
+            var otpExpiresAt = DateTime.UtcNow.AddMinutes(10);
+
+            user.EmailVerificationOtpHash = otpHash;
+            user.EmailVerificationOtpExpiresAt = otpExpiresAt;
+
+            await _context.SaveChangesAsync();
+
+            // Gửi email mới
+            var fullName = user.CustomerProfile?.FullName ?? "Quý khách";
+            try
+            {
+                await SendRegistrationOtpEmailAsync(normalizedEmail, fullName, otp, otpExpiresAt);
+            }
+            catch (Exception ex)
+            {
+                throw new BadRequestException($"Không thể gửi email OTP mới. Lỗi máy chủ Email: {ex.Message}");
+            }
+
+            // Trả về response y hệt như lúc Register để FE hiển thị lại bộ đếm ngược
+            return new RegisterPendingResponseDTO
+            {
+                UserId = user.UserId,
+                Email = normalizedEmail,
+                Status = user.Status,
+                OtpExpiresAt = otpExpiresAt
+            };
+        }
         private ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
         {
             var tokenValidationParameters = new TokenValidationParameters

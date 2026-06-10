@@ -20,7 +20,10 @@ namespace AutoWashPro.BLL.DTOs
         [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Họ tên không được chỉ chứa khoảng trắng.")]
         public string FullName { get; set; }
     }
-
+    public class ResendOtpDTO
+    {
+        public string Email { get; set; } = null!;
+    }
     public class LoginDTO
     {
         [Required(ErrorMessage = "Số điện thoại hoặc Email không được để trống.")]
