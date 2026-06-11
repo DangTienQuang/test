@@ -217,6 +217,26 @@ namespace AutoWashPro.BLL.Services
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
+            var welcomeVouchers = await _context.Vouchers
+                .Where(v => v.CampaignType == AutoWashPro.DAL.Enums.VoucherCampaignType.Welcome && v.IsActive &&
+                            (!v.StartDate.HasValue || v.StartDate <= DateTime.UtcNow) &&
+                            v.ExpiryDate > DateTime.UtcNow)
+                .ToListAsync();
+
+            foreach(var voucher in welcomeVouchers)
+            {
+                var expiry = voucher.ExpiryDays.HasValue ? DateTime.UtcNow.AddDays(voucher.ExpiryDays.Value) : voucher.ExpiryDate;
+                _context.UserVouchers.Add(new UserVoucher
+                {
+                    UserId = user.UserId,
+                    VoucherId = voucher.VoucherId,
+                    IsUsed = false,
+                    UsageCount = 0,
+                    ReceivedDate = DateTime.UtcNow,
+                    ExpiryDate = expiry <= voucher.ExpiryDate ? expiry : voucher.ExpiryDate
+                });
+            }
+
             await _context.SaveChangesAsync();
 
             return new AuthResponseDTO

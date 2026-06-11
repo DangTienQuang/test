@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace DAL.Migrations
 {
     /// <inheritdoc />
-    public partial class UpdateDB : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -218,48 +218,6 @@ namespace DAL.Migrations
                         principalTable: "Branches",
                         principalColumn: "BranchId",
                         onDelete: ReferentialAction.Cascade);
-                })
-                .Annotation("MySql:CharSet", "utf8mb4");
-
-            migrationBuilder.CreateTable(
-                name: "Vouchers",
-                columns: table => new
-                {
-                    VoucherId = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
-                    Code = table.Column<string>(type: "varchar(50)", maxLength: 50, nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    DiscountAmount = table.Column<decimal>(type: "decimal(65,30)", nullable: false),
-                    MaxUsages = table.Column<int>(type: "int", nullable: false),
-                    CurrentUsageCount = table.Column<int>(type: "int", nullable: false),
-                    MaxUsagePerUser = table.Column<int>(type: "int", nullable: false),
-                    ExpiryDate = table.Column<DateTime>(type: "datetime(6)", nullable: false),
-                    ExpiryDays = table.Column<int>(type: "int", nullable: true),
-                    StartDate = table.Column<DateTime>(type: "datetime(6)", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
-                    IsActive = table.Column<bool>(type: "tinyint(1)", nullable: false),
-                    PointsRequired = table.Column<int>(type: "int", nullable: false),
-                    VoucherType = table.Column<int>(type: "int", nullable: false),
-                    CampaignType = table.Column<int>(type: "int", nullable: false),
-                    ImageUrl = table.Column<string>(type: "longtext", nullable: true)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    MinOrderAmount = table.Column<decimal>(type: "decimal(65,30)", nullable: false),
-                    RequiredTierId = table.Column<int>(type: "int", nullable: true),
-                    ValidStartTime = table.Column<TimeSpan>(type: "time(6)", nullable: true),
-                    ValidEndTime = table.Column<TimeSpan>(type: "time(6)", nullable: true),
-                    TargetAge = table.Column<int>(type: "int", nullable: true),
-                    InactiveDays = table.Column<int>(type: "int", nullable: true),
-                    ResendAfterDays = table.Column<int>(type: "int", nullable: true),
-                    MilestoneUsageCount = table.Column<int>(type: "int", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Vouchers", x => x.VoucherId);
-                    table.ForeignKey(
-                        name: "FK_Vouchers_Tiers_RequiredTierId",
-                        column: x => x.RequiredTierId,
-                        principalTable: "Tiers",
-                        principalColumn: "TierId");
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
@@ -624,6 +582,54 @@ namespace DAL.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
+                name: "Vouchers",
+                columns: table => new
+                {
+                    VoucherId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    Code = table.Column<string>(type: "varchar(50)", maxLength: 50, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    DiscountAmount = table.Column<decimal>(type: "decimal(65,30)", nullable: false),
+                    MaxUsages = table.Column<int>(type: "int", nullable: false),
+                    CurrentUsageCount = table.Column<int>(type: "int", nullable: false),
+                    MaxUsagePerUser = table.Column<int>(type: "int", nullable: false),
+                    ExpiryDate = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    ExpiryDays = table.Column<int>(type: "int", nullable: true),
+                    StartDate = table.Column<DateTime>(type: "datetime(6)", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    IsActive = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    PointsRequired = table.Column<int>(type: "int", nullable: false),
+                    VoucherType = table.Column<int>(type: "int", nullable: false),
+                    CampaignType = table.Column<int>(type: "int", nullable: false),
+                    ImageUrl = table.Column<string>(type: "longtext", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    MinOrderAmount = table.Column<decimal>(type: "decimal(65,30)", nullable: false),
+                    RequiredTierId = table.Column<int>(type: "int", nullable: true),
+                    VehicleTypeId = table.Column<int>(type: "int", nullable: true),
+                    ValidStartTime = table.Column<TimeSpan>(type: "time(6)", nullable: true),
+                    ValidEndTime = table.Column<TimeSpan>(type: "time(6)", nullable: true),
+                    TargetAge = table.Column<int>(type: "int", nullable: true),
+                    InactiveDays = table.Column<int>(type: "int", nullable: true),
+                    ResendAfterDays = table.Column<int>(type: "int", nullable: true),
+                    MilestoneUsageCount = table.Column<int>(type: "int", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Vouchers", x => x.VoucherId);
+                    table.ForeignKey(
+                        name: "FK_Vouchers_Tiers_RequiredTierId",
+                        column: x => x.RequiredTierId,
+                        principalTable: "Tiers",
+                        principalColumn: "TierId");
+                    table.ForeignKey(
+                        name: "FK_Vouchers_VehicleTypes_VehicleTypeId",
+                        column: x => x.VehicleTypeId,
+                        principalTable: "VehicleTypes",
+                        principalColumn: "Id");
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
                 name: "StaffShiftAssignments",
                 columns: table => new
                 {
@@ -716,41 +722,6 @@ namespace DAL.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "UserVouchers",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
-                    UserId = table.Column<int>(type: "int", nullable: false),
-                    VoucherId = table.Column<int>(type: "int", nullable: false),
-                    IsUsed = table.Column<bool>(type: "tinyint(1)", nullable: false),
-                    UsedDate = table.Column<DateTime>(type: "datetime(6)", nullable: true),
-                    UsageCount = table.Column<int>(type: "int", nullable: false),
-                    ReceivedDate = table.Column<DateTime>(type: "datetime(6)", nullable: false),
-                    ExpiryDate = table.Column<DateTime>(type: "datetime(6)", nullable: false),
-                    LastUsedDate = table.Column<DateTime>(type: "datetime(6)", nullable: true),
-                    TriggerKey = table.Column<string>(type: "varchar(255)", nullable: true)
-                        .Annotation("MySql:CharSet", "utf8mb4")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_UserVouchers", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_UserVouchers_Users_UserId",
-                        column: x => x.UserId,
-                        principalTable: "Users",
-                        principalColumn: "UserId",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_UserVouchers_Vouchers_VoucherId",
-                        column: x => x.VoucherId,
-                        principalTable: "Vouchers",
-                        principalColumn: "VoucherId",
-                        onDelete: ReferentialAction.Cascade);
-                })
-                .Annotation("MySql:CharSet", "utf8mb4");
-
-            migrationBuilder.CreateTable(
                 name: "FleetImportBatches",
                 columns: table => new
                 {
@@ -805,6 +776,41 @@ namespace DAL.Migrations
                         column: x => x.WalletId,
                         principalTable: "Wallets",
                         principalColumn: "WalletId",
+                        onDelete: ReferentialAction.Cascade);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "UserVouchers",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    VoucherId = table.Column<int>(type: "int", nullable: false),
+                    IsUsed = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    UsedDate = table.Column<DateTime>(type: "datetime(6)", nullable: true),
+                    UsageCount = table.Column<int>(type: "int", nullable: false),
+                    ReceivedDate = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    ExpiryDate = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    LastUsedDate = table.Column<DateTime>(type: "datetime(6)", nullable: true),
+                    TriggerKey = table.Column<string>(type: "varchar(255)", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserVouchers", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_UserVouchers_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_UserVouchers_Vouchers_VoucherId",
+                        column: x => x.VoucherId,
+                        principalTable: "Vouchers",
+                        principalColumn: "VoucherId",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
@@ -1500,6 +1506,11 @@ namespace DAL.Migrations
                 name: "IX_Vouchers_RequiredTierId",
                 table: "Vouchers",
                 column: "RequiredTierId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Vouchers_VehicleTypeId",
+                table: "Vouchers",
+                column: "VehicleTypeId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Wallets_UserId",
