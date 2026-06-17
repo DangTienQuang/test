@@ -106,6 +106,15 @@ namespace AutoWashPro.BLL.DTOs
         public required string ReturnUrl { get; set; }
     }
 
+    public class RescheduleBookingDTO
+    {
+        [Required]
+        public DateTime NewScheduledDate { get; set; }
+
+        [Required]
+        public int NewSlotId { get; set; }
+    }
+
     public class BookingPaymentLinkResponseDTO
     {
         public required string PaymentUrl { get; set; }

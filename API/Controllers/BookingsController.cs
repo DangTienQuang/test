@@ -132,6 +132,14 @@ namespace AutoWashPro.API.Controllers
             return Ok(new { statusCode = 200, message = "Đã hủy lịch thành công." });
         }
 
+        [HttpPut("{id}/reschedule")]
+        public async Task<IActionResult> RescheduleBooking(int id, [FromBody] RescheduleBookingDTO request)
+        {
+            int userId = GetUserId();
+            var result = await _bookingService.RescheduleBookingAsync(userId, id, request);
+            return Ok(new { statusCode = 200, message = "Đã thay đổi lịch hẹn thành công.", data = result });
+        }
+
         [Authorize(Roles = "Staff,Manager,Admin")]
         [HttpPut("{id}/condition")]
         public async Task<IActionResult> UpdateVehicleCondition(int id, [FromBody] UpdateVehicleConditionDTO request)

@@ -1341,5 +1341,125 @@ namespace AutoWashPro.BLL.Services
                 && (t.TransactionType == "Payment" || t.TransactionType == "BookingPayment"));
         }
 
+        public async Task<BookingResponseDTO> RescheduleBookingAsync(int userId, int bookingId, RescheduleBookingDTO request)
+        {
+            var booking = await _context.Bookings
+                .Include(b => b.User)
+                .Include(b => b.BookingDetails)
+                .ThenInclude(bd => bd.Service)
+                .FirstOrDefaultAsync(b => b.BookingId == bookingId && b.UserId == userId);
+
+            if (booking == null)
+            {
+                throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy lịch hẹn.");
+            }
+
+            if (booking.Status != "Pending" && booking.Status != "Confirmed")
+            {
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Chỉ có thể thay đổi lịch hẹn ở trạng thái Pending hoặc Confirmed.");
+            }
+
+            var timeRemaining = booking.ScheduledTime - DateTime.UtcNow;
+            if (timeRemaining.TotalHours < 2)
+            {
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Chỉ có thể thay đổi lịch hẹn trước 2 tiếng so với giờ bắt đầu.");
+            }
+
+            var newSlot = await _context.TimeSlots.FindAsync(request.NewSlotId);
+            if (newSlot == null || newSlot.BranchId != booking.BranchId)
+            {
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Khung giờ mới không hợp lệ hoặc không thuộc cùng một chi nhánh.");
+            }
+
+            var newTargetDateTime = request.NewScheduledDate.Date.Add(newSlot.StartTime);
+
+            if (newTargetDateTime <= DateTime.UtcNow)
+            {
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Không thể đặt lịch trong quá khứ.");
+            }
+
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
+
+            try
+            {
+                var oldSlot = await _context.TimeSlots
+                    .Where(s => s.BranchId == booking.BranchId && s.StartTime <= booking.ScheduledTime.TimeOfDay && s.EndTime >= booking.ScheduledTime.TimeOfDay)
+                    .FirstOrDefaultAsync();
+
+                if (oldSlot != null)
+                {
+                    var oldCapacity = await _context.DailySlotCapacities
+                        .FirstOrDefaultAsync(dc => dc.SlotId == oldSlot.SlotId && dc.BranchId == booking.BranchId && dc.Date == booking.ScheduledTime.Date);
+
+                    if (oldCapacity != null)
+                    {
+                        oldCapacity.BookedWeight -= booking.CapacityWeight;
+                        if (oldCapacity.BookedWeight < 0) oldCapacity.BookedWeight = 0;
+                    }
+                }
+
+                var newCapacity = await _context.DailySlotCapacities
+                    .FirstOrDefaultAsync(dc => dc.SlotId == newSlot.SlotId && dc.BranchId == booking.BranchId && dc.Date == newTargetDateTime.Date);
+
+                if (newCapacity == null)
+                {
+                    newCapacity = new DailySlotCapacity
+                    {
+                        SlotId = newSlot.SlotId,
+                        BranchId = booking.BranchId,
+                        Date = newTargetDateTime.Date,
+                        BookedWeight = 0
+                    };
+                    _context.DailySlotCapacities.Add(newCapacity);
+                }
+
+                if (newCapacity.BookedWeight + booking.CapacityWeight > newSlot.MaxCapacity)
+                {
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Khung giờ mới không đủ sức chứa cho xe của bạn.");
+                }
+
+                newCapacity.BookedWeight += booking.CapacityWeight;
+                booking.ScheduledTime = newTargetDateTime;
+                booking.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                if (booking.User != null && !string.IsNullOrEmpty(booking.User.Email))
+                {
+                    var emailHtml = $"Kính chào quý khách,<br/><br/>Lịch hẹn của quý khách đã được thay đổi thành công.<br/>Giờ hẹn mới: {newTargetDateTime:dd/MM/yyyy HH:mm}.<br/><br/>Trân trọng,<br/>AutoWashPro";
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _emailService.SendEmailAsync(booking.User.Email, $"[SmartWash] Xác nhận thay đổi lịch hẹn - #{booking.BookingId}", emailHtml);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[Lỗi Background Task - Email Reschedule] Booking #{booking.BookingId}: {ex.Message}");
+                        }
+                    });
+                }
+
+                return new BookingResponseDTO
+                {
+                    BookingId = booking.BookingId,
+                    LicensePlate = booking.LicensePlate,
+                    ServiceNames = booking.BookingDetails.Select(d => d.Service.ServiceName).ToList(),
+                    ScheduledTime = booking.ScheduledTime,
+                    Status = booking.Status,
+                    OriginalPrice = booking.OriginalPrice,
+                    PointDiscountAmount = booking.PointDiscountAmount,
+                    VoucherDiscountAmount = booking.VoucherDiscountAmount,
+                    FinalAmount = booking.FinalAmount
+                };
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
     }
 }
