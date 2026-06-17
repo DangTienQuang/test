@@ -1,0 +1,2 @@
+sed -i 's/await _carModelService.RequestNewCarModelAsync(userId, request);/var newId = await _carModelService.RequestNewCarModelAsync(userId, request);/g' API/Controllers/CarModelsController.cs
+sed -i 's/return Ok(new { statusCode = 200, message = "Yêu cầu thêm dòng xe đã được gửi và đang chờ duyệt." });/return Ok(new { statusCode = 200, message = "Yêu cầu thêm dòng xe đã được gửi và đang chờ duyệt.", data = newId });/g' API/Controllers/CarModelsController.cs

@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > BLL/Services/CarModelService.cs
 using AutoWashPro.BLL.DTOs;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
@@ -143,3 +144,4 @@ namespace AutoWashPro.BLL.Services
         }
     }
 }
+INNER_EOF
