@@ -85,7 +85,7 @@ namespace AutoWashPro.BLL.Services
 
             if (request.CarModelId.HasValue)
             {
-                var carModelExists = await _context.CarModels.AnyAsync(c => c.Id == request.CarModelId.Value && c.IsActive);
+                var carModelExists = await _context.CarModels.AnyAsync(c => c.Id == request.CarModelId.Value && c.IsActive && c.Status != "Rejected");
                 if (!carModelExists)
                     throw new BadRequestException("Dòng xe bạn chọn không tồn tại hoặc đã ngừng hỗ trợ.");
 
@@ -324,7 +324,7 @@ namespace AutoWashPro.BLL.Services
 
             if (request.CarModelId.HasValue)
             {
-                var carModelExists = await _context.CarModels.AnyAsync(c => c.Id == request.CarModelId.Value && c.IsActive);
+                var carModelExists = await _context.CarModels.AnyAsync(c => c.Id == request.CarModelId.Value && c.IsActive && c.Status != "Rejected");
                 if (!carModelExists)
                     throw new BadRequestException("Dòng xe bạn chọn không tồn tại hoặc đã ngừng hỗ trợ.");
 

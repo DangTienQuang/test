@@ -10,5 +10,10 @@ namespace AutoWashPro.BLL.Services
         Task<bool> CreateCarModelAsync(CreateCarModelDTO request);
         Task<bool> UpdateCarModelAsync(int id, UpdateCarModelDTO request);
         Task<bool> DeleteCarModelAsync(int id);
+
+        Task<int> RequestNewCarModelAsync(int userId, RequestCarModelDTO request);
+        Task<List<CarModelDTO>> GetPendingCarModelsAsync();
+        Task<bool> ApproveCarModelAsync(int id, ApproveCarModelDTO request);
+        Task<bool> RejectCarModelAsync(int id);
     }
 }

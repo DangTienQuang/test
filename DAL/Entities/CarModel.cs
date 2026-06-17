@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AutoWashPro.DAL.Entities
 {
@@ -16,5 +17,19 @@ namespace AutoWashPro.DAL.Entities
         public string Name { get; set; } // Tên dòng xe (VD: Vios, CX-5)
 
         public bool IsActive { get; set; } = true;
+
+        [Required]
+        [MaxLength(20)]
+        public string Status { get; set; } = "Approved"; // Pending, Approved, Rejected
+
+        public int? RequestedByUserId { get; set; }
+
+        [ForeignKey("RequestedByUserId")]
+        public User RequestedByUser { get; set; }
+
+        public int? VehicleTypeId { get; set; }
+
+        [ForeignKey("VehicleTypeId")]
+        public VehicleType VehicleType { get; set; }
     }
 }
