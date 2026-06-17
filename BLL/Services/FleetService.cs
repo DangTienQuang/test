@@ -70,11 +70,11 @@ namespace BLL.Services
 
             var worksheet = package.Workbook.Worksheets[0];
 
-            int rowCount = worksheet.Dimension.Rows;
             if (worksheet?.Dimension == null)
             {
                 throw new BadRequestException("File Excel không có dữ liệu.");
             }
+            int rowCount = worksheet.Dimension.Rows;
 
             var importedPlates = new HashSet<string>();
 
@@ -86,6 +86,20 @@ namespace BLL.Services
                 string model = worksheet.Cells[row, 5].Text.Trim();
                 string driverName = worksheet.Cells[row, 6].Text.Trim();
                 string employeeCode = worksheet.Cells[row, 7].Text.Trim();
+
+                // Skip completely empty rows
+                bool isEmptyRow =
+                    string.IsNullOrWhiteSpace(licensePlate) &&
+                    string.IsNullOrWhiteSpace(vehicleTypeName) &&
+                    string.IsNullOrWhiteSpace(brand) &&
+                    string.IsNullOrWhiteSpace(model) &&
+                    string.IsNullOrWhiteSpace(driverName) &&
+                    string.IsNullOrWhiteSpace(employeeCode);
+
+                if (isEmptyRow)
+                {
+                    continue;
+                }
 
                 var errors = new List<string>();
 
@@ -100,6 +114,7 @@ namespace BLL.Services
                 }
 
                 bool existed = await _context.FleetVehicles.AnyAsync(x => x.LicensePlate == licensePlate);
+
                 if (existed)
                 {
                     errors.Add("Biển số đã tồn tại trong hệ thống.");
@@ -107,7 +122,8 @@ namespace BLL.Services
 
                 importedPlates.Add(licensePlate);
 
-                var vehicleType = await _context.VehicleTypes.FirstOrDefaultAsync(x => x.Name == vehicleTypeName);
+                var vehicleType = await _context.VehicleTypes
+                    .FirstOrDefaultAsync(x => x.Name == vehicleTypeName);
 
                 if (vehicleType == null)
                 {
@@ -118,17 +134,15 @@ namespace BLL.Services
                 {
                     foreach (var error in errors)
                     {
-                        _context.FleetImportErrors.Add(
-                            new FleetImportError
-                            {
-                                FleetImportBatchId = batch.FleetImportBatchId,
-                                RowNumber = row,
-                                ErrorMessage = error
-                            });
+                        _context.FleetImportErrors.Add(new FleetImportError
+                        {
+                            FleetImportBatchId = batch.FleetImportBatchId,
+                            RowNumber = row,
+                            ErrorMessage = error
+                        });
                     }
 
                     batch.FailedRows++;
-
                     continue;
                 }
 
@@ -147,10 +161,8 @@ namespace BLL.Services
                 };
 
                 _context.FleetVehicles.Add(fleetVehicle);
-
                 batch.SuccessRows++;
             }
-
             batch.TotalRows = batch.SuccessRows + batch.FailedRows;
 
             if (batch.SuccessRows == 0)
@@ -240,6 +252,39 @@ namespace BLL.Services
                     DriverName = x.DriverName,
                     EmployeeId = x.EmployeeCode,
                     Status = x.Status
+                })
+                .ToListAsync();
+        }
+
+        public async Task<List<StaffPendingVehicleDTO>> GetAllPendingVehiclesAsync(int? businessProfileId = null)
+        {
+            var query = _context.FleetVehicles
+                .Include(x => x.VehicleType)
+                .Include(x => x.BusinessProfile)
+                .Where(x => x.Status == "PendingApproval")
+                .AsQueryable();
+
+            if (businessProfileId.HasValue)
+            {
+                query = query.Where(x => x.BusinessProfileId == businessProfileId.Value);
+            }
+
+            return await query
+                .OrderBy(x => x.CreatedAt)
+                .Select(x => new StaffPendingVehicleDTO
+                {
+                    FleetVehicleId = x.FleetVehicleId,
+                    LicensePlate = x.LicensePlate,
+                    Brand = x.Brand,
+                    Model = x.Model,
+                    VehicleTypeName = x.VehicleType.Name,
+                    DriverName = x.DriverName,
+                    EmployeeId = x.EmployeeCode,
+                    Status = x.Status,
+                    BusinessName = x.BusinessProfile.CompanyName,
+                    BusinessProfileId = x.BusinessProfileId,
+                    FleetImportBatchId = x.FleetImportBatchId,
+                    CreatedAt = x.CreatedAt
                 })
                 .ToListAsync();
         }

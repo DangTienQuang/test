@@ -171,7 +171,7 @@ builder.Services.AddScoped<IManagerService, ManagerService>();
 builder.Services.AddScoped<IOperationStaffService, OperationStaffService>();
 builder.Services.AddScoped<IBusinessBookingService, BusinessBookingService>();
 builder.Services.AddScoped<IInvoicePdfService, InvoicePdfService>();
-
+builder.Services.AddScoped<ILaneSchedulerService, LaneSchedulerService>();
 builder.Services.AddScoped<IFleetService, FleetService>();
 // ==============================================================================
 // 7. BACKGROUND WORKERS

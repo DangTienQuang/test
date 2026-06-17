@@ -22,5 +22,6 @@ namespace BLL.Services.Interface
         Task<FleetDashboardDTO> GetDashboardAsync(int businessUserId);
         Task<List<FleetWashHistoryDTO>> GetWashHistoryAsync(int businessUserId);
         Task<FleetTemplateDTO> GetFleetTemplateAsync();
+        Task<List<StaffPendingVehicleDTO>> GetAllPendingVehiclesAsync(int? businessProfileId = null);
     }
 }

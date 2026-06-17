@@ -1,4 +1,5 @@
-﻿using BLL.DTOs;
+﻿using AutoWashPro.BLL.DTOs;
+using BLL.DTOs;
 using BLL.DTOs.Business;
 using BLL.DTOs.Fleet;
 using System;
@@ -11,7 +12,7 @@ namespace BLL.Services.Interface
 {
     public interface IBusinessBookingService
     {
-        Task<BusinessBookingResponseDTO> CreateBookingAsync(int businessUserId, CreateBusinessBookingDTO dto);
+        Task<MultiVehicleBookingResponseDTO> CreateBusinessBookingAsync(int businessUserId, CreateBusinessBookingDTO dto);
         Task<List<FleetVehicleDTO>> GetActiveFleetVehiclesAsync(int businessUserId);
         Task<List<BusinessBookingListDTO>> GetBookingsAsync(int businessUserId);
         Task<BusinessBookingDetailDTO> GetBookingDetailAsync(int businessUserId, int bookingId);
@@ -30,5 +31,8 @@ namespace BLL.Services.Interface
         Task<InvoiceDetailDTO> GetInvoiceDetailAsync(int businessUserId, int invoiceId);
         Task<MonthlyStatementDTO> GetMonthlyStatementAsync(int businessUserId, int year, int month);
         Task AssignLaneAsync(int washLogId, AssignLaneDTO dto);
+        Task<List<BusinessVehicleStatusDTO>> GetActiveVehiclesOnFloorAsync(int businessUserId);
+        Task<List<BusinessVehicleStatusDTO>> GetVehiclesByStatusAsync(int businessUserId, string? status);
+        Task<List<DTOs.Business.TimeSlotResponseDTO>> GetAvailableSlotsForBusinessAsync(int businessUserId, CheckBusinessSlotsRequestDTO request);
     }
 }
