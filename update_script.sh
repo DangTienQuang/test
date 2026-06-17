@@ -1,1 +1,0 @@
-sed -i 's/var carModelExists = await _context.CarModels.AnyAsync(c => c.Id == request.CarModelId.Value \&\& c.IsActive);/var carModelExists = await _context.CarModels.AnyAsync(c => c.Id == request.CarModelId.Value \&\& c.IsActive \&\& c.Status != "Rejected");/g' BLL/Services/VehicleService.cs
