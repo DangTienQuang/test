@@ -38,6 +38,9 @@ namespace AutoWashPro.BLL.DTOs
         [Required(ErrorMessage = "Vui lòng nhập tên dòng xe.")]
         public string Name { get; set; }
 
+        public int? Year { get; set; }
+        public string? Version { get; set; }
+
         public int? VehicleTypeId { get; set; }
     }
 

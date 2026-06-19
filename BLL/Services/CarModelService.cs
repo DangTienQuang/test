@@ -112,10 +112,20 @@ namespace AutoWashPro.BLL.Services
                 }
             }
 
+            string combinedName = request.Name.Trim();
+            if (!string.IsNullOrWhiteSpace(request.Version))
+            {
+                combinedName += $" {request.Version.Trim()}";
+            }
+            if (request.Year.HasValue)
+            {
+                combinedName += $" {request.Year.Value}";
+            }
+
             var newModel = new CarModel
             {
                 Brand = request.Brand.Trim(),
-                Name = request.Name.Trim(),
+                Name = combinedName,
                 Status = "Pending",
                 IsActive = true,
                 RequestedByUserId = userId,
