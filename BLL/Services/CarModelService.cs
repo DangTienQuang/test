@@ -40,6 +40,12 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<bool> CreateCarModelAsync(CreateCarModelDTO request)
         {
+            if (request.VehicleTypeId.HasValue)
+            {
+                var vehicleTypeExists = await _context.VehicleTypes.AnyAsync(vt => vt.Id == request.VehicleTypeId.Value);
+                if (!vehicleTypeExists) throw new BadRequestException("Loại xe không hợp lệ.");
+            }
+
             var newModel = new CarModel
             {
                 Brand = request.Brand,
@@ -78,6 +84,12 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<int> RequestNewCarModelAsync(int userId, RequestCarModelDTO request)
         {
+            if (request.VehicleTypeId.HasValue)
+            {
+                var vehicleTypeExists = await _context.VehicleTypes.AnyAsync(vt => vt.Id == request.VehicleTypeId.Value);
+                if (!vehicleTypeExists) throw new BadRequestException("Loại xe không hợp lệ.");
+            }
+
             var newModel = new CarModel
             {
                 Brand = request.Brand.Trim(),
