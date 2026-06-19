@@ -84,10 +84,32 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<int> RequestNewCarModelAsync(int userId, RequestCarModelDTO request)
         {
-            if (request.VehicleTypeId.HasValue)
+            int? finalVehicleTypeId = request.VehicleTypeId;
+
+            if (finalVehicleTypeId.HasValue)
             {
-                var vehicleTypeExists = await _context.VehicleTypes.AnyAsync(vt => vt.Id == request.VehicleTypeId.Value);
+                var vehicleTypeExists = await _context.VehicleTypes.AnyAsync(vt => vt.Id == finalVehicleTypeId.Value);
                 if (!vehicleTypeExists) throw new BadRequestException("Loại xe không hợp lệ.");
+            }
+            else
+            {
+                // Auto-assign to "Khác" (Other) if FE doesn't provide one
+                var otherVehicleType = await _context.VehicleTypes
+                    .FirstOrDefaultAsync(vt => vt.Name.Contains("Khác") || vt.Name.Contains("Other"));
+
+                if (otherVehicleType != null)
+                {
+                    finalVehicleTypeId = otherVehicleType.Id;
+                }
+                else
+                {
+                    // Fallback to the first available vehicle type if "Khác" doesn't exist
+                    var firstType = await _context.VehicleTypes.FirstOrDefaultAsync();
+                    if (firstType != null)
+                    {
+                        finalVehicleTypeId = firstType.Id;
+                    }
+                }
             }
 
             var newModel = new CarModel
@@ -97,7 +119,7 @@ namespace AutoWashPro.BLL.Services
                 Status = "Pending",
                 IsActive = true,
                 RequestedByUserId = userId,
-                VehicleTypeId = request.VehicleTypeId
+                VehicleTypeId = finalVehicleTypeId
             };
 
             _context.CarModels.Add(newModel);
