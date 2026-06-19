@@ -56,7 +56,15 @@ namespace BLL.DTOs.Business
         public string TimeRange { get; set; } = string.Empty;
         public bool IsAvailable { get; set; }
         public string Reason { get; set; } = string.Empty;
-        // Extra info for multi-vehicle display
         public int? EstimatedLastEndMinutesIntoSlot { get; set; }
+        public List<VehicleSlotProjectionDTO> VehicleProjections { get; set; } = new();
+    }
+
+    public class VehicleSlotProjectionDTO
+    {
+        public int FleetVehicleId { get; set; }
+        public DateTime EstimatedStart { get; set; }
+        public DateTime EstimatedEnd { get; set; }
+        public string LaneName { get; set; } = string.Empty;
     }
 }

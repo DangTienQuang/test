@@ -87,45 +87,118 @@ namespace BLL.Services
                 return LaneScheduleResult.Fail("Danh sách phương tiện không được để trống.");
 
             var lanes = await _context.Lanes
-                .Where(x => x.BranchId == branchId && x.IsActive)
-                .OrderBy(x => x.IsBusinessLane ? 0 : 1) // business lane gets first pick
+                .Where(x =>
+                    x.BranchId == branchId &&
+                    x.IsActive &&
+                    x.IsBusinessLane)
                 .ToListAsync();
 
             if (!lanes.Any())
                 return LaneScheduleResult.Fail("Không có làn xe khả dụng tại chi nhánh này.");
 
-            var projectedFreeTimes = await GetLaneProjectedFreeTimesAsync(branchId, slotStart);
+            // ------------------------------------------------------------------
+            // STEP 1: Current active occupancy from CheckedIn/Assigned/Processing
+            // ------------------------------------------------------------------
 
-            // Local mutable state — we simulate without touching the DB
+            var projectedFreeTimes =
+                await GetLaneProjectedFreeTimesAsync(branchId, slotStart);
+
             var laneQueue = lanes
                 .Select(l => new LaneSimState
                 {
                     LaneId = l.LaneId,
                     IsBusinessLane = l.IsBusinessLane,
                     FreeAt = projectedFreeTimes.TryGetValue(l.LaneId, out var t)
-                                        ? t
-                                        : slotStart
+                        ? t
+                        : slotStart
                 })
                 .ToList();
 
+            // ------------------------------------------------------------------
+            // STEP 2: Replay existing pending bookings already assigned
+            // ------------------------------------------------------------------
+
+            DateTime slotEnd = slotStart.Add(slotDuration);
+
+            var existingBookings = await _context.Bookings
+                .Include(x => x.BookingDetails)
+                .Include(x => x.FleetVehicle)
+                    .ThenInclude(x => x!.VehicleType)
+                .Where(x =>
+                    x.BranchId == branchId &&
+                    x.BookingType == "Business" &&
+                    x.Status == "Pending" &&
+                    x.ProcessingLaneId != null &&
+                    x.ScheduledTime >= slotStart &&
+                    x.ScheduledTime < slotEnd)
+                .OrderBy(x => x.BookingId)
+                .ToListAsync();
+
+            foreach (var booking in existingBookings)
+            {
+                var laneState = laneQueue.FirstOrDefault(x =>
+                    x.LaneId == booking.ProcessingLaneId);
+
+                if (laneState == null)
+                    continue;
+
+                var serviceIds = booking.BookingDetails
+                    .Select(x => x.ServiceId)
+                    .ToList();
+
+                if (!serviceIds.Any())
+                    continue;
+
+                var servicePrices = await _context.ServicePrices
+                    .Where(x =>
+                        x.BranchId == branchId &&
+                        x.VehicleTypeId == booking.FleetVehicle!.VehicleTypeId &&
+                        serviceIds.Contains(x.ServiceId))
+                    .ToListAsync();
+
+                int washMinutes =
+                    WashTimeEstimator.EstimateMinutes(servicePrices);
+
+                DateTime estimatedStart =
+                    laneState.FreeAt < slotStart
+                        ? slotStart
+                        : laneState.FreeAt;
+
+                DateTime estimatedEnd =
+                    estimatedStart.AddMinutes(washMinutes);
+
+                laneState.FreeAt =
+                    estimatedEnd.AddMinutes(
+                        WashTimeEstimator.GetInterVehicleBuffer());
+            }
+
+            // ------------------------------------------------------------------
+            // STEP 3: Schedule NEW vehicles
+            // ------------------------------------------------------------------
+
             var assignments = new List<VehicleAssignment>();
-            DateTime deadline = slotStart + slotDuration + TimeSpan.FromMinutes(SlotGraceMinutes);
+
+            DateTime deadline =
+                slotStart +
+                slotDuration +
+                TimeSpan.FromMinutes(SlotGraceMinutes);
 
             foreach (var vehicle in vehicles)
             {
-                int washMinutes = WashTimeEstimator.EstimateMinutes(vehicle.ServicePrices);
+                int washMinutes =
+                    WashTimeEstimator.EstimateMinutes(vehicle.ServicePrices);
 
-                // Re-sort every iteration — FreeAt mutates as we assign
                 laneQueue.Sort((a, b) => a.FreeAt.CompareTo(b.FreeAt));
 
                 var chosenLane = laneQueue[0];
 
-                // Vehicle cannot start before the slot opens
-                DateTime estimatedStart = chosenLane.FreeAt < slotStart
-                    ? slotStart
-                    : chosenLane.FreeAt;
+                DateTime estimatedStart =
+                    chosenLane.FreeAt < slotStart
+                        ? slotStart
+                        : chosenLane.FreeAt;
 
-                DateTime estimatedEnd = estimatedStart.AddMinutes(washMinutes);
+                DateTime estimatedEnd =
+                    estimatedStart.AddMinutes(washMinutes);
 
                 if (estimatedEnd > deadline)
                 {
@@ -143,8 +216,9 @@ namespace BLL.Services
                     EstimatedEnd = estimatedEnd
                 });
 
-                // Advance this lane's free time + inter-vehicle buffer
-                chosenLane.FreeAt = estimatedEnd.AddMinutes(WashTimeEstimator.GetInterVehicleBuffer());
+                chosenLane.FreeAt =
+                    estimatedEnd.AddMinutes(
+                        WashTimeEstimator.GetInterVehicleBuffer());
             }
 
             return LaneScheduleResult.Ok(assignments);

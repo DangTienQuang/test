@@ -34,5 +34,6 @@ namespace BLL.Services.Interface
         Task<List<BusinessVehicleStatusDTO>> GetActiveVehiclesOnFloorAsync(int businessUserId);
         Task<List<BusinessVehicleStatusDTO>> GetVehiclesByStatusAsync(int businessUserId, string? status);
         Task<List<DTOs.Business.TimeSlotResponseDTO>> GetAvailableSlotsForBusinessAsync(int businessUserId, CheckBusinessSlotsRequestDTO request);
+        Task<RescheduleBusinessResponseDTO> RescheduleBookingAsync(int businessUserId, RescheduleBusinessBookingDTO dto);
     }
 }
