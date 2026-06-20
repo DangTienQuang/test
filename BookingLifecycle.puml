@@ -1,0 +1,77 @@
+@startuml
+!theme spacelab
+
+' Define choice pseudostates
+state check_in_payment_choice <<choice>>
+state completion_payment_choice <<choice>>
+
+' Main states
+[*] --> Pending : CreateBookingAsync() / InsertBooking()
+[*] --> CheckedIn : CreateWalkInBookingAsync() / InsertBooking()
+
+state Pending {
+}
+
+state CheckedIn {
+}
+
+state Processing {
+}
+
+state Completed {
+  entry / AwardCompletionPointsAsync()
+  entry / UpdateLastVisitDate()
+  entry / ProcessMilestoneCampaignsAsync()
+}
+
+state Cancelled {
+  entry / RefundBalanceAsync() [IsRefundable == true]
+  entry / RefundSpendablePointsAsync()
+  entry / ReleaseTimeSlotCapacity()
+}
+
+state CancelledBySystem {
+  entry / RefundBalanceAsync()
+  entry / RefundSpendablePointsAsync()
+  entry / GenerateCompensationVoucherAsync()
+  entry / SendBookingCancellationEmailAsync()
+}
+
+state NoShow {
+  ' No refund logic
+}
+
+state Delayed {
+}
+
+' Transitions from Pending
+Pending --> Cancelled : CancelBookingAsync() [Status == "Pending"] / SetStatus("Cancelled")
+Pending --> CancelledBySystem : ForceCancelBookingsAsync() [Status == "Pending"] / SetStatus("CancelledBySystem")
+Pending --> Delayed : UpdateBookingStatusAsync("Delayed") [Status == "Pending"] / SetStatus("Delayed")
+Pending --> NoShow : MarkAsNoShowAsync() / SetStatus("NoShow")
+
+' Check-in logic with payment check
+Pending --> check_in_payment_choice : UpdateBookingStatusAsync("CheckedIn")\nOR ConfirmCheckInAndAssignLaneAsync()\nOR CheckInBookingAsync()\nOR UpdateBookingStatusByLicensePlateAsync("CheckedIn")
+check_in_payment_choice --> CheckedIn : [FinalAmount == 0 OR HasCompletedBookingPaymentAsync() == true] / AssignLane()
+check_in_payment_choice --> Pending : [FinalAmount > 0 AND HasCompletedBookingPaymentAsync() == false] / throw BadRequestException
+
+' Transitions from CheckedIn
+CheckedIn --> Cancelled : CancelBookingAsync() [Status == "CheckedIn"] / SetStatus("Cancelled")
+CheckedIn --> Delayed : UpdateBookingStatusAsync("Delayed") [Status == "CheckedIn"] / SetStatus("Delayed")
+CheckedIn --> Processing : UpdateBookingStatusAsync("Processing") [Status == "CheckedIn"] / AssignStaffId()
+CheckedIn --> completion_payment_choice : UpdateBookingStatusAsync("Completed")
+
+' Processing transitions
+Processing --> completion_payment_choice : UpdateBookingStatusAsync("Completed") [AssignedStaffId == CurrentUserId]
+
+' Completion logic with payment check
+completion_payment_choice --> Completed : [FinalAmount == 0 OR HasCompletedBookingPaymentAsync() == true] / SetStatus("Completed")
+completion_payment_choice --> Processing : [FinalAmount > 0 AND HasCompletedBookingPaymentAsync() == false] / throw BadRequestException
+
+' End state transitions
+Completed --> [*]
+Cancelled --> [*]
+CancelledBySystem --> [*]
+NoShow --> [*]
+
+@enduml
