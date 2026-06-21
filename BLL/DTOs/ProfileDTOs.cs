@@ -27,6 +27,8 @@ namespace AutoWashPro.BLL.DTOs
         public string VehicleType { get; set; }
         public string? RegistrationPhotoUrl { get; set; }
         public string? CarModel { get; set; }
+        public string? Brand { get; set; }
+        public string? UserNote { get; set; }
     }
 
     public class CreateVehicleDTO

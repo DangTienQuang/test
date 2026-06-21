@@ -36,7 +36,9 @@ namespace AutoWashPro.BLL.Services
                     VehicleTypeId = v.VehicleTypeId,
                     VehicleType = v.VehicleType.Name,
                     RegistrationPhotoUrl = v.RegistrationPhotoUrl,
-                    CarModel = v.CarModelId.HasValue ? v.CarModelEntity.Name : v.CarModel
+                    CarModel = v.CarModelId.HasValue ? v.CarModelEntity.Name : v.CarModel,
+                    Brand = v.CarModelId.HasValue ? v.CarModelEntity.Brand : null,
+                    UserNote = v.UserNote
                 }).ToListAsync();
         }
 
