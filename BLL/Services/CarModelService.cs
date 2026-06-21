@@ -103,12 +103,15 @@ namespace AutoWashPro.BLL.Services
                 }
                 else
                 {
-                    // Fallback to the first available vehicle type if "Khác" doesn't exist
-                    var firstType = await _context.VehicleTypes.FirstOrDefaultAsync();
-                    if (firstType != null)
+                    var newOtherType = new AutoWashPro.DAL.Entities.VehicleType
                     {
-                        finalVehicleTypeId = firstType.Id;
-                    }
+                        Name = "Khác",
+                        Description = "Các loại xe chưa được phân loại",
+                        BaseWeight = 1
+                    };
+                    _context.VehicleTypes.Add(newOtherType);
+                    await _context.SaveChangesAsync();
+                    finalVehicleTypeId = newOtherType.Id;
                 }
             }
 
