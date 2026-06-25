@@ -89,7 +89,7 @@ namespace AutoWashPro.BLL.Services
             return true;
         }
 
-        public async Task<bool> UnassignStaffFromLaneAsync(int managerUserId, int laneId, int staffId)
+        public async Task<bool> UnassignStaffFromLaneAsync(int managerUserId, int laneId, int staffId, System.DateTime? date = null)
         {
             var managerProfile = await GetManagerProfileAsync(managerUserId);
 
@@ -100,15 +100,15 @@ namespace AutoWashPro.BLL.Services
                 throw new NotFoundException("Lane not found in your branch.");
             }
 
-            var today = System.DateTime.UtcNow.ToVnTime().Date;
+            var targetDate = date?.Date ?? System.DateTime.UtcNow.ToVnTime().Date;
 
-            // Find the active shift assignment for today
+            // Find the active shift assignment for targetDate
             var assignment = await _context.StaffLaneAssignments
-                .FirstOrDefaultAsync(a => a.LaneId == laneId && a.StaffId == staffId && a.AssignedDate.Date == today);
+                .FirstOrDefaultAsync(a => a.LaneId == laneId && a.StaffId == staffId && a.AssignedDate.Date == targetDate);
 
             if (assignment == null)
             {
-                throw new NotFoundException("Active staff assignment not found for today in this lane.");
+                throw new NotFoundException("Active staff assignment not found for the specified date in this lane.");
             }
 
             _context.StaffLaneAssignments.Remove(assignment);
@@ -259,7 +259,7 @@ namespace AutoWashPro.BLL.Services
             return lanes;
         }
 
-        public async Task<List<ManagerStaffDTO>> GetStaffAssignedToLaneAsync(int managerUserId, int laneId)
+        public async Task<List<ManagerStaffDTO>> GetStaffAssignedToLaneAsync(int managerUserId, int laneId, System.DateTime? date = null)
         {
             var managerProfile = await GetManagerProfileAsync(managerUserId);
 
@@ -269,12 +269,12 @@ namespace AutoWashPro.BLL.Services
                 throw new NotFoundException("Lane not found in your branch.");
             }
 
-            var today = System.DateTime.UtcNow.ToVnTime().Date;
+            var targetDate = date?.Date ?? System.DateTime.UtcNow.ToVnTime().Date;
 
             var assignments = await _context.StaffLaneAssignments
                 .Include(a => a.Staff)
                     .ThenInclude(s => s.EmployeeProfile)
-                .Where(a => a.LaneId == laneId && a.AssignedDate.Date == today)
+                .Where(a => a.LaneId == laneId && a.AssignedDate.Date == targetDate)
                 .ToListAsync();
 
             return assignments.Select(a => new ManagerStaffDTO
