@@ -40,9 +40,9 @@ namespace AutoWashPro.API.Controllers
         }
 
         [HttpGet("lanes/{laneId}/staff")]
-        public async Task<IActionResult> GetStaffAssignedToLane(int laneId)
+        public async Task<IActionResult> GetStaffAssignedToLane(int laneId, [FromQuery] DateTime? date)
         {
-            var staffList = await _managerService.GetStaffAssignedToLaneAsync(GetUserId(), laneId);
+            var staffList = await _managerService.GetStaffAssignedToLaneAsync(GetUserId(), laneId, date);
             return Ok(staffList);
         }
 
@@ -75,9 +75,9 @@ namespace AutoWashPro.API.Controllers
         }
 
         [HttpDelete("lanes/{laneId}/staff/{staffId}")]
-        public async Task<IActionResult> UnassignStaffFromLane(int laneId, int staffId)
+        public async Task<IActionResult> UnassignStaffFromLane(int laneId, int staffId, [FromQuery] DateTime? date)
         {
-            await _managerService.UnassignStaffFromLaneAsync(GetUserId(), laneId, staffId);
+            await _managerService.UnassignStaffFromLaneAsync(GetUserId(), laneId, staffId, date);
             return Ok(new { Message = "Staff unassigned from lane successfully." });
         }
 
