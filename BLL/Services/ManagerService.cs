@@ -131,6 +131,12 @@ namespace AutoWashPro.BLL.Services
                 .Where(b => b.BranchId == managerProfile.BranchId && (b.Status == "CheckedIn" || b.Status == "Pending" || b.Status == "Processing"))
                 .ToListAsync();
 
+            var bookingIds = bookings.Select(b => b.BookingId).ToList();
+            var paidBookingIds = await _context.Transactions
+                .Where(t => t.ReferenceBookingId.HasValue && bookingIds.Contains(t.ReferenceBookingId.Value) && t.Status == "Completed" && (t.TransactionType == "Payment" || t.TransactionType == "BookingPayment"))
+                .Select(t => t.ReferenceBookingId.Value)
+                .ToListAsync();
+
             return bookings.Select(b => new ManagerBookingListDTO
             {
                 BookingId = b.BookingId,
@@ -143,7 +149,8 @@ namespace AutoWashPro.BLL.Services
                 ProcessingLaneId = b.ProcessingLaneId,
                 ProcessingLaneName = b.ProcessingLane?.Name,
                 ProcessingStaffId = b.ProcessingStaffId,
-                ProcessingStaffName = b.ProcessingStaff?.EmployeeProfile?.FullName
+                ProcessingStaffName = b.ProcessingStaff?.EmployeeProfile?.FullName,
+                PaymentStatus = (b.FinalAmount == 0 || paidBookingIds.Contains(b.BookingId)) ? "Completed" : "Unpaid"
             }).ToList();
         }
 

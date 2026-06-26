@@ -15,6 +15,7 @@ namespace AutoWashPro.BLL.DTOs
         public int? ProcessingLaneId { get; set; }
         public string? ProcessingLaneName { get; set; }
         public int? ProcessingStaffId { get; set; }
+        public string PaymentStatus { get; set; } = "Unpaid";
         public string? ProcessingStaffName { get; set; }
     }
 }

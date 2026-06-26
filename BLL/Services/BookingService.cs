@@ -136,6 +136,12 @@ namespace AutoWashPro.BLL.Services
                 .OrderBy(b => b.ScheduledTime)
                 .ToListAsync();
 
+            var bookingIds = bookings.Select(b => b.BookingId).ToList();
+            var paidBookingIds = await _context.Transactions
+                .Where(t => t.ReferenceBookingId.HasValue && bookingIds.Contains(t.ReferenceBookingId.Value) && t.Status == "Completed" && (t.TransactionType == "Payment" || t.TransactionType == "BookingPayment"))
+                .Select(t => t.ReferenceBookingId.Value)
+                .ToListAsync();
+
             return bookings.Select(b => new BookingResponseDTO
             {
                 BookingId = b.BookingId,
@@ -146,7 +152,8 @@ namespace AutoWashPro.BLL.Services
                 OriginalPrice = b.OriginalPrice,
                 PointDiscountAmount = b.PointDiscountAmount,
                 VoucherDiscountAmount = b.VoucherDiscountAmount,
-                FinalAmount = b.FinalAmount
+                FinalAmount = b.FinalAmount,
+                PaymentStatus = (b.FinalAmount == 0 || paidBookingIds.Contains(b.BookingId)) ? "Completed" : "Unpaid"
             }).ToList();
         }
 
@@ -160,6 +167,8 @@ namespace AutoWashPro.BLL.Services
             if (booking == null)
                 throw new AutoWashPro.BLL.Exceptions.NotFoundException("Không tìm thấy chi tiết lịch hẹn hoặc bạn không có quyền xem.");
 
+            bool isPaid = await HasCompletedBookingPaymentAsync(booking.BookingId);
+
             return new BookingResponseDTO
             {
                 BookingId = booking.BookingId,
@@ -170,7 +179,8 @@ namespace AutoWashPro.BLL.Services
                 OriginalPrice = booking.OriginalPrice,
                 PointDiscountAmount = booking.PointDiscountAmount,
                 VoucherDiscountAmount = booking.VoucherDiscountAmount,
-                FinalAmount = booking.FinalAmount
+                FinalAmount = booking.FinalAmount,
+                PaymentStatus = (booking.FinalAmount == 0 || isPaid) ? "Completed" : "Unpaid"
             };
         }
 
@@ -201,6 +211,12 @@ namespace AutoWashPro.BLL.Services
                 return new List<BookingResponseDTO>();
             }
 
+            var bookingIds = bookings.Select(b => b.BookingId).ToList();
+            var paidBookingIds = await _context.Transactions
+                .Where(t => t.ReferenceBookingId.HasValue && bookingIds.Contains(t.ReferenceBookingId.Value) && t.Status == "Completed" && (t.TransactionType == "Payment" || t.TransactionType == "BookingPayment"))
+                .Select(t => t.ReferenceBookingId.Value)
+                .ToListAsync();
+
             return bookings.Select(b =>
             {
                 return new BookingResponseDTO
@@ -213,7 +229,8 @@ namespace AutoWashPro.BLL.Services
                     OriginalPrice = b.OriginalPrice,
                     PointDiscountAmount = b.PointDiscountAmount,
                     VoucherDiscountAmount = b.VoucherDiscountAmount,
-                    FinalAmount = b.FinalAmount
+                    FinalAmount = b.FinalAmount,
+                    PaymentStatus = (b.FinalAmount == 0 || paidBookingIds.Contains(b.BookingId)) ? "Completed" : "Unpaid"
                 };
             }).ToList();
         }
@@ -291,6 +308,7 @@ namespace AutoWashPro.BLL.Services
             }
 
             // 7. TRẢ VỀ DTO
+            bool isPaid = await HasCompletedBookingPaymentAsync(booking.BookingId);
             return new BookingResponseDTO
             {
                 BookingId = booking.BookingId,
@@ -301,7 +319,8 @@ namespace AutoWashPro.BLL.Services
                 OriginalPrice = booking.OriginalPrice,
                 PointDiscountAmount = booking.PointDiscountAmount,
                 VoucherDiscountAmount = booking.VoucherDiscountAmount,
-                FinalAmount = booking.FinalAmount
+                FinalAmount = booking.FinalAmount,
+                PaymentStatus = (booking.FinalAmount == 0 || isPaid) ? "Completed" : "Unpaid"
             };
         }
         public async Task<bool> UpdateBookingStatusAsync(int bookingId, string newStatus)
@@ -689,6 +708,7 @@ namespace AutoWashPro.BLL.Services
 
                 var serviceNames = await _context.Services.Where(s => request.ServiceIds.Contains(s.ServiceId)).Select(s => s.ServiceName).ToListAsync();
 
+                bool isPaid = await HasCompletedBookingPaymentAsync(booking.BookingId);
                 return new BookingResponseDTO
                 {
                     BookingId = booking.BookingId,
@@ -699,7 +719,8 @@ namespace AutoWashPro.BLL.Services
                     OriginalPrice = booking.OriginalPrice,
                     PointDiscountAmount = booking.PointDiscountAmount,
                     VoucherDiscountAmount = booking.VoucherDiscountAmount,
-                    FinalAmount = booking.FinalAmount
+                    FinalAmount = booking.FinalAmount,
+                    PaymentStatus = (booking.FinalAmount == 0 || isPaid) ? "Completed" : "Unpaid"
                 };
             }
             catch (Exception)
@@ -737,6 +758,12 @@ namespace AutoWashPro.BLL.Services
                 .OrderByDescending(b => b.ScheduledTime)
                 .ToListAsync();
 
+            var bookingIds = bookings.Select(b => b.BookingId).ToList();
+            var paidBookingIds = await _context.Transactions
+                .Where(t => t.ReferenceBookingId.HasValue && bookingIds.Contains(t.ReferenceBookingId.Value) && t.Status == "Completed" && (t.TransactionType == "Payment" || t.TransactionType == "BookingPayment"))
+                .Select(t => t.ReferenceBookingId.Value)
+                .ToListAsync();
+
             return bookings.Select(b => new BookingResponseDTO
             {
                 BookingId = b.BookingId,
@@ -747,7 +774,8 @@ namespace AutoWashPro.BLL.Services
                 OriginalPrice = b.OriginalPrice,
                 PointDiscountAmount = b.PointDiscountAmount,
                 VoucherDiscountAmount = b.VoucherDiscountAmount,
-                FinalAmount = b.FinalAmount
+                FinalAmount = b.FinalAmount,
+                PaymentStatus = (b.FinalAmount == 0 || paidBookingIds.Contains(b.BookingId)) ? "Completed" : "Unpaid"
             }).ToList();
         }
 
@@ -1236,6 +1264,7 @@ namespace AutoWashPro.BLL.Services
 
                 var serviceNames = await _context.Services.Where(s => request.ServiceIds.Contains(s.ServiceId)).Select(s => s.ServiceName).ToListAsync();
 
+                bool isPaid = await HasCompletedBookingPaymentAsync(booking.BookingId);
                 return new BookingResponseDTO
                 {
                     BookingId = booking.BookingId,
@@ -1246,7 +1275,8 @@ namespace AutoWashPro.BLL.Services
                     OriginalPrice = booking.OriginalPrice,
                     PointDiscountAmount = booking.PointDiscountAmount,
                     VoucherDiscountAmount = booking.VoucherDiscountAmount,
-                    FinalAmount = booking.FinalAmount
+                    FinalAmount = booking.FinalAmount,
+                    PaymentStatus = (booking.FinalAmount == 0 || isPaid) ? "Completed" : "Unpaid"
                 };
             }
             catch (Exception)
@@ -1441,6 +1471,7 @@ namespace AutoWashPro.BLL.Services
                     });
                 }
 
+                bool isPaid = await HasCompletedBookingPaymentAsync(booking.BookingId);
                 return new BookingResponseDTO
                 {
                     BookingId = booking.BookingId,
@@ -1451,7 +1482,8 @@ namespace AutoWashPro.BLL.Services
                     OriginalPrice = booking.OriginalPrice,
                     PointDiscountAmount = booking.PointDiscountAmount,
                     VoucherDiscountAmount = booking.VoucherDiscountAmount,
-                    FinalAmount = booking.FinalAmount
+                    FinalAmount = booking.FinalAmount,
+                    PaymentStatus = (booking.FinalAmount == 0 || isPaid) ? "Completed" : "Unpaid"
                 };
             }
             catch (Exception)

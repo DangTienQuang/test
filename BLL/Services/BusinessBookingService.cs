@@ -567,20 +567,26 @@ namespace BLL.Services
 
             if (business == null) throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
 
-            return await _context.Bookings
-                .Where(x =>
-                    x.BusinessProfileId ==
-                    business.BusinessProfileId)
+            var bookings = await _context.Bookings
+                .Where(x => x.BusinessProfileId == business.BusinessProfileId)
                 .OrderByDescending(x => x.CreatedAt)
-                .Select(x => new BusinessBookingListDTO
-                {
-                    BookingId = x.BookingId,
-                    LicensePlate = x.LicensePlate,
-                    ScheduledTime = x.ScheduledTime,
-                    Status = x.Status,
-                    FinalAmount = x.FinalAmount
-                })
                 .ToListAsync();
+
+            var bookingIds = bookings.Select(b => b.BookingId).ToList();
+            var paidBookingIds = await _context.Transactions
+                .Where(t => t.ReferenceBookingId.HasValue && bookingIds.Contains(t.ReferenceBookingId.Value) && t.Status == "Completed" && (t.TransactionType == "Payment" || t.TransactionType == "BookingPayment"))
+                .Select(t => t.ReferenceBookingId.Value)
+                .ToListAsync();
+
+            return bookings.Select(x => new BusinessBookingListDTO
+            {
+                BookingId = x.BookingId,
+                LicensePlate = x.LicensePlate,
+                ScheduledTime = x.ScheduledTime,
+                Status = x.Status,
+                FinalAmount = x.FinalAmount,
+                PaymentStatus = (x.FinalAmount == 0 || paidBookingIds.Contains(x.BookingId)) ? "Completed" : "Unpaid"
+            }).ToList();
         }
 
         public async Task<BusinessBookingDetailDTO> GetBookingDetailAsync(int businessUserId, int bookingId)
