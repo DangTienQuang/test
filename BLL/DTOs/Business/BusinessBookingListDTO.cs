@@ -13,6 +13,7 @@ namespace BLL.DTOs.Business
         public DateTime ScheduledTime { get; set; }
         public string Status { get; set; } = null!;
         public decimal FinalAmount { get; set; }
+        public string PaymentStatus { get; set; } = "Unpaid";
     }
 
     public class BusinessVehicleStatusDTO

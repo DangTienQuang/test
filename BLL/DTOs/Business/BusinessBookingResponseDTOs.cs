@@ -17,6 +17,7 @@ namespace BLL.DTOs.Business
         public decimal FinalAmount { get; set; }
 
         public string Status { get; set; } = null!;
+        public string PaymentStatus { get; set; } = "Unpaid";
     }
 
     public class BusinessBookingDetailDTO
@@ -25,6 +26,7 @@ namespace BLL.DTOs.Business
         public string LicensePlate { get; set; } = null!;
         public DateTime ScheduledTime { get; set; }
         public string Status { get; set; } = null!;
+        public string PaymentStatus { get; set; } = "Unpaid";
         public decimal OriginalPrice { get; set; }
         public decimal FinalAmount { get; set; }
         public List<string> Services { get; set; } = [];
