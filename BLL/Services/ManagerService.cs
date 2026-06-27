@@ -142,6 +142,7 @@ namespace AutoWashPro.BLL.Services
                 ServiceNames = b.BookingDetails.Select(d => d.Service.ServiceName).ToList(),
                 ProcessingLaneId = b.ProcessingLaneId,
                 ProcessingLaneName = b.ProcessingLane?.Name,
+                IsBusinessLane = b.ProcessingLane?.IsBusinessLane ?? false,
                 ProcessingStaffId = b.ProcessingStaffId,
                 ProcessingStaffName = b.ProcessingStaff?.EmployeeProfile?.FullName
             }).ToList();
@@ -283,6 +284,36 @@ namespace AutoWashPro.BLL.Services
                 FullName = a.Staff.EmployeeProfile!.FullName,
                 PhoneNumber = a.Staff.PhoneNumber,
                 Status = a.Staff.Status
+            }).ToList();
+        }
+
+        public async Task<List<LaneStaffAssignmentDTO>> GetAllLanesWithStaffAssignmentsAsync(int managerUserId, System.DateTime? date = null)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+            var targetDate = date?.Date ?? System.DateTime.UtcNow.ToVnTime().Date;
+
+            var lanes = await _context.Lanes
+                .Where(l => l.BranchId == managerProfile.BranchId)
+                .ToListAsync();
+
+            var assignments = await _context.StaffLaneAssignments
+                .Include(a => a.Staff)
+                    .ThenInclude(s => s.EmployeeProfile)
+                .Where(a => a.Lane.BranchId == managerProfile.BranchId && a.AssignedDate.Date == targetDate)
+                .ToListAsync();
+
+            return lanes.Select(l => new LaneStaffAssignmentDTO
+            {
+                LaneId = l.LaneId,
+                LaneName = l.Name,
+                IsBusinessLane = l.IsBusinessLane,
+                AssignedStaff = assignments.Where(a => a.LaneId == l.LaneId).Select(a => new ManagerStaffDTO
+                {
+                    UserId = a.Staff.UserId,
+                    FullName = a.Staff.EmployeeProfile!.FullName,
+                    PhoneNumber = a.Staff.PhoneNumber,
+                    Status = a.Staff.Status
+                }).ToList()
             }).ToList();
         }
 

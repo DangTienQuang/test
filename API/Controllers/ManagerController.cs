@@ -46,6 +46,13 @@ namespace AutoWashPro.API.Controllers
             return Ok(staffList);
         }
 
+        [HttpGet("lanes/staff-assignments")]
+        public async Task<IActionResult> GetAllLanesWithStaffAssignments([FromQuery] DateTime? date)
+        {
+            var assignments = await _managerService.GetAllLanesWithStaffAssignmentsAsync(GetUserId(), date);
+            return Ok(assignments);
+        }
+
         [HttpGet("timeslots")]
         public async Task<IActionResult> GetTimeSlotsInBranch()
         {
