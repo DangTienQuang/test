@@ -180,7 +180,8 @@ namespace AutoWashPro.BLL.Services
             {
                 Name = request.Name,
                 BranchId = request.BranchId,
-                IsActive = true
+                IsActive = true,
+                IsBusinessLane = request.IsBusinessLane
             };
 
             _context.Lanes.Add(lane);
@@ -191,7 +192,8 @@ namespace AutoWashPro.BLL.Services
                 LaneId = lane.LaneId,
                 Name = lane.Name,
                 BranchId = lane.BranchId,
-                IsActive = lane.IsActive
+                IsActive = lane.IsActive,
+                IsBusinessLane = lane.IsBusinessLane
             };
         }
 
@@ -242,52 +244,7 @@ namespace AutoWashPro.BLL.Services
             };
         }
 
-        public async Task<List<LaneDTO>> GetLanesInBranchAsync(int managerUserId)
-        {
-            var managerProfile = await GetManagerProfileAsync(managerUserId);
-
-            var lanes = await _context.Lanes
-                .Where(l => l.BranchId == managerProfile.BranchId)
-                .Select(l => new LaneDTO
-                {
-                    LaneId = l.LaneId,
-                    Name = l.Name,
-                    BranchId = l.BranchId,
-                    IsActive = l.IsActive
-                })
-                .ToListAsync();
-
-            return lanes;
-        }
-
-        public async Task<List<ManagerStaffDTO>> GetStaffAssignedToLaneAsync(int managerUserId, int laneId, System.DateTime? date = null)
-        {
-            var managerProfile = await GetManagerProfileAsync(managerUserId);
-
-            var lane = await _context.Lanes.FirstOrDefaultAsync(l => l.LaneId == laneId && l.BranchId == managerProfile.BranchId);
-            if (lane == null)
-            {
-                throw new NotFoundException("Lane not found in your branch.");
-            }
-
-            var targetDate = date?.Date ?? System.DateTime.UtcNow.ToVnTime().Date;
-
-            var assignments = await _context.StaffLaneAssignments
-                .Include(a => a.Staff)
-                    .ThenInclude(s => s.EmployeeProfile)
-                .Where(a => a.LaneId == laneId && a.AssignedDate.Date == targetDate)
-                .ToListAsync();
-
-            return assignments.Select(a => new ManagerStaffDTO
-            {
-                UserId = a.Staff.UserId,
-                FullName = a.Staff.EmployeeProfile!.FullName,
-                PhoneNumber = a.Staff.PhoneNumber,
-                Status = a.Staff.Status
-            }).ToList();
-        }
-
-        public async Task<List<LaneStaffAssignmentDTO>> GetAllLanesWithStaffAssignmentsAsync(int managerUserId, System.DateTime? date = null)
+        public async Task<List<LaneStaffAssignmentDTO>> GetLanesInBranchAsync(int managerUserId, System.DateTime? date = null)
         {
             var managerProfile = await GetManagerProfileAsync(managerUserId);
             var targetDate = date?.Date ?? System.DateTime.UtcNow.ToVnTime().Date;
@@ -314,6 +271,33 @@ namespace AutoWashPro.BLL.Services
                     PhoneNumber = a.Staff.PhoneNumber,
                     Status = a.Staff.Status
                 }).ToList()
+            }).ToList();
+        }
+
+        public async Task<List<ManagerStaffDTO>> GetStaffAssignedToLaneAsync(int managerUserId, int laneId, System.DateTime? date = null)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+
+            var lane = await _context.Lanes.FirstOrDefaultAsync(l => l.LaneId == laneId && l.BranchId == managerProfile.BranchId);
+            if (lane == null)
+            {
+                throw new NotFoundException("Lane not found in your branch.");
+            }
+
+            var targetDate = date?.Date ?? System.DateTime.UtcNow.ToVnTime().Date;
+
+            var assignments = await _context.StaffLaneAssignments
+                .Include(a => a.Staff)
+                    .ThenInclude(s => s.EmployeeProfile)
+                .Where(a => a.LaneId == laneId && a.AssignedDate.Date == targetDate)
+                .ToListAsync();
+
+            return assignments.Select(a => new ManagerStaffDTO
+            {
+                UserId = a.Staff.UserId,
+                FullName = a.Staff.EmployeeProfile!.FullName,
+                PhoneNumber = a.Staff.PhoneNumber,
+                Status = a.Staff.Status
             }).ToList();
         }
 
@@ -363,6 +347,7 @@ namespace AutoWashPro.BLL.Services
 
             lane.Name = request.Name;
             lane.IsActive = request.IsActive;
+            lane.IsBusinessLane = request.IsBusinessLane;
 
             await _context.SaveChangesAsync();
 
@@ -371,7 +356,8 @@ namespace AutoWashPro.BLL.Services
                 LaneId = lane.LaneId,
                 Name = lane.Name,
                 BranchId = lane.BranchId,
-                IsActive = lane.IsActive
+                IsActive = lane.IsActive,
+                IsBusinessLane = lane.IsBusinessLane
             };
         }
 
