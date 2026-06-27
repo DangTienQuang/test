@@ -523,5 +523,20 @@ namespace BLL.Services
                 IsBusinessLane = lane.IsBusinessLane
             };
         }
+
+        public async Task<object> GetAllPendingStaffAsync()
+        {
+            throw new NotImplementedException("This method is a placeholder to resolve route conflicts.");
+        }
+
+        public async Task ApproveFleetStaffAsync(int id)
+        {
+            throw new NotImplementedException("This method is a placeholder to resolve route conflicts.");
+        }
+
+        public async Task RejectFleetStaffAsync(int id, string reason)
+        {
+            throw new NotImplementedException("This method is a placeholder to resolve route conflicts.");
+        }
     }
 }
