@@ -143,7 +143,8 @@ namespace AutoWashPro.BLL.Services
                 ProcessingLaneId = b.ProcessingLaneId,
                 ProcessingLaneName = b.ProcessingLane?.Name,
                 ProcessingStaffId = b.ProcessingStaffId,
-                ProcessingStaffName = b.ProcessingStaff?.EmployeeProfile?.FullName
+                ProcessingStaffName = b.ProcessingStaff?.EmployeeProfile?.FullName,
+                IsBusinessLane = b.ProcessingLane != null && b.ProcessingLane.IsBusinessLane
             }).ToList();
         }
 
@@ -190,7 +191,8 @@ namespace AutoWashPro.BLL.Services
                 LaneId = lane.LaneId,
                 Name = lane.Name,
                 BranchId = lane.BranchId,
-                IsActive = lane.IsActive
+                IsActive = lane.IsActive,
+                IsBusinessLane = lane.IsBusinessLane
             };
         }
 
@@ -241,21 +243,40 @@ namespace AutoWashPro.BLL.Services
             };
         }
 
-        public async Task<List<LaneDTO>> GetLanesInBranchAsync(int managerUserId)
+        public async Task<List<LaneStaffAssignmentDTO>> GetLanesInBranchAsync(int managerUserId, System.DateTime? date = null)
         {
             var managerProfile = await GetManagerProfileAsync(managerUserId);
+            var targetDate = date?.Date ?? System.DateTime.UtcNow.ToVnTime().Date;
 
             var lanes = await _context.Lanes
                 .Where(l => l.BranchId == managerProfile.BranchId)
-                .Select(l => new LaneDTO
+                .Select(l => new LaneStaffAssignmentDTO
                 {
                     LaneId = l.LaneId,
                     Name = l.Name,
                     BranchId = l.BranchId,
-                    IsActive = l.IsActive
+                    IsActive = l.IsActive,
+                    IsBusinessLane = l.IsBusinessLane
                 })
                 .ToListAsync();
 
+            var laneIds = lanes.Select(l => l.LaneId).ToList();
+            var assignments = await _context.StaffLaneAssignments
+                .Include(a => a.Staff)
+                    .ThenInclude(s => s.EmployeeProfile)
+                .Where(a => laneIds.Contains(a.LaneId) && a.AssignedDate.Date == targetDate)
+                .ToListAsync();
+
+            foreach (var lane in lanes)
+            {
+                lane.AssignedStaff = assignments.Where(a => a.LaneId == lane.LaneId).Select(a => new ManagerStaffDTO
+                {
+                    UserId = a.Staff.UserId,
+                    FullName = a.Staff.EmployeeProfile!.FullName,
+                    PhoneNumber = a.Staff.PhoneNumber,
+                    Status = a.Staff.Status
+                }).ToList();
+            }
             return lanes;
         }
 

@@ -23,13 +23,13 @@ namespace AutoWashPro.BLL.Services
             _walletService = walletService;
         }
 
-        public async Task<StaffLaneTaskDTO?> GetTodayLaneAssignmentAsync(int staffUserId)
+        public async Task<StaffLaneTaskDTO?> GetTodayLaneAssignmentAsync(int staffUserId, DateTime? date = null)
         {
-            var today = DateTime.UtcNow.Date;
+            var targetDate = date?.Date ?? DateTime.UtcNow.ToVnTime().Date;
 
             var assignment = await _context.StaffLaneAssignments
                 .Include(a => a.Lane)
-                .Where(a => a.StaffId == staffUserId && a.AssignedDate == today)
+                .Where(a => a.StaffId == staffUserId && a.AssignedDate.Date == targetDate)
                 .OrderByDescending(a => a.AssignmentId)
                 .FirstOrDefaultAsync();
 
@@ -77,12 +77,12 @@ namespace AutoWashPro.BLL.Services
             return true;
         }
 
-        public async Task<List<StaffBookingDTO>> GetAssignedBookingsAsync(int staffUserId)
+        public async Task<List<StaffBookingDTO>> GetAssignedBookingsAsync(int staffUserId, DateTime? date = null)
         {
-            var today = DateTime.UtcNow.Date;
+            var targetDate = date?.Date ?? DateTime.UtcNow.ToVnTime().Date;
 
             var assignment = await _context.StaffLaneAssignments
-                .Where(a => a.StaffId == staffUserId && a.AssignedDate == today)
+                .Where(a => a.StaffId == staffUserId && a.AssignedDate.Date == targetDate)
                 .FirstOrDefaultAsync();
 
             if (assignment == null)
@@ -160,6 +160,36 @@ namespace AutoWashPro.BLL.Services
                      userProfile.LastVisitDate = DateTime.UtcNow;
                  }
             }
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> SwapShiftByPhoneAsync(int currentStaffId, SwapLaneByPhoneDTO dto)
+        {
+            var targetStaff = await _context.Users
+                .FirstOrDefaultAsync(u => u.PhoneNumber == dto.TargetPhoneNumber && u.Role == "Staff" && u.Status == "Active");
+
+            if (targetStaff == null)
+            {
+                throw new BadRequestException("Không tìm thấy nhân viên với số điện thoại này hoặc nhân viên không khả dụng.");
+            }
+
+            var targetDate = dto.Date?.Date ?? DateTime.UtcNow.ToVnTime().Date;
+
+            var currentAssignment = await _context.StaffLaneAssignments
+                .FirstOrDefaultAsync(a => a.StaffId == currentStaffId && a.AssignedDate.Date == targetDate);
+
+            var targetAssignment = await _context.StaffLaneAssignments
+                .FirstOrDefaultAsync(a => a.StaffId == targetStaff.UserId && a.AssignedDate.Date == targetDate);
+
+            if (currentAssignment == null || targetAssignment == null)
+            {
+                throw new BadRequestException("Một trong hai nhân viên không có lịch phân công vào ngày này để đổi.");
+            }
+
+            // Swap lane IDs
+            (currentAssignment.LaneId, targetAssignment.LaneId) = (targetAssignment.LaneId, currentAssignment.LaneId);
 
             await _context.SaveChangesAsync();
             return true;

@@ -33,9 +33,9 @@ namespace AutoWashPro.API.Controllers
         }
 
         [HttpGet("lanes")]
-        public async Task<IActionResult> GetLanesInBranch()
+        public async Task<IActionResult> GetLanesInBranch([FromQuery] System.DateTime? date)
         {
-            var lanes = await _managerService.GetLanesInBranchAsync(GetUserId());
+            var lanes = await _managerService.GetLanesInBranchAsync(GetUserId(), date);
             return Ok(lanes);
         }
 
