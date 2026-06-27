@@ -596,6 +596,7 @@ namespace BLL.Services
             var booking = await _context.Bookings
                 .Include(x => x.BookingDetails)
                     .ThenInclude(x => x.Service)
+                .Include(x => x.ProcessingLane)
                 .FirstOrDefaultAsync(x =>
                     x.BookingId == bookingId &&
                     x.BusinessProfileId == business.BusinessProfileId);
@@ -615,7 +616,8 @@ namespace BLL.Services
                 FinalAmount = booking.FinalAmount,
                 Services = booking.BookingDetails
                     .Select(x => x.Service.ServiceName)
-                    .ToList()
+                    .ToList(),
+                IsBusinessLane = booking.ProcessingLane?.IsBusinessLane ?? false
             };
         }
 

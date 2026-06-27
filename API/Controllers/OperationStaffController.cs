@@ -24,21 +24,28 @@ namespace AutoWashPro.API.Controllers
             return int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         }
 
-        [HttpGet("lane-assignment")]
-        public async Task<IActionResult> GetTodayLaneAssignment()
+        [HttpPost("swap-lane")]
+        public async Task<IActionResult> SwapLaneAssignment([FromBody] SwapLaneByPhoneDTO dto)
         {
-            var assignment = await _staffService.GetTodayLaneAssignmentAsync(GetUserId());
+            await _staffService.SwapLaneAssignmentByPhoneAsync(GetUserId(), dto);
+            return Ok(new { Message = "Đổi ca/làn thành công." });
+        }
+
+        [HttpGet("lane-assignment")]
+        public async Task<IActionResult> GetTodayLaneAssignment([FromQuery] System.DateTime? date)
+        {
+            var assignment = await _staffService.GetTodayLaneAssignmentAsync(GetUserId(), date);
             if (assignment == null)
             {
-                return Ok(new { Message = "No lane assigned for today." });
+                return Ok(new { Message = "No lane assigned for the selected date." });
             }
             return Ok(assignment);
         }
 
         [HttpGet("tasks")]
-        public async Task<IActionResult> GetAssignedTasks()
+        public async Task<IActionResult> GetAssignedTasks([FromQuery] System.DateTime? date)
         {
-            var tasks = await _staffService.GetAssignedBookingsAsync(GetUserId());
+            var tasks = await _staffService.GetAssignedBookingsAsync(GetUserId(), date);
             return Ok(tasks);
         }
         [HttpPost("bookings/{bookingId}/checkin")]
