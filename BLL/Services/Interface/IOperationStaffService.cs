@@ -6,9 +6,10 @@ namespace AutoWashPro.BLL.Services
 {
     public interface IOperationStaffService
     {
-        Task<StaffLaneTaskDTO?> GetTodayLaneAssignmentAsync(int staffUserId);
-        Task<List<StaffBookingDTO>> GetAssignedBookingsAsync(int staffUserId);
+        Task<StaffLaneTaskDTO?> GetTodayLaneAssignmentAsync(int staffUserId, System.DateTime? date = null);
+        Task<List<StaffBookingDTO>> GetAssignedBookingsAsync(int staffUserId, System.DateTime? date = null);
         Task<bool> UpdateBookingStatusAsync(int staffUserId, int bookingId, string newStatus);
         Task<bool> CheckInBookingAsync(int staffUserId, int bookingId);
+        Task<bool> SwapShiftByPhoneAsync(int currentStaffId, SwapLaneByPhoneDTO dto);
     }
 }
