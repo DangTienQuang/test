@@ -156,6 +156,10 @@ namespace AutoWashPro.BLL.DTOs
         public decimal PointDiscountAmount { get; set; }
         public decimal VoucherDiscountAmount { get; set; }
         public decimal FinalAmount { get; set; }
+    }
+
+    public class AdminBookingResponseDTO : BookingResponseDTO
+    {
         public string PaymentStatus { get; set; } = "Unpaid";
     }
 

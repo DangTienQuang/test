@@ -1,5 +1,6 @@
 using AutoWashPro.BLL.DTOs;
 using AutoWashPro.BLL.Services;
+using BLL.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
@@ -12,10 +13,12 @@ namespace AutoWashPro.API.Controllers
     public class AdminLanesController : ControllerBase
     {
         private readonly ILaneService _laneService;
+        private readonly IFleetService _fleetService;
 
-        public AdminLanesController(ILaneService laneService)
+        public AdminLanesController(ILaneService laneService, IFleetService fleetService)
         {
             _laneService = laneService;
+            _fleetService = fleetService;
         }
 
         [HttpGet]
@@ -36,6 +39,13 @@ namespace AutoWashPro.API.Controllers
         public async Task<IActionResult> CreateLane([FromBody] CreateLaneDTO dto)
         {
             var lane = await _laneService.CreateLaneAsync(dto);
+            return CreatedAtAction(nameof(GetLane), new { id = lane.LaneId }, lane);
+        }
+
+        [HttpPost("business")]
+        public async Task<IActionResult> CreateBusinessLane([FromBody] CreateBusinessLaneDTO dto)
+        {
+            var lane = await _fleetService.CreateBusinessLaneAsync(dto);
             return CreatedAtAction(nameof(GetLane), new { id = lane.LaneId }, lane);
         }
 

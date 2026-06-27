@@ -34,7 +34,8 @@ namespace AutoWashPro.BLL.Services
                 LaneId = l.LaneId,
                 Name = l.Name,
                 BranchId = l.BranchId,
-                IsActive = l.IsActive
+                IsActive = l.IsActive,
+                IsBusinessLane = l.IsBusinessLane,
             }).ToList();
         }
 
@@ -48,7 +49,8 @@ namespace AutoWashPro.BLL.Services
                 LaneId = lane.LaneId,
                 Name = lane.Name,
                 BranchId = lane.BranchId,
-                IsActive = lane.IsActive
+                IsActive = lane.IsActive,
+                IsBusinessLane = lane.IsBusinessLane
             };
         }
 
@@ -61,7 +63,8 @@ namespace AutoWashPro.BLL.Services
             {
                 Name = createDto.Name,
                 BranchId = createDto.BranchId,
-                IsActive = true
+                IsActive = true,
+                IsBusinessLane = false
             };
 
             _context.Lanes.Add(lane);
@@ -72,7 +75,8 @@ namespace AutoWashPro.BLL.Services
                 LaneId = lane.LaneId,
                 Name = lane.Name,
                 BranchId = lane.BranchId,
-                IsActive = lane.IsActive
+                IsActive = lane.IsActive,
+                IsBusinessLane = lane.IsBusinessLane
             };
         }
 

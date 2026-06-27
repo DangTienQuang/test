@@ -1,5 +1,7 @@
-﻿using AutoWashPro.BLL.Exceptions;
+﻿using AutoWashPro.BLL.DTOs;
+using AutoWashPro.BLL.Exceptions;
 using AutoWashPro.DAL.Data;
+using AutoWashPro.DAL.Entities;
 using BLL.DTOs.Fleet;
 using BLL.Services.Interface;
 using DAL.Entities;
@@ -146,6 +148,13 @@ namespace BLL.Services
                     continue;
                 }
 
+                // Auto-approve if CarModel (Brand + Model name) already exists and is Active
+                bool carModelExists = await _context.CarModels.AnyAsync(x =>
+                    x.Brand == brand &&
+                    x.Name == model &&
+                    x.VehicleTypeId == vehicleType!.Id &&
+                    x.IsActive == true);
+
                 var fleetVehicle = new FleetVehicle
                 {
                     BusinessProfileId = business.BusinessProfileId,
@@ -156,7 +165,7 @@ namespace BLL.Services
                     Model = model,
                     DriverName = driverName,
                     EmployeeCode = employeeCode,
-                    Status = "PendingApproval",
+                    Status = carModelExists ? "Active" : "PendingApproval",
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -259,10 +268,10 @@ namespace BLL.Services
         public async Task<List<StaffPendingVehicleDTO>> GetAllPendingVehiclesAsync(int? businessProfileId = null)
         {
             var query = _context.FleetVehicles
+                .AsQueryable()
                 .Include(x => x.VehicleType)
                 .Include(x => x.BusinessProfile)
-                .Where(x => x.Status == "PendingApproval")
-                .AsQueryable();
+                .Where(x => x.Status == "PendingApproval");
 
             if (businessProfileId.HasValue)
             {
@@ -487,6 +496,32 @@ namespace BLL.Services
                 FileName = "FleetTemplate.xlsx",
                 DownloadUrl = url
             });
+        }
+
+        public async Task<LaneDTO> CreateBusinessLaneAsync(CreateBusinessLaneDTO dto)
+        {
+            var branch = await _context.Branches.FindAsync(dto.BranchId);
+            if (branch == null) throw new NotFoundException("Không tìm thấy chi nhánh.");
+
+            var lane = new Lane
+            {
+                Name = dto.Name,
+                BranchId = dto.BranchId,
+                IsActive = true,
+                IsBusinessLane = true
+            };
+
+            _context.Lanes.Add(lane);
+            await _context.SaveChangesAsync();
+
+            return new LaneDTO
+            {
+                LaneId = lane.LaneId,
+                Name = lane.Name,
+                BranchId = lane.BranchId,
+                IsActive = lane.IsActive,
+                IsBusinessLane = lane.IsBusinessLane
+            };
         }
     }
 }

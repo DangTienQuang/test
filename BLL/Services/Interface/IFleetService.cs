@@ -1,4 +1,5 @@
-﻿using BLL.DTOs.Fleet;
+﻿using AutoWashPro.BLL.DTOs;
+using BLL.DTOs.Fleet;
 using DAL.Entities;
 using Microsoft.AspNetCore.Http;
 using System;
@@ -23,5 +24,6 @@ namespace BLL.Services.Interface
         Task<List<FleetWashHistoryDTO>> GetWashHistoryAsync(int businessUserId);
         Task<FleetTemplateDTO> GetFleetTemplateAsync();
         Task<List<StaffPendingVehicleDTO>> GetAllPendingVehiclesAsync(int? businessProfileId = null);
+        Task<LaneDTO> CreateBusinessLaneAsync(CreateBusinessLaneDTO dto);
     }
 }

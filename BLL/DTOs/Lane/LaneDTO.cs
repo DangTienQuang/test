@@ -6,5 +6,6 @@ namespace AutoWashPro.BLL.DTOs
         public string Name { get; set; } = null!;
         public int BranchId { get; set; }
         public bool IsActive { get; set; }
+        public bool IsBusinessLane { get; set; }
     }
 }

@@ -11,4 +11,13 @@ namespace AutoWashPro.BLL.DTOs
         [Required]
         public int BranchId { get; set; }
     }
+
+    public class CreateBusinessLaneDTO
+    {
+        [Required]
+        [MaxLength(50)]
+        public string Name { get; set; } = string.Empty;
+        [Required]
+        public int BranchId { get; set; }
+    }
 }
