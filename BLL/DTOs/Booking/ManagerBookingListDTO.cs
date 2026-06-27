@@ -14,7 +14,6 @@ namespace AutoWashPro.BLL.DTOs
         public List<string> ServiceNames { get; set; } = new List<string>();
         public int? ProcessingLaneId { get; set; }
         public string? ProcessingLaneName { get; set; }
-        public bool IsBusinessLane { get; set; }
         public int? ProcessingStaffId { get; set; }
         public string? ProcessingStaffName { get; set; }
     }

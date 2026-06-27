@@ -28,7 +28,6 @@ namespace BLL.DTOs.Business
         public decimal OriginalPrice { get; set; }
         public decimal FinalAmount { get; set; }
         public List<string> Services { get; set; } = [];
-        public bool IsBusinessLane { get; set; }
     }
 
     public class MultiVehicleBookingResponseDTO

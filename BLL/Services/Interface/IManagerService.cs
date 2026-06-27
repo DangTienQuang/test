@@ -13,7 +13,6 @@ namespace AutoWashPro.BLL.Services
         Task<bool> ConfirmCheckInAndAssignLaneAsync(int managerUserId, int bookingId, AssignBookingToLaneDTO assignment);
         Task<List<LaneDTO>> GetLanesInBranchAsync(int managerUserId);
         Task<List<ManagerStaffDTO>> GetStaffAssignedToLaneAsync(int managerUserId, int laneId, System.DateTime? date = null);
-        Task<List<LaneStaffAssignmentDTO>> GetAllLanesWithStaffAssignmentsAsync(int managerUserId, System.DateTime? date = null);
         Task<List<TimeSlotAdminResponseDTO>> GetTimeSlotsInBranchAsync(int managerUserId);
         Task<LaneDTO> CreateLaneAsync(int managerUserId, CreateLaneDTO request);
         Task<TimeSlotAdminResponseDTO> CreateTimeSlotAsync(int managerUserId, CreateTimeSlotDTO request);

@@ -25,8 +25,5 @@ namespace BLL.Services.Interface
         Task<FleetTemplateDTO> GetFleetTemplateAsync();
         Task<List<StaffPendingVehicleDTO>> GetAllPendingVehiclesAsync(int? businessProfileId = null);
         Task<LaneDTO> CreateBusinessLaneAsync(CreateBusinessLaneDTO dto);
-        Task<object> GetAllPendingStaffAsync();
-        Task ApproveFleetStaffAsync(int id);
-        Task RejectFleetStaffAsync(int id, string reason);
     }
 }

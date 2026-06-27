@@ -23,13 +23,13 @@ namespace AutoWashPro.BLL.Services
             _walletService = walletService;
         }
 
-        public async Task<StaffLaneTaskDTO?> GetTodayLaneAssignmentAsync(int staffUserId, System.DateTime? date = null)
+        public async Task<StaffLaneTaskDTO?> GetTodayLaneAssignmentAsync(int staffUserId)
         {
-            var targetDate = date?.Date ?? DateTime.UtcNow.ToVnTime().Date;
+            var today = DateTime.UtcNow.Date;
 
             var assignment = await _context.StaffLaneAssignments
                 .Include(a => a.Lane)
-                .Where(a => a.StaffId == staffUserId && a.AssignedDate.Date == targetDate)
+                .Where(a => a.StaffId == staffUserId && a.AssignedDate == today)
                 .OrderByDescending(a => a.AssignmentId)
                 .FirstOrDefaultAsync();
 
@@ -41,51 +41,6 @@ namespace AutoWashPro.BLL.Services
                 LaneName = assignment.Lane.Name,
                 AssignedDate = assignment.AssignedDate
             };
-        }
-
-        public async Task<bool> SwapLaneAssignmentByPhoneAsync(int staffUserId, SwapLaneByPhoneDTO dto)
-        {
-            var targetDate = dto.Date?.Date ?? DateTime.UtcNow.ToVnTime().Date;
-
-            // Find current user's assignment
-            var currentAssignment = await _context.StaffLaneAssignments
-                .Include(a => a.Staff)
-                    .ThenInclude(s => s.EmployeeProfile)
-                .FirstOrDefaultAsync(a => a.StaffId == staffUserId && a.AssignedDate.Date == targetDate);
-
-            if (currentAssignment == null)
-            {
-                throw new BadRequestException("Bạn không có phân công làn nào trong ngày này để đổi.");
-            }
-
-            var branchId = currentAssignment.Staff.EmployeeProfile!.BranchId;
-
-            // Find target staff by phone number
-            var targetStaff = await _context.Users
-                .Include(u => u.EmployeeProfile)
-                .FirstOrDefaultAsync(u => u.PhoneNumber == dto.TargetStaffPhoneNumber && u.Role == "Staff");
-
-            if (targetStaff == null || targetStaff.EmployeeProfile?.BranchId != branchId)
-            {
-                throw new NotFoundException("Staff with this phone number not found in your branch.");
-            }
-
-            // Find target user's assignment
-            var targetAssignment = await _context.StaffLaneAssignments
-                .FirstOrDefaultAsync(a => a.StaffId == targetStaff.UserId && a.AssignedDate.Date == targetDate);
-
-            if (targetAssignment == null)
-            {
-                throw new BadRequestException("Nhân viên này không có phân công làn nào trong ngày này để đổi.");
-            }
-
-            // Swap LaneIds
-            int tempLaneId = currentAssignment.LaneId;
-            currentAssignment.LaneId = targetAssignment.LaneId;
-            targetAssignment.LaneId = tempLaneId;
-
-            await _context.SaveChangesAsync();
-            return true;
         }
 
         public async Task<bool> CheckInBookingAsync(int staffUserId, int bookingId)
@@ -122,12 +77,12 @@ namespace AutoWashPro.BLL.Services
             return true;
         }
 
-        public async Task<List<StaffBookingDTO>> GetAssignedBookingsAsync(int staffUserId, System.DateTime? date = null)
+        public async Task<List<StaffBookingDTO>> GetAssignedBookingsAsync(int staffUserId)
         {
-            var targetDate = date?.Date ?? DateTime.UtcNow.ToVnTime().Date;
+            var today = DateTime.UtcNow.Date;
 
             var assignment = await _context.StaffLaneAssignments
-                .Where(a => a.StaffId == staffUserId && a.AssignedDate.Date == targetDate)
+                .Where(a => a.StaffId == staffUserId && a.AssignedDate == today)
                 .FirstOrDefaultAsync();
 
             if (assignment == null)
@@ -140,9 +95,8 @@ namespace AutoWashPro.BLL.Services
                 .ThenInclude(d => d.Service)
                 .Include(b => b.ActualVehicleType)
                 .Where(b => b.ProcessingLaneId == assignment.LaneId
-                         && b.ScheduledTime.Date == targetDate
                          && (b.ProcessingStaffId == staffUserId || b.ProcessingStaffId == null)
-                         && (b.Status == "CheckedIn" || b.Status == "Processing" || b.Status == "Pending"))
+                         && (b.Status == "CheckedIn" || b.Status == "Processing"))
                 .ToListAsync();
 
             return bookings.Select(b => new StaffBookingDTO
