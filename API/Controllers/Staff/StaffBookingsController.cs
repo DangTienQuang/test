@@ -43,7 +43,13 @@ namespace API.Controllers.Staff
         [HttpGet("by-license-plate/{licensePlate}")]
         public async Task<IActionResult> GetBookingsByLicensePlate(string licensePlate)
         {
-            var result = await _bookingService.GetBookingsByLicensePlateAsync(licensePlate);
+            var branchIdClaim = User.FindFirst("BranchId")?.Value;
+            if (string.IsNullOrEmpty(branchIdClaim) || !int.TryParse(branchIdClaim, out int branchId))
+            {
+                throw new AutoWashPro.BLL.Exceptions.UnauthorizedException("Không tìm thấy thông tin chi nhánh (BranchId) trong token.");
+            }
+
+            var result = await _bookingService.LookupLicensePlateAsync(licensePlate, branchId);
             return Ok(new { statusCode = 200, message = "Success", data = result });
         }
         [HttpPut("{id}/no-show")]
