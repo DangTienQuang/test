@@ -10,6 +10,7 @@ namespace AutoWashPro.BLL.DTOs
 
         [Required]
         public int BranchId { get; set; }
+        public bool IsBusinessLane { get; set; }
     }
 
     public class CreateBusinessLaneDTO
