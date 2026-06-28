@@ -1140,7 +1140,22 @@ namespace AutoWashPro.BLL.Services
 
             if (vehicleTypeQuery == null)
             {
-                 throw new AutoWashPro.BLL.Exceptions.NotFoundException($"Xe với biển số {request.LicensePlate} không tồn tại trong hệ thống.");
+                 var otherVehicleType = await _context.VehicleTypes.FirstOrDefaultAsync(vt => vt.Name == "Khác");
+                 if (otherVehicleType == null)
+                 {
+                     otherVehicleType = new VehicleType { Name = "Khác", BaseWeight = 1 };
+                     _context.VehicleTypes.Add(otherVehicleType);
+                     await _context.SaveChangesAsync();
+                 }
+                 var newVehicle = new Vehicle
+                 {
+                     UserId = customerUserId,
+                     LicensePlate = request.LicensePlate,
+                     VehicleTypeId = otherVehicleType.Id,
+                 };
+                 _context.Vehicles.Add(newVehicle);
+                 await _context.SaveChangesAsync();
+                 vehicleTypeQuery = new { VehicleId = newVehicle.Id, LicensePlate = newVehicle.LicensePlate, BaseWeight = otherVehicleType.BaseWeight, VehicleTypeId = otherVehicleType.Id };
             }
 
             var servicePrices = await _context.ServicePrices
