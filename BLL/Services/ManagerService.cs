@@ -180,6 +180,7 @@ namespace AutoWashPro.BLL.Services
             {
                 Name = request.Name,
                 BranchId = request.BranchId,
+                IsBusinessLane = request.IsBusinessLane,
                 IsActive = true
             };
 

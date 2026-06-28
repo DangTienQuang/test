@@ -67,7 +67,7 @@ namespace API.Controllers
             });
         }
 
-        [Authorize(Roles = "Staff, Manager")]
+        [Authorize(Roles = "Admin")]
         [HttpGet("staff/pending/all")]
         public async Task<IActionResult> GetAllPendingVehicles([FromQuery] int? businessProfileId = null)
         {
@@ -82,7 +82,7 @@ namespace API.Controllers
         }
 
         // Staff review vehicle
-        [Authorize(Roles = "Staff,Manager")]
+        [Authorize(Roles = "Admin")]
         [HttpPost("staff/approve/{id}")]
         public async Task<IActionResult> ApproveVehicle(int id)
         {
@@ -96,7 +96,7 @@ namespace API.Controllers
         }
 
         // Staff reject vehicle
-        [Authorize(Roles = "Staff,Manager")]
+        [Authorize(Roles = "Admin")]
         [HttpPost("staff/reject/{id}")]
         public async Task<IActionResult> RejectVehicle(int id, [FromBody] ReviewFleetImportDTO dto)
         {
