@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
-namespace AutoWashPro.API.Controllers
+namespace API.Controllers.Manager
 {
     [ApiController]
     [Route("api/v1/manager")]
@@ -33,7 +33,7 @@ namespace AutoWashPro.API.Controllers
         }
 
         [HttpGet("lanes")]
-        public async Task<IActionResult> GetLanesInBranch([FromQuery] System.DateTime? date)
+        public async Task<IActionResult> GetLanesInBranch([FromQuery] DateTime? date)
         {
             var lanes = await _managerService.GetLanesInBranchAsync(GetUserId(), date);
             return Ok(lanes);

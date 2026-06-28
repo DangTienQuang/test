@@ -1,12 +1,12 @@
 using AutoWashPro.BLL.DTOs;
 
-using AutoWashPro.BLL.Services;    
+using AutoWashPro.BLL.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
 
-namespace AutoWashPro.API.Controllers
+namespace API.Controllers.Staff
 {
     [Route("api/v1/admin/bookings")]
     [ApiController]
