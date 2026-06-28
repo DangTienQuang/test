@@ -65,6 +65,4 @@ secrets.json
 *.swp
 *.log
 *.cache
-API/appsettings.json
-/API
-*.json
+
