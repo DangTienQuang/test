@@ -77,11 +77,30 @@ namespace AutoWashPro.BLL.Services
                 throw new BadRequestException("Lane not found in your branch.");
             }
 
+            // Verify staff has a scheduled work shift on that Date and WorkShiftId
+            var hasScheduledShift = await _context.StaffShiftAssignments
+                .AnyAsync(s => s.StaffUserId == staffProfile.EmployeeId && s.WorkDate.Date == assignDto.AssignedDate.Date && s.WorkShiftId == assignDto.WorkShiftId);
+
+            if (!hasScheduledShift)
+            {
+                throw new BadRequestException("Nhân viên không có lịch làm việc trong ca này vào ngày được chọn.");
+            }
+
+            // Verify staff is not already assigned to ANY lane for the exact same WorkShiftId on the exact same Date
+            var existingAssignment = await _context.StaffLaneAssignments
+                .AnyAsync(a => a.StaffId == assignDto.StaffId && a.AssignedDate.Date == assignDto.AssignedDate.Date && a.WorkShiftId == assignDto.WorkShiftId);
+
+            if (existingAssignment)
+            {
+                throw new BadRequestException("Nhân viên này đã được phân công vào một làn khác trong ca làm việc này.");
+            }
+
             var assignment = new StaffLaneAssignment
             {
                 StaffId = assignDto.StaffId,
                 LaneId = assignDto.LaneId,
-                AssignedDate = assignDto.AssignedDate.Date
+                AssignedDate = assignDto.AssignedDate.Date,
+                WorkShiftId = assignDto.WorkShiftId
             };
 
             _context.StaffLaneAssignments.Add(assignment);
@@ -265,6 +284,7 @@ namespace AutoWashPro.BLL.Services
             var assignments = await _context.StaffLaneAssignments
                 .Include(a => a.Staff)
                     .ThenInclude(s => s.EmployeeProfile)
+                .Include(a => a.WorkShift)
                 .Where(a => laneIds.Contains(a.LaneId) && a.AssignedDate.Date == targetDate)
                 .ToListAsync();
 
@@ -275,7 +295,9 @@ namespace AutoWashPro.BLL.Services
                     UserId = a.Staff.UserId,
                     FullName = a.Staff.EmployeeProfile!.FullName,
                     PhoneNumber = a.Staff.PhoneNumber,
-                    Status = a.Staff.Status
+                    Status = a.Staff.Status,
+                    ShiftId = a.WorkShiftId,
+                    ShiftName = a.WorkShift.ShiftName
                 }).ToList();
             }
             return lanes;
@@ -296,6 +318,7 @@ namespace AutoWashPro.BLL.Services
             var assignments = await _context.StaffLaneAssignments
                 .Include(a => a.Staff)
                     .ThenInclude(s => s.EmployeeProfile)
+                .Include(a => a.WorkShift)
                 .Where(a => a.LaneId == laneId && a.AssignedDate.Date == targetDate)
                 .ToListAsync();
 
@@ -304,7 +327,9 @@ namespace AutoWashPro.BLL.Services
                 UserId = a.Staff.UserId,
                 FullName = a.Staff.EmployeeProfile!.FullName,
                 PhoneNumber = a.Staff.PhoneNumber,
-                Status = a.Staff.Status
+                Status = a.Staff.Status,
+                ShiftId = a.WorkShiftId,
+                ShiftName = a.WorkShift.ShiftName
             }).ToList();
         }
 
