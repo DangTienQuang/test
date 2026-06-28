@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using BLL.Helpers;
 
-namespace AutoWashPro.API.Controllers
+namespace API.Controllers.User
 {
     [ApiController]
     [Route("api/v1/wallets")]

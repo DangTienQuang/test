@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
 
-namespace AutoWashPro.API.Controllers
+namespace API.Controllers.Admin
 {
     [Route("api/v1/admin/users")]
     [ApiController]

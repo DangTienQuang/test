@@ -4,16 +4,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
-namespace AutoWashPro.API.Controllers
+namespace API.Controllers.Manager
 {
-    [Route("api/v1/manager/overtime-requests")]
+    [Route("api/v1/manager/shift-swap-requests")]
     [ApiController]
     [Authorize(Roles = "Manager,Admin")]
-    public class ManagerOvertimeRequestController : ControllerBase
+    public class ManagerShiftSwapRequestController : ControllerBase
     {
         private readonly IStaffManagementService _staffService;
 
-        public ManagerOvertimeRequestController(IStaffManagementService staffService)
+        public ManagerShiftSwapRequestController(IStaffManagementService staffService)
         {
             _staffService = staffService;
         }
@@ -25,17 +25,17 @@ namespace AutoWashPro.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetOvertimeRequests([FromQuery] string? status = null)
+        public async Task<IActionResult> GetShiftSwapRequests([FromQuery] string? status = null)
         {
-            var result = await _staffService.GetOvertimeRequestsAsync(status);
+            var result = await _staffService.GetShiftSwapRequestsAsync(status);
             return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
         [HttpPut("{id}/review")]
-        public async Task<IActionResult> ReviewOvertimeRequest(int id, [FromBody] ReviewRequestDTO request)
+        public async Task<IActionResult> ReviewShiftSwapRequest(int id, [FromBody] ReviewRequestDTO request)
         {
-            var result = await _staffService.ReviewOvertimeRequestAsync(id, GetUserId(), request);
-            return Ok(new { statusCode = 200, message = "Duyet yeu cau tang ca thanh cong.", data = result });
+            var result = await _staffService.ReviewShiftSwapRequestAsync(id, GetUserId(), request);
+            return Ok(new { statusCode = 200, message = "Duyet yeu cau doi ca thanh cong.", data = result });
         }
     }
 }

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
-namespace API.Controllers
+namespace API.Controllers.Ai
 {
     [ApiController]
     [Route("api/v1/ai")]

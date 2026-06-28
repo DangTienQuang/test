@@ -6,7 +6,7 @@ using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
-namespace AutoWashPro.API.Controllers
+namespace API.Controllers.User
 {
     [Route("api/v1/auth")]
     [ApiController]

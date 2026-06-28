@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
-namespace AutoWashPro.API.Controllers
+namespace API.Controllers.Staff
 {
     [ApiController]
     [Route("api/v1/operation-staff")]

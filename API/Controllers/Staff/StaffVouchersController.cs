@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 
-namespace AutoWashPro.API.Controllers
+namespace API.Controllers.Staff
 {
     [ApiController]
     [Route("api/v1/staff/vouchers")]

@@ -2,7 +2,7 @@ using AutoWashPro.BLL.DTOs;
 using AutoWashPro.BLL.Services;
 using Microsoft.AspNetCore.Mvc;
 
-namespace AutoWashPro.API.Controllers
+namespace API.Controllers.User
 {
     [ApiController]
     [Route("api/v1/payments")]

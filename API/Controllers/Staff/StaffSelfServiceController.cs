@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
-namespace AutoWashPro.API.Controllers
+namespace API.Controllers.Staff
 {
     [Route("api/v1/staff/me")]
     [ApiController]
