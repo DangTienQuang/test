@@ -13,5 +13,8 @@ namespace AutoWashPro.BLL.DTOs
 
         [Required]
         public DateTime AssignedDate { get; set; }
+
+        [Required]
+        public int WorkShiftId { get; set; }
     }
 }

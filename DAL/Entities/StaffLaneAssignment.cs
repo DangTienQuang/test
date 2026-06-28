@@ -23,5 +23,11 @@ namespace AutoWashPro.DAL.Entities
 
         [Required]
         public DateTime AssignedDate { get; set; }
+
+        [Required]
+        public int WorkShiftId { get; set; }
+
+        [ForeignKey("WorkShiftId")]
+        public WorkShift WorkShift { get; set; } = null!;
     }
 }
