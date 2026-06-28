@@ -185,15 +185,21 @@ namespace AutoWashPro.BLL.Services
             return new string(plate.Where(char.IsLetterOrDigit).ToArray()).ToUpper();
         }
 
-        public async Task<List<AdminBookingResponseDTO>> GetBookingsByLicensePlateAsync(string licensePlate)
+        public async Task<SmartLicensePlateResponseDTO> LookupLicensePlateAsync(string licensePlate, int branchId)
         {
             var normalizedPlate = NormalizeLicensePlate(licensePlate);
             if (string.IsNullOrEmpty(normalizedPlate))
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException("Biển số xe không hợp lệ.");
 
-            var bookings = await _context.Bookings
-                .Where(b => (b.LicensePlate ?? "").Replace("-", "").Replace(".", "").Replace(" ", "").ToUpper() == normalizedPlate)
-                .OrderByDescending(b => b.ScheduledTime)
+            var todayInVN = DateTime.UtcNow.ToVnTime().Date;
+
+            // Step 1: Query Bookings for today at the specific branch
+            var preBooked = await _context.Bookings
+                .Where(b => (b.LicensePlate ?? "").Replace("-", "").Replace(".", "").Replace(" ", "").ToUpper() == normalizedPlate
+                         && b.BranchId == branchId
+                         && b.ScheduledTime.Date == todayInVN
+                         && (b.Status == "Pending" || b.Status == "Confirmed"))
+                .OrderBy(b => b.ScheduledTime)
                 .Select(b => new AdminBookingResponseDTO
                 {
                     BookingId = b.BookingId,
@@ -207,20 +213,60 @@ namespace AutoWashPro.BLL.Services
                     FinalAmount = b.FinalAmount
                 })
                 .AsNoTracking()
-                .ToListAsync();
+                .FirstOrDefaultAsync();
 
-            if (bookings.Count == 0)
+            if (preBooked != null)
             {
-                return new List<AdminBookingResponseDTO>();
+                var paymentStatuses = await GetPaymentStatusesByBookingIdsAsync(new List<int> { preBooked.BookingId });
+                preBooked.PaymentStatus = GetPaymentStatus(paymentStatuses, preBooked.BookingId);
+
+                return new SmartLicensePlateResponseDTO
+                {
+                    CustomerType = "PreBooked",
+                    Data = preBooked
+                };
             }
 
-            var paymentStatuses = await GetPaymentStatusesByBookingIdsAsync(bookings.Select(b => b.BookingId));
-            foreach (var booking in bookings)
+            // Step 2: Query FleetVehicles (Global)
+            var fleetVehicle = await _context.FleetVehicles
+                .Include(fv => fv.BusinessProfile)
+                .Include(fv => fv.VehicleType)
+                .Where(fv => (fv.LicensePlate ?? "").Replace("-", "").Replace(".", "").Replace(" ", "").ToUpper() == normalizedPlate
+                          && (fv.Status == "Approved" || fv.Status == "Active")
+                          && fv.BusinessProfile != null
+                          && fv.BusinessProfile.ApprovalStatus == "Approved"
+                          && fv.BusinessProfile.IsContractActive)
+                .Select(fv => new global::BLL.DTOs.Fleet.FleetVehicleDTO
+                {
+                    FleetVehicleId = fv.FleetVehicleId,
+                    LicensePlate = fv.LicensePlate,
+                    VehicleType = fv.VehicleType.Name,
+                    VehicleTypeName = fv.VehicleType.Name,
+                    Brand = fv.Brand,
+                    Model = fv.Model,
+                    DriverName = fv.DriverName,
+                    EmployeeId = fv.EmployeeCode,
+                    Status = fv.Status,
+                    CreatedAt = fv.CreatedAt
+                })
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+
+            if (fleetVehicle != null)
             {
-                booking.PaymentStatus = GetPaymentStatus(paymentStatuses, booking.BookingId);
+                return new SmartLicensePlateResponseDTO
+                {
+                    CustomerType = "Fleet",
+                    Data = fleetVehicle
+                };
             }
 
-            return bookings;
+            // Step 3: WalkIn
+            return new SmartLicensePlateResponseDTO
+            {
+                CustomerType = "WalkIn",
+                Data = null
+            };
         }
 
         private async Task<Dictionary<int, string>> GetPaymentStatusesByBookingIdsAsync(IEnumerable<int> bookingIds)
@@ -1125,7 +1171,7 @@ namespace AutoWashPro.BLL.Services
             if (request.ServiceIds == null || request.ServiceIds.Count == 0)
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException("Vui lòng chọn ít nhất 1 dịch vụ.");
 
-            int customerUserId = request.UserId;
+            int? customerUserId = request.UserId == 0 ? (int?)null : request.UserId;
             var targetDateTime = DateTime.UtcNow;
 
             // Anti-hoarding Rule
@@ -1221,7 +1267,7 @@ namespace AutoWashPro.BLL.Services
             }
 
             var (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher) =
-                await CalculateBookingPricingAsync(customerUserId, totalOriginalPrice, request.VoucherId, request.PointsToUse, targetDateTime, vehicleTypeQuery.VehicleTypeId);
+                await CalculateBookingPricingAsync(customerUserId ?? 0, totalOriginalPrice, request.VoucherId, request.PointsToUse, targetDateTime, vehicleTypeQuery.VehicleTypeId);
 
             var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == customerUserId);
             if (wallet == null || wallet.Balance < finalAmount)
@@ -1253,9 +1299,9 @@ namespace AutoWashPro.BLL.Services
                     userVoucher.LastUsedDate = DateTime.UtcNow;
                     userVoucher.Voucher.CurrentUsageCount += 1;
                 }
-                if (pointsUsed > 0)
+                if (pointsUsed > 0 && customerUserId.HasValue)
                 {
-                    await _walletService.DeductSpendablePointsAsync(customerUserId, pointsUsed, "Dùng điểm giảm giá đặt lịch vãng lai");
+                    await _walletService.DeductSpendablePointsAsync(customerUserId.Value, pointsUsed, "Dùng điểm giảm giá đặt lịch vãng lai");
                 }
 
                 var booking = new Booking
