@@ -262,6 +262,28 @@ namespace AutoWashPro.BLL.Services
             }
 
             // Step 3: WalkIn
+            var registeredVehicle = await _context.Vehicles
+                .Include(v => v.User)
+                .ThenInclude(u => u.CustomerProfile)
+                .Where(v => v.LicensePlate.Replace("-", "").Replace(".", "").Replace(" ", "").ToUpper() == normalizedPlate && !v.IsDeleted && v.UserId != null)
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+
+            if (registeredVehicle != null && registeredVehicle.User != null)
+            {
+                return new SmartLicensePlateResponseDTO
+                {
+                    CustomerType = "WalkIn",
+                    Data = new
+                    {
+                        userId = registeredVehicle.UserId,
+                        customerName = registeredVehicle.User.CustomerProfile?.FullName,
+                        phoneNumber = registeredVehicle.User.PhoneNumber,
+                        vehicleId = registeredVehicle.Id
+                    }
+                };
+            }
+
             return new SmartLicensePlateResponseDTO
             {
                 CustomerType = "WalkIn",

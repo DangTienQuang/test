@@ -163,6 +163,7 @@ namespace AutoWashPro.BLL.Services
                 .Include(u => u.CustomerProfile)
                 .Include(u => u.StaffProfile)
                 .Include(u => u.ManagerProfile)
+                .Include(u => u.EmployeeProfile)
                 .FirstOrDefaultAsync(u => u.PhoneNumber == loginInput || (u.Email != null && u.Email.ToLower() == loginInput));
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
@@ -263,6 +264,7 @@ namespace AutoWashPro.BLL.Services
                 .Include(u => u.CustomerProfile)
                 .Include(u => u.StaffProfile)
                 .Include(u => u.ManagerProfile)
+                .Include(u => u.EmployeeProfile)
                 .FirstOrDefaultAsync(u => u.UserId == userId);
 
             if (user == null || user.RefreshToken != request.RefreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
@@ -306,14 +308,23 @@ namespace AutoWashPro.BLL.Services
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.ASCII.GetBytes(_configuration["Jwt:Key"]);
+
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+                new Claim(ClaimTypes.MobilePhone, user.PhoneNumber),
+                new Claim(ClaimTypes.Role, user.Role)
+            };
+
+            var branchId = user.EmployeeProfile?.BranchId;
+            if (branchId.HasValue)
+            {
+                claims.Add(new Claim("BranchId", branchId.Value.ToString()));
+            }
+
             var tokenDescriptor = new SecurityTokenDescriptor
             {
-                Subject = new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-                    new Claim(ClaimTypes.MobilePhone, user.PhoneNumber),
-                    new Claim(ClaimTypes.Role, user.Role)
-                }),
+                Subject = new ClaimsIdentity(claims),
                 Expires = DateTime.UtcNow.AddMinutes(30),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
