@@ -7,21 +7,29 @@ namespace AutoWashPro.BLL.Services
 {
     public class PayOsService : IPayOsService
     {
-        private readonly dynamic _payOS;
+        private readonly dynamic? _payOS;
 
         public PayOsService(IConfiguration configuration)
         {
-            var clientId = configuration["PayOSConfig:ClientId"] ?? throw new Exception("PayOS ClientId missing");
-            var apiKey = configuration["PayOSConfig:ApiKey"] ?? throw new Exception("PayOS ApiKey missing");
-            var checksumKey = configuration["PayOSConfig:ChecksumKey"] ?? throw new Exception("PayOS ChecksumKey missing");
+            var clientId = configuration["PayOSConfig:ClientId"];
+            var apiKey = configuration["PayOSConfig:ApiKey"];
+            var checksumKey = configuration["PayOSConfig:ChecksumKey"];
 
-            var asm = System.Reflection.Assembly.Load("payOS");
-            var type = asm.GetType("PayOS.PayOS") ?? throw new Exception("Could not find PayOS class in SDK");
-            _payOS = Activator.CreateInstance(type, clientId, apiKey, checksumKey)!;
+            if (!string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(checksumKey))
+            {
+                var asm = System.Reflection.Assembly.Load("payOS");
+                var type = asm.GetType("PayOS.PayOS") ?? throw new Exception("Could not find PayOS class in SDK");
+                _payOS = Activator.CreateInstance(type, clientId, apiKey, checksumKey)!;
+            }
         }
 
         public async Task<PayOsPaymentResult> CreatePaymentLinkAsync(long orderCode, int amount, string description, string userId)
         {
+            if (_payOS == null)
+            {
+                throw new Exception("PayOS configuration is missing (ClientId, ApiKey, or ChecksumKey). Cannot create payment link.");
+            }
+
             var asm = _payOS.GetType().Assembly;
             var paymentDataType = asm.GetType("PayOS.Types.PaymentData") ?? throw new Exception("PaymentData type not found");
             var itemDataType = asm.GetType("PayOS.Types.ItemData");
@@ -51,6 +59,11 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<PayOsWebhookResult?> VerifyWebhookDataAsync(object webhookBody)
         {
+            if (_payOS == null)
+            {
+                throw new Exception("PayOS configuration is missing (ClientId, ApiKey, or ChecksumKey). Cannot verify webhook data.");
+            }
+
             await Task.Yield();
             try
             {
