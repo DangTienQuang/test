@@ -19,6 +19,7 @@ namespace AutoWashPro.BLL.Services
         private readonly IEmailService _emailService;
         private readonly IVoucherService _voucherService;
         private readonly IVoucherCampaignService _voucherCampaignService;
+        private readonly IPayOsService _payOsService;
 
         public BookingService(
             AutoWashDbContext context,
@@ -26,7 +27,8 @@ namespace AutoWashPro.BLL.Services
             ITierService tierService,
             IEmailService emailService,
             IVoucherService voucherService,
-            IVoucherCampaignService voucherCampaignService)
+            IVoucherCampaignService voucherCampaignService,
+            IPayOsService payOsService)
         {
             _context = context;
             _walletService = walletService;
@@ -34,6 +36,7 @@ namespace AutoWashPro.BLL.Services
             _emailService = emailService;
             _voucherService = voucherService;
             _voucherCampaignService = voucherCampaignService;
+            _payOsService = payOsService;
         }
 
         public async Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, CheckAvailableSlotsRequestDTO request)
@@ -1188,7 +1191,7 @@ namespace AutoWashPro.BLL.Services
             await _context.SaveChangesAsync();
         }
 
-        public async Task<BookingResponseDTO> CreateWalkInBookingAsync(int staffId, CreateWalkInBookingDTO request)
+        public async Task<WalkInBookingResponseDTO> CreateWalkInBookingAsync(int staffId, CreateWalkInBookingDTO request)
         {
             if (request.ServiceIds == null || request.ServiceIds.Count == 0)
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException("Vui lòng chọn ít nhất 1 dịch vụ.");
@@ -1196,13 +1199,15 @@ namespace AutoWashPro.BLL.Services
             int? customerUserId = request.UserId == 0 ? (int?)null : request.UserId;
             var targetDateTime = DateTime.UtcNow;
 
+            var normalizedPlate = request.LicensePlate.Replace("-", "").Replace(".", "").Trim().ToUpper();
+
             // Anti-hoarding Rule
-            bool hasActiveBooking = await _context.Bookings.AnyAsync(b => b.LicensePlate == request.LicensePlate && (b.Status == "Pending" || b.Status == "CheckedIn"));
+            bool hasActiveBooking = await _context.Bookings.AnyAsync(b => b.LicensePlate == normalizedPlate && (b.Status == "Pending" || b.Status == "CheckedIn"));
             if (hasActiveBooking)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Xe biển số {request.LicensePlate} đang có lịch hẹn chưa hoàn thành.");
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Xe biển số {normalizedPlate} đang có lịch hẹn chưa hoàn thành.");
 
             var vehicleTypeQuery = await _context.Vehicles
-                .Where(v => v.LicensePlate == request.LicensePlate && !v.IsDeleted)
+                .Where(v => v.LicensePlate == normalizedPlate && !v.IsDeleted)
                 .Select(v => new { VehicleId = v.Id, v.LicensePlate, v.VehicleType.BaseWeight, v.VehicleTypeId })
                 .FirstOrDefaultAsync();
 
@@ -1215,14 +1220,38 @@ namespace AutoWashPro.BLL.Services
                      _context.VehicleTypes.Add(otherVehicleType);
                      await _context.SaveChangesAsync();
                  }
+
+                 var otherCarModel = await _context.CarModels.FirstOrDefaultAsync(cm => cm.Name == "Khác");
+                 if (otherCarModel == null)
+                 {
+                     otherCarModel = new CarModel { Name = "Khác", Brand = "Khác" };
+                     _context.CarModels.Add(otherCarModel);
+                     try
+                     {
+                         await _context.SaveChangesAsync();
+                     }
+                     catch (DbUpdateException ex)
+                     {
+                         throw new Exception($"Database update failed during CarModel creation: {ex.InnerException?.Message ?? ex.Message}", ex);
+                     }
+                 }
+
                  var newVehicle = new Vehicle
                  {
                      UserId = customerUserId,
-                     LicensePlate = request.LicensePlate,
+                     LicensePlate = normalizedPlate,
                      VehicleTypeId = otherVehicleType.Id,
+                     CarModelId = otherCarModel.Id
                  };
                  _context.Vehicles.Add(newVehicle);
-                 await _context.SaveChangesAsync();
+                 try
+                 {
+                     await _context.SaveChangesAsync();
+                 }
+                 catch (DbUpdateException ex)
+                 {
+                     throw new Exception($"Database update failed during Vehicle creation: {ex.InnerException?.Message ?? ex.Message}", ex);
+                 }
                  vehicleTypeQuery = new { VehicleId = newVehicle.Id, LicensePlate = newVehicle.LicensePlate, BaseWeight = otherVehicleType.BaseWeight, VehicleTypeId = otherVehicleType.Id };
             }
 
@@ -1275,7 +1304,7 @@ namespace AutoWashPro.BLL.Services
                     };
                     _context.DailySlotCapacities.Add(dailyCapacity);
                     try { await _context.SaveChangesAsync(); }
-                    catch (DbUpdateException ex)
+                    catch (DbUpdateException)
                     {
                         _context.Entry(dailyCapacity).State = EntityState.Detached;
                         dailyCapacity = await _context.DailySlotCapacities.FirstAsync(dc => dc.SlotId == slot.SlotId && dc.BranchId == slot.BranchId && dc.Date == targetDateTime.Date);
@@ -1288,12 +1317,7 @@ namespace AutoWashPro.BLL.Services
                 dailyCapacity.BookedWeight += maxCapacityWeight;
             }
 
-            var (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher) =
-                await CalculateBookingPricingAsync(customerUserId ?? 0, totalOriginalPrice, request.VoucherId, request.PointsToUse, targetDateTime, vehicleTypeQuery.VehicleTypeId);
-
-            var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == customerUserId);
-            if (wallet == null || wallet.Balance < finalAmount)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Số dư ví của khách hàng không đủ để thanh toán. Cần: {finalAmount:N0}đ");
+            string? paymentUrl = null;
 
             try
             {
@@ -1303,60 +1327,132 @@ namespace AutoWashPro.BLL.Services
                     catch (DbUpdateConcurrencyException) { throw new AutoWashPro.BLL.Exceptions.BadRequestException("Có người khác vừa đặt lịch. Vui lòng thử lại."); }
                 }
 
-                wallet.Balance -= finalAmount;
-                var paymentTx = new Transaction
-                {
-                    WalletId = wallet.WalletId,
-                    Amount = -finalAmount,
-                    TransactionType = "Payment",
-                    Description = $"Thanh toán khách vãng lai lúc {targetDateTime:dd/MM/yyyy HH:mm}"
-                };
-                _context.Transactions.Add(paymentTx);
+                var paymentMethod = request.PaymentMethod?.Trim() ?? "Cash";
 
-                if (userVoucher != null)
+                Booking booking;
+                Transaction paymentTx;
+
+                if (customerUserId == null) // THE GUEST FLOW
                 {
-                    userVoucher.UsageCount += 1;
-                    userVoucher.IsUsed = userVoucher.UsageCount >= userVoucher.Voucher.MaxUsagePerUser;
-                    userVoucher.UsedDate = DateTime.UtcNow;
-                    userVoucher.LastUsedDate = DateTime.UtcNow;
-                    userVoucher.Voucher.CurrentUsageCount += 1;
+                    if (string.Equals(paymentMethod, "Wallet", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new AutoWashPro.BLL.Exceptions.BadRequestException("Khách vãng lai không thể thanh toán bằng Wallet.");
+                    }
+
+                    decimal finalAmount = totalOriginalPrice;
+
+                    booking = new Booking
+                    {
+                        UserId = null,
+                        VehicleId = vehicleTypeQuery.VehicleId,
+                        LicensePlate = normalizedPlate,
+                        CapacityWeight = maxCapacityWeight,
+                        VehicleCondition = VehicleCondition.Clean,
+                        BranchId = request.BranchId,
+                        ScheduledTime = targetDateTime,
+                        Status = "CheckedIn",
+                        OriginalPrice = totalOriginalPrice,
+                        PointsUsed = 0,
+                        PointDiscountAmount = 0,
+                        AppliedVoucherId = null,
+                        VoucherDiscountAmount = 0,
+                        FinalAmount = finalAmount,
+                        BookingDetails = pendingDetails,
+                        FallbackQrCode = Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper()
+                    };
+
+                    _context.Bookings.Add(booking);
+                    await _context.SaveChangesAsync();
+
+                    paymentTx = new Transaction
+                    {
+                        WalletId = null,
+                        Amount = finalAmount,
+                        TransactionType = "WalkInPayment",
+                        Description = $"Walk-in payment via {paymentMethod}",
+                        PaymentMethod = paymentMethod,
+                        ReferenceBookingId = booking.BookingId
+                    };
+                    _context.Transactions.Add(paymentTx);
+                    await _context.SaveChangesAsync();
+
+                    if (string.Equals(paymentMethod, "PayOS", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var payOsResult = await _payOsService.CreatePaymentLinkAsync(
+                            long.Parse(DateTime.UtcNow.ToString("yyMMddHHmmssfff")),
+                            (int)finalAmount,
+                            $"Thanh toan #{booking.BookingId}",
+                            "WalkIn"
+                        );
+                        paymentUrl = payOsResult.CheckoutUrl;
+                    }
                 }
-                if (pointsUsed > 0 && customerUserId.HasValue)
+                else // THE REGISTERED CUSTOMER FLOW
                 {
-                    await _walletService.DeductSpendablePointsAsync(customerUserId.Value, pointsUsed, "Dùng điểm giảm giá đặt lịch vãng lai");
+                    var (voucherDiscount, pointDiscount, pointsUsed, finalAmount, userVoucher) =
+                        await CalculateBookingPricingAsync(customerUserId.Value, totalOriginalPrice, request.VoucherId, request.PointsToUse, targetDateTime, vehicleTypeQuery.VehicleTypeId);
+
+                    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == customerUserId);
+                    if (wallet == null || wallet.Balance < finalAmount)
+                        throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Số dư ví của khách hàng không đủ để thanh toán. Cần: {finalAmount:N0}đ");
+
+                    wallet.Balance -= finalAmount;
+
+                    paymentTx = new Transaction
+                    {
+                        WalletId = wallet.WalletId,
+                        Amount = -finalAmount,
+                        TransactionType = "Payment",
+                        Description = $"Thanh toán khách vãng lai (có TK) lúc {targetDateTime:dd/MM/yyyy HH:mm}",
+                        PaymentMethod = paymentMethod
+                    };
+                    _context.Transactions.Add(paymentTx);
+
+                    if (userVoucher != null)
+                    {
+                        userVoucher.UsageCount += 1;
+                        userVoucher.IsUsed = userVoucher.UsageCount >= userVoucher.Voucher.MaxUsagePerUser;
+                        userVoucher.UsedDate = DateTime.UtcNow;
+                        userVoucher.LastUsedDate = DateTime.UtcNow;
+                        userVoucher.Voucher.CurrentUsageCount += 1;
+                    }
+                    if (pointsUsed > 0)
+                    {
+                        await _walletService.DeductSpendablePointsAsync(customerUserId.Value, pointsUsed, "Dùng điểm giảm giá đặt lịch vãng lai");
+                    }
+
+                    booking = new Booking
+                    {
+                        UserId = customerUserId,
+                        VehicleId = vehicleTypeQuery.VehicleId,
+                        LicensePlate = normalizedPlate,
+                        CapacityWeight = maxCapacityWeight,
+                        VehicleCondition = VehicleCondition.Clean,
+                        BranchId = request.BranchId,
+                        ScheduledTime = targetDateTime,
+                        Status = "CheckedIn",
+                        OriginalPrice = totalOriginalPrice,
+                        PointsUsed = pointsUsed,
+                        PointDiscountAmount = pointDiscount,
+                        AppliedVoucherId = request.VoucherId,
+                        VoucherDiscountAmount = voucherDiscount,
+                        FinalAmount = finalAmount,
+                        BookingDetails = pendingDetails,
+                        FallbackQrCode = Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper()
+                    };
+
+                    _context.Bookings.Add(booking);
+                    await _context.SaveChangesAsync();
+
+                    paymentTx.ReferenceBookingId = booking.BookingId;
+                    await _context.SaveChangesAsync();
                 }
-
-                var booking = new Booking
-                {
-                    UserId = customerUserId,
-                    VehicleId = vehicleTypeQuery.VehicleId,
-                    LicensePlate = request.LicensePlate,
-                    CapacityWeight = maxCapacityWeight,
-                    VehicleCondition = VehicleCondition.Clean,
-                    BranchId = request.BranchId,
-                    ScheduledTime = targetDateTime,
-                    Status = "CheckedIn", // Walk-ins go straight to CheckedIn
-                    OriginalPrice = totalOriginalPrice,
-                    PointsUsed = pointsUsed,
-                    PointDiscountAmount = pointDiscount,
-                    AppliedVoucherId = request.VoucherId,
-                    VoucherDiscountAmount = voucherDiscount,
-                    FinalAmount = finalAmount,
-                    BookingDetails = pendingDetails,
-                    FallbackQrCode = Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper()
-                };
-
-                _context.Bookings.Add(booking);
-                await _context.SaveChangesAsync();
-
-                paymentTx.ReferenceBookingId = booking.BookingId;
-                await _context.SaveChangesAsync();
 
                 await transaction.CommitAsync();
 
                 var serviceNames = await _context.Services.Where(s => request.ServiceIds.Contains(s.ServiceId)).Select(s => s.ServiceName).ToListAsync();
 
-                return new BookingResponseDTO
+                return new WalkInBookingResponseDTO
                 {
                     BookingId = booking.BookingId,
                     LicensePlate = booking.LicensePlate,
@@ -1366,8 +1462,14 @@ namespace AutoWashPro.BLL.Services
                     OriginalPrice = booking.OriginalPrice,
                     PointDiscountAmount = booking.PointDiscountAmount,
                     VoucherDiscountAmount = booking.VoucherDiscountAmount,
-                    FinalAmount = booking.FinalAmount
+                    FinalAmount = booking.FinalAmount,
+                    PaymentUrl = paymentUrl
                 };
+            }
+            catch (DbUpdateException ex)
+            {
+                await transaction.RollbackAsync();
+                throw new Exception($"Database update failed: {ex.InnerException?.Message ?? ex.Message}", ex);
             }
             catch (Exception)
             {

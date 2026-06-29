@@ -9,10 +9,10 @@ namespace AutoWashPro.DAL.Entities
         [Key]
         public int TransactionId { get; set; }
 
-        [Required]
-        public int WalletId { get; set; }
+        // WalletId is nullable for Walk-in guest payments
+        public int? WalletId { get; set; }
         [ForeignKey("WalletId")]
-        public Wallet Wallet { get; set; } = null!;
+        public Wallet? Wallet { get; set; }
 
         [Required]
         public decimal Amount { get; set; }
@@ -33,6 +33,9 @@ namespace AutoWashPro.DAL.Entities
         [Required]
         [MaxLength(20)]
         public string Status { get; set; } = "Completed"; // Completed, Pending
+
+        [MaxLength(50)]
+        public string? PaymentMethod { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
