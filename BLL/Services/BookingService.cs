@@ -1206,12 +1206,16 @@ namespace AutoWashPro.BLL.Services
             if (hasActiveBooking)
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Xe biển số {normalizedPlate} đang có lịch hẹn chưa hoàn thành.");
 
-            var vehicleTypeQuery = await _context.Vehicles
+            var existingVehicle = await _context.Vehicles
+                .Include(v => v.VehicleType)
                 .Where(v => v.LicensePlate == normalizedPlate && !v.IsDeleted)
-                .Select(v => new { VehicleId = v.Id, v.LicensePlate, v.VehicleType.BaseWeight, v.VehicleTypeId })
                 .FirstOrDefaultAsync();
 
-            if (vehicleTypeQuery == null)
+            var vehicleTypeQuery = existingVehicle != null
+                ? new { VehicleId = existingVehicle.Id, LicensePlate = existingVehicle.LicensePlate, BaseWeight = existingVehicle.VehicleType.BaseWeight, VehicleTypeId = existingVehicle.VehicleTypeId }
+                : null;
+
+            if (existingVehicle == null)
             {
                  var otherVehicleType = await _context.VehicleTypes.FirstOrDefaultAsync(vt => vt.Name == "Khác");
                  if (otherVehicleType == null)
