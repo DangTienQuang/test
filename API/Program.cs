@@ -178,6 +178,7 @@ builder.Services.AddScoped<IFleetService, FleetService>();
 builder.Services.AddScoped<IStaffManagementService, StaffManagementService>();
 builder.Services.AddScoped<ICRMCampaignService, CRMCampaignService>();
 builder.Services.AddHttpClient<IWeatherService, WeatherService>();
+builder.Services.AddScoped<IOccupancyService, OccupancyService>();
 builder.Services.AddScoped<IAnnualTierService, AnnualTierService>();
 builder.Services.AddScoped<IDatabaseSeedingService, DatabaseSeedingService>();
 
