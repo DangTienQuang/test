@@ -44,21 +44,8 @@ namespace AutoWashPro.BLL.Services
                 }
 
                 var content = await response.Content.ReadAsStringAsync();
-                var weatherData = JsonSerializer.Deserialize<JsonElement>(content);
-
-                if (weatherData.TryGetProperty("weather", out var weatherArray) && weatherArray.ValueKind == JsonValueKind.Array && weatherArray.GetArrayLength() > 0)
-                {
-                    var mainStatus = weatherArray[0].GetProperty("main").GetString();
-
-                    if (!string.IsNullOrEmpty(mainStatus) &&
-                        (mainStatus.Contains("Rain", StringComparison.OrdinalIgnoreCase) ||
-                         mainStatus.Contains("Thunderstorm", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
+                using var doc = JsonDocument.Parse(content);
+                return IsRainOrThunderstorm(doc.RootElement);
             }
             catch (Exception ex)
             {
@@ -67,8 +54,13 @@ namespace AutoWashPro.BLL.Services
             }
         }
 
-        public async Task<bool> IsProlongedRainAsync(Branch branch)
+        public async Task<bool> IsProlongedRainAsync(Branch? branch)
         {
+            if (branch == null)
+            {
+                return false;
+            }
+
             try
             {
                 var apiKey = _configuration["OpenWeatherMap:ApiKey"];
@@ -91,21 +83,8 @@ namespace AutoWashPro.BLL.Services
                 }
 
                 var currentContent = await currentResponse.Content.ReadAsStringAsync();
-                var currentWeatherData = JsonSerializer.Deserialize<JsonElement>(currentContent);
-                bool isCurrentlyRaining = false;
-
-                if (currentWeatherData.TryGetProperty("weather", out var currentWeatherArray) && currentWeatherArray.ValueKind == JsonValueKind.Array && currentWeatherArray.GetArrayLength() > 0)
-                {
-                    var mainStatus = currentWeatherArray[0].GetProperty("main").GetString();
-                    if (!string.IsNullOrEmpty(mainStatus) &&
-                        (mainStatus.Contains("Rain", StringComparison.OrdinalIgnoreCase) ||
-                         mainStatus.Contains("Thunderstorm", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        isCurrentlyRaining = true;
-                    }
-                }
-
-                if (!isCurrentlyRaining)
+                using var currentDoc = JsonDocument.Parse(currentContent);
+                if (!IsRainOrThunderstorm(currentDoc.RootElement))
                 {
                     return false; // Not raining now
                 }
@@ -116,25 +95,20 @@ namespace AutoWashPro.BLL.Services
                 if (!forecastResponse.IsSuccessStatusCode)
                 {
                     _logger.LogWarning("Failed to fetch forecast data for branch {BranchId}. StatusCode: {StatusCode}", branch.BranchId, forecastResponse.StatusCode);
-                    return false; // Better to return false if we can't confirm forecast
+                    return false;
                 }
 
                 var forecastContent = await forecastResponse.Content.ReadAsStringAsync();
-                var forecastData = JsonSerializer.Deserialize<JsonElement>(forecastContent);
+                using var forecastDoc = JsonDocument.Parse(forecastContent);
+                var root = forecastDoc.RootElement;
 
-                if (forecastData.TryGetProperty("list", out var listArray) && listArray.ValueKind == JsonValueKind.Array && listArray.GetArrayLength() > 0)
+                if (root.ValueKind == JsonValueKind.Object &&
+                    root.TryGetProperty("list", out var listArray) &&
+                    listArray.ValueKind == JsonValueKind.Array &&
+                    listArray.GetArrayLength() > 0)
                 {
                     var firstForecast = listArray[0];
-                    if (firstForecast.TryGetProperty("weather", out var forecastWeatherArray) && forecastWeatherArray.ValueKind == JsonValueKind.Array && forecastWeatherArray.GetArrayLength() > 0)
-                    {
-                        var mainStatus = forecastWeatherArray[0].GetProperty("main").GetString();
-                        if (!string.IsNullOrEmpty(mainStatus) &&
-                            (mainStatus.Contains("Rain", StringComparison.OrdinalIgnoreCase) ||
-                             mainStatus.Contains("Thunderstorm", StringComparison.OrdinalIgnoreCase)))
-                        {
-                            return true; // Raining now AND forecast is rain
-                        }
-                    }
+                    return IsRainOrThunderstorm(firstForecast);
                 }
 
                 return false;
@@ -144,6 +118,32 @@ namespace AutoWashPro.BLL.Services
                 _logger.LogError(ex, "An error occurred while fetching prolonged rain weather data for branch {BranchId}.", branch.BranchId);
                 return false;
             }
+        }
+
+        private static bool IsRainOrThunderstorm(JsonElement element)
+        {
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            if (element.TryGetProperty("weather", out var weatherArray) &&
+                weatherArray.ValueKind == JsonValueKind.Array &&
+                weatherArray.GetArrayLength() > 0)
+            {
+                var firstItem = weatherArray[0];
+                if (firstItem.ValueKind == JsonValueKind.Object &&
+                    firstItem.TryGetProperty("main", out var mainProp) &&
+                    mainProp.ValueKind == JsonValueKind.String)
+                {
+                    var mainStatus = mainProp.GetString();
+                    return !string.IsNullOrEmpty(mainStatus) &&
+                           (mainStatus.Contains("Rain", StringComparison.OrdinalIgnoreCase) ||
+                            mainStatus.Contains("Thunderstorm", StringComparison.OrdinalIgnoreCase));
+                }
+            }
+
+            return false;
         }
 
         private string ExtractCityFromAddress(string? address)

@@ -75,7 +75,9 @@ namespace AutoWashPro.BLL.Services
             var assignedCount = 0;
 
             var usersReceivedToday = await _context.UserVouchers
-                .Where(uv => uv.VoucherId == voucher.VoucherId && uv.ReceivedDate.Date == today)
+                .Where(uv => uv.VoucherId == voucher.VoucherId &&
+                             uv.ReceivedDate.Date == today &&
+                             uv.TriggerKey == "WeatherCampaign")
                 .Select(uv => uv.UserId)
                 .ToListAsync();
 
@@ -83,7 +85,7 @@ namespace AutoWashPro.BLL.Services
 
             foreach (var user in activeUsers)
             {
-                if (!receivedUserIds.Contains(user.UserId))
+                if (receivedUserIds.Add(user.UserId))
                 {
                     var userVoucher = new UserVoucher
                     {
@@ -115,32 +117,11 @@ namespace AutoWashPro.BLL.Services
             var branches = await _context.Branches.Where(b => b.IsActive).ToListAsync();
             int totalVouchersIssued = 0;
 
-            // Ensure the Scenario exists
-            var scenario = await _context.KnowledgeScenarios.FirstOrDefaultAsync(s => s.ScenarioCode == "WEATHER_CAMPAIGN");
-            if (scenario == null)
-            {
-                // Find or create a category
-                var category = await _context.KnowledgeCategories.FirstOrDefaultAsync();
-                if (category == null)
-                {
-                    category = new KnowledgeCategory { Name = "Campaigns", Code = "CAMPAIGNS", Description = "Campaigns Category" };
-                    _context.KnowledgeCategories.Add(category);
-                    await _context.SaveChangesAsync();
-                }
+            // Ensure the Scenario exists safely against race conditions
+            var scenario = await GetOrCreateWeatherCampaignScenarioAsync();
 
-                scenario = new KnowledgeScenario
-                {
-                    ScenarioCode = "WEATHER_CAMPAIGN",
-                    ScenarioName = "Smart Weather Campaign",
-                    Enabled = true,
-                    CategoryId = category.CategoryId,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                _context.KnowledgeScenarios.Add(scenario);
-                await _context.SaveChangesAsync();
-            }
-
+            // 1. Identify qualifying branches first (filtering out > 50% occupancy and non-prolonged rain)
+            var qualifyingBranches = new List<Branch>();
             foreach (var branch in branches)
             {
                 var occupancyRate = await _occupancyService.GetBranchOccupancyRateAsync(branch.BranchId, targetDate);
@@ -157,12 +138,30 @@ namespace AutoWashPro.BLL.Services
                     continue;
                 }
 
-                string voucherCode = $"RAIN_BR{branch.BranchId}";
-                var voucher = await _context.Vouchers.FirstOrDefaultAsync(v => v.Code == voucherCode);
+                qualifyingBranches.Add(branch);
+            }
 
-                if (voucher == null)
+            if (!qualifyingBranches.Any())
+            {
+                return "Smart Weather Campaign evaluated. No qualifying branches found.";
+            }
+
+            // 2. Pre-fetch all needed vouchers for qualifying branches in ONE database query
+            var qualifyingBranchIds = qualifyingBranches.Select(b => b.BranchId).ToList();
+            var branchVoucherCodes = qualifyingBranchIds.Select(id => $"RAIN_BR{id}").ToList();
+
+            var existingVouchers = await _context.Vouchers
+                .Where(v => branchVoucherCodes.Contains(v.Code))
+                .ToDictionaryAsync(v => v.Code);
+
+            // Create any missing vouchers in batch
+            bool newVouchersCreated = false;
+            foreach (var branchId in qualifyingBranchIds)
+            {
+                string voucherCode = $"RAIN_BR{branchId}";
+                if (!existingVouchers.ContainsKey(voucherCode))
                 {
-                    voucher = new Voucher
+                    var newVoucher = new Voucher
                     {
                         Code = voucherCode,
                         DiscountAmount = 30,
@@ -175,33 +174,63 @@ namespace AutoWashPro.BLL.Services
                         StartDate = DateTime.UtcNow,
                         ExpiryDate = DateTime.UtcNow.AddYears(1)
                     };
-                    _context.Vouchers.Add(voucher);
-                    await _context.SaveChangesAsync();
+                    _context.Vouchers.Add(newVoucher);
+                    existingVouchers[voucherCode] = newVoucher;
+                    newVouchersCreated = true;
                 }
+            }
 
-                // Find loyal users for this branch
-                var targetCustomers = await _context.CustomerFeatureProfiles
-                    .Where(cfp => cfp.FavoriteBranchId == branch.BranchId && cfp.Customer.Status == "Active")
-                    .Select(cfp => cfp.CustomerId)
+            if (newVouchersCreated)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            // 3. Pre-fetch all target customers for all qualifying branches in ONE database query
+            var targetCustomersByBranch = await _context.CustomerFeatureProfiles
+                .Where(cfp => cfp.FavoriteBranchId.HasValue &&
+                              qualifyingBranchIds.Contains(cfp.FavoriteBranchId.Value) &&
+                              cfp.Customer.Status == "Active")
+                .Select(cfp => new { BranchId = cfp.FavoriteBranchId ?? 0, cfp.CustomerId })
+                .ToListAsync();
+
+            var branchCustomersMap = targetCustomersByBranch
+                .GroupBy(x => x.BranchId)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.CustomerId).Distinct().ToList());
+
+            // 4. Pre-fetch existing UserVouchers issued today for any of these vouchers in ONE database query
+            var voucherIds = existingVouchers.Values.Select(v => v.VoucherId).ToList();
+            var issuedTodaySet = new HashSet<(int VoucherId, int UserId)>();
+
+            if (voucherIds.Any())
+            {
+                var existingUserVouchers = await _context.UserVouchers
+                    .Where(uv => voucherIds.Contains(uv.VoucherId) &&
+                                 uv.ReceivedDate.Date == today &&
+                                 uv.TriggerKey == "SmartWeatherCampaign")
+                    .Select(uv => new { uv.VoucherId, uv.UserId })
                     .ToListAsync();
 
-                if (!targetCustomers.Any())
+                foreach (var uv in existingUserVouchers)
+                {
+                    issuedTodaySet.Add((uv.VoucherId, uv.UserId));
+                }
+            }
+
+            // 5. In-memory assignment for all branches without any database queries inside the loop
+            bool hasNewAssignments = false;
+            foreach (var branch in qualifyingBranches)
+            {
+                string voucherCode = $"RAIN_BR{branch.BranchId}";
+                var voucher = existingVouchers[voucherCode];
+
+                if (!branchCustomersMap.TryGetValue(branch.BranchId, out var customerIds))
                 {
                     continue;
                 }
 
-                // Exclude users who already received this voucher today
-                var usersReceivedToday = await _context.UserVouchers
-                    .Where(uv => uv.VoucherId == voucher.VoucherId && uv.ReceivedDate.Date == today)
-                    .Select(uv => uv.UserId)
-                    .ToListAsync();
-
-                var receivedUserIds = new HashSet<int>(usersReceivedToday);
-                int branchAssignedCount = 0;
-
-                foreach (var customerId in targetCustomers)
+                foreach (var customerId in customerIds)
                 {
-                    if (!receivedUserIds.Contains(customerId))
+                    if (issuedTodaySet.Add((voucher.VoucherId, customerId)))
                     {
                         var userVoucher = new UserVoucher
                         {
@@ -226,18 +255,62 @@ namespace AutoWashPro.BLL.Services
                         };
                         _context.AIDecisionHistories.Add(decisionHistory);
 
-                        branchAssignedCount++;
                         totalVouchersIssued++;
+                        hasNewAssignments = true;
                     }
-                }
-
-                if(branchAssignedCount > 0)
-                {
-                    await _context.SaveChangesAsync();
                 }
             }
 
+            if (hasNewAssignments)
+            {
+                await _context.SaveChangesAsync();
+            }
+
             return $"Smart Weather Campaign executed. Issued {totalVouchersIssued} branch-specific vouchers.";
+        }
+
+        private async Task<KnowledgeScenario> GetOrCreateWeatherCampaignScenarioAsync()
+        {
+            var scenario = await _context.KnowledgeScenarios.FirstOrDefaultAsync(s => s.ScenarioCode == "WEATHER_CAMPAIGN");
+            if (scenario != null)
+            {
+                return scenario;
+            }
+
+            try
+            {
+                var category = await _context.KnowledgeCategories.FirstOrDefaultAsync();
+                if (category == null)
+                {
+                    category = new KnowledgeCategory { Name = "Campaigns", Code = "CAMPAIGNS", Description = "Campaigns Category" };
+                    _context.KnowledgeCategories.Add(category);
+                    await _context.SaveChangesAsync();
+                }
+
+                scenario = new KnowledgeScenario
+                {
+                    ScenarioCode = "WEATHER_CAMPAIGN",
+                    ScenarioName = "Smart Weather Campaign",
+                    Enabled = true,
+                    CategoryId = category.CategoryId,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.KnowledgeScenarios.Add(scenario);
+                await _context.SaveChangesAsync();
+                return scenario;
+            }
+            catch (DbUpdateException)
+            {
+                // In case of concurrent creation or duplicate key error, reload existing scenario
+                _context.ChangeTracker.Clear();
+                scenario = await _context.KnowledgeScenarios.FirstOrDefaultAsync(s => s.ScenarioCode == "WEATHER_CAMPAIGN");
+                if (scenario != null)
+                {
+                    return scenario;
+                }
+                throw;
+            }
         }
     }
 }

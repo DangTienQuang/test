@@ -18,19 +18,22 @@ namespace AutoWashPro.BLL.Services
 
         public async Task<double> GetBranchOccupancyRateAsync(int branchId, DateTime targetDate)
         {
-            // targetDate is typically DateTime.UtcNow (or equivalent local time)
-            var targetDateVn = targetDate;
-            var targetTimeOfDay = targetDateVn.TimeOfDay;
-            var endTargetTimeOfDay = targetTimeOfDay.Add(TimeSpan.FromHours(4));
+            var targetDateTime = targetDate;
+            var endDateTime = targetDateTime.AddHours(4);
+
+            var startDate = targetDateTime.Date;
+            var endDate = endDateTime.Date;
 
             var dailyCapacities = await _context.DailySlotCapacities
                 .Include(dsc => dsc.TimeSlot)
-                .Where(dsc => dsc.BranchId == branchId && dsc.Date == targetDateVn.Date)
+                .Where(dsc => dsc.BranchId == branchId && dsc.Date >= startDate && dsc.Date <= endDate)
                 .ToListAsync();
 
-            // Filter for next 4 hours
+            // Safely compute the slot start date/time and filter within the next 4 hours
             var relevantCapacities = dailyCapacities
-                .Where(dsc => dsc.TimeSlot.StartTime >= targetTimeOfDay && dsc.TimeSlot.StartTime < endTargetTimeOfDay)
+                .Where(dsc => dsc.TimeSlot != null &&
+                              dsc.Date.Add(dsc.TimeSlot.StartTime) >= targetDateTime &&
+                              dsc.Date.Add(dsc.TimeSlot.StartTime) < endDateTime)
                 .ToList();
 
             if (!relevantCapacities.Any())
@@ -39,9 +42,9 @@ namespace AutoWashPro.BLL.Services
             }
 
             int totalBookedWeight = relevantCapacities.Sum(dsc => dsc.BookedWeight);
-            int totalMaxCapacity = relevantCapacities.Sum(dsc => dsc.TimeSlot.MaxCapacity);
+            int totalMaxCapacity = relevantCapacities.Sum(dsc => dsc.TimeSlot?.MaxCapacity ?? 0);
 
-            if (totalMaxCapacity == 0)
+            if (totalMaxCapacity <= 0)
             {
                 return 0.0;
             }

@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using BLL.Services.Interface;
 using CloudinaryDotNet;
-using DAL.Data;
+using AutoWashPro.DAL.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -180,7 +180,6 @@ builder.Services.AddScoped<ICRMCampaignService, CRMCampaignService>();
 builder.Services.AddHttpClient<IWeatherService, WeatherService>();
 builder.Services.AddScoped<IOccupancyService, OccupancyService>();
 builder.Services.AddScoped<IAnnualTierService, AnnualTierService>();
-builder.Services.AddScoped<IDatabaseSeedingService, DatabaseSeedingService>();
 
 builder.Services.AddHostedService<AutoWashPro.API.Workers.AnnualTierResetWorker>();
 builder.Services.AddHostedService<AutoWashPro.API.Workers.CRMCampaignWorker>();
@@ -264,12 +263,12 @@ app.UseAuthorization();
 app.MapControllers();
 
 // ==============================================================================
-// 10. DATABASE MIGRATION & SEEDING ON STARTUP
+// 10. DATABASE MIGRATION ON STARTUP
 // ==============================================================================
 using (var scope = app.Services.CreateScope())
 {
-    var seedingService = scope.ServiceProvider.GetRequiredService<IDatabaseSeedingService>();
-    await seedingService.InitializeAndSeedAsync();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AutoWashDbContext>();
+    await dbContext.Database.MigrateAsync();
 }
 
 app.Run();
