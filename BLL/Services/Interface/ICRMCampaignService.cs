@@ -8,5 +8,6 @@ namespace AutoWashPro.BLL.Services
     {
         Task<List<VoucherCampaignProcessResultDTO>> ProcessDailyCampaignsAsync();
         Task<string> TriggerWeatherCampaignAsync();
+        Task<string> TriggerSmartWeatherCampaignAsync();
     }
 }
