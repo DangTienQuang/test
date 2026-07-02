@@ -113,16 +113,13 @@ builder.Services.AddRateLimiter(options =>
 // ==============================================================================
 // 5. THIRD-PARTY & AI SERVICES (PayOS, PaddleOCR, LLM)
 // ==============================================================================
-// 5.1. PayOS Integration
-builder.Services.AddSingleton(sp =>
-{
-    var config = sp.GetRequiredService<IConfiguration>();
-    return new PayOSClient(
-        config["PayOS:ClientId"] ?? "",
-        config["PayOS:ApiKey"] ?? "",
-        config["PayOS:ChecksumKey"] ?? ""
-    );
-});
+// 5.1. PayOS Integration - một singleton dùng chung cho toàn bộ ứng dụng
+var payOSClient = new PayOSClient(
+    builder.Configuration["PayOS:ClientId"] ?? "",
+    builder.Configuration["PayOS:ApiKey"] ?? "",
+    builder.Configuration["PayOS:ChecksumKey"] ?? ""
+);
+builder.Services.AddSingleton(payOSClient);
 
 ExcelPackage.License.SetNonCommercialPersonal("AutoWashPro");
 
