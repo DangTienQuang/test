@@ -2,6 +2,7 @@ using AutoWashPro.BLL.Extensions;
 using AutoWashPro.BLL.Services;
 using BLL.Helpers;
 using BLL.Services;
+using AutoWashPro.BLL.Services.Interface;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using BLL.Services.Interface;
@@ -179,6 +180,7 @@ builder.Services.AddScoped<IFleetService, FleetService>();
 // ==============================================================================
 builder.Services.AddScoped<IStaffManagementService, StaffManagementService>();
 builder.Services.AddScoped<ICRMCampaignService, CRMCampaignService>();
+builder.Services.AddHttpClient<IWeatherService, WeatherService>();
 builder.Services.AddScoped<IAnnualTierService, AnnualTierService>();
 builder.Services.AddScoped<IDatabaseSeedingService, DatabaseSeedingService>();
 
