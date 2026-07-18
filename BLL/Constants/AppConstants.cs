@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -11,6 +11,7 @@ namespace AutoWashPro.BLL.Constants
         public const string Active = "Active";
         public const string Pending = "Pending";
         public const string Blocked = "Blocked";
+        public const string Deleted = "Deleted";
     }
 
     public static class UserRoles
@@ -25,7 +26,7 @@ namespace AutoWashPro.BLL.Constants
     {
         public const int VndPerSpendPoint = 100;
         public const int VndPerEarnedPoint = 1000;
-        public const string CompletionReasonPrefix = "Hoàn thành dịch vụ";
-        public const string RefundPointsReasonPrefix = "Hoàn điểm do hủy lịch";
+        public const string CompletionReasonPrefix = "Service completion";
+        public const string RefundPointsReasonPrefix = "Refund points due to booking cancellation";
     }
 }

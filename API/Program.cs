@@ -8,16 +8,20 @@ using Microsoft.AspNetCore.Mvc;
 using BLL.Services.Interface;
 using CloudinaryDotNet;
 using AutoWashPro.DAL.Data;
+using BLL.Services.AI.Calculators;
+using BLL.Services.AI.Helpers;
+using BLL.Services.AI.Interfaces;
+using BLL.Services.AI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using OfficeOpenXml;
 using PayOS;
+using QuestPDF.Infrastructure;
 using System.Linq;
 using System.Text;
 using System.Threading.RateLimiting;
-using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,7 +37,7 @@ builder.Services.AddControllers()
                 .SelectMany(entry => entry.Value?.Errors.Select(error => (
                     Field: entry.Key,
                     Message: string.IsNullOrWhiteSpace(error.ErrorMessage)
-                        ? "Dữ liệu đầu vào không hợp lệ."
+                        ? "Invalid input data."
                         : error.ErrorMessage
                 )) ?? Enumerable.Empty<(string Field, string Message)>())
                 .ToList();
@@ -47,7 +51,7 @@ builder.Services.AddControllers()
             return new BadRequestObjectResult(new
             {
                 statusCode = 400,
-                message = errorMessage ?? "Dữ liệu đầu vào không hợp lệ.",
+                message = errorMessage ?? "Invalid input data.",
                 details = errors.Select(error => new { field = error.Field, message = error.Message }).ToList()
             });
         };
@@ -172,6 +176,12 @@ builder.Services.AddScoped<IBusinessBookingService, BusinessBookingService>();
 builder.Services.AddScoped<IInvoicePdfService, InvoicePdfService>();
 builder.Services.AddScoped<ILaneSchedulerService, LaneSchedulerService>();
 builder.Services.AddScoped<IFleetService, FleetService>();
+builder.Services.AddScoped<IMaterialService, MaterialService>();
+builder.Services.AddScoped<IServiceMaterialUsageService, ServiceMaterialUsageService>();
+builder.Services.AddScoped<IInventoryTransferService, InventoryTransferService>();
+builder.Services.AddScoped<IBookingMaterialUsageService, BookingMaterialUsageService>();
+builder.Services.AddScoped<IInventoryReportService, InventoryReportService>();
+
 // ==============================================================================
 // 7. BACKGROUND WORKERS
 // ==============================================================================
@@ -179,10 +189,30 @@ builder.Services.AddScoped<IStaffManagementService, StaffManagementService>();
 builder.Services.AddScoped<ICRMCampaignService, CRMCampaignService>();
 builder.Services.AddHttpClient<IWeatherService, WeatherService>();
 builder.Services.AddScoped<IOccupancyService, OccupancyService>();
+builder.Services.AddScoped<IBranchRevenueAnalyticsService, BranchRevenueAnalyticsService>();
 builder.Services.AddScoped<IAnnualTierService, AnnualTierService>();
+builder.Services.AddScoped<IFeatureGenerationService, FeatureGenerationService>();
+builder.Services.AddScoped<IScenarioEvaluationService, ScenarioEvaluationService>();
+builder.Services.AddSingleton<ICarDetectionService, CarDetectionService>();
+builder.Services.AddSingleton<ICarClassificationService, CarClassificationService>();
+builder.Services.AddScoped<ICarModelMatchingService, CarModelMatchingService>();
+builder.Services.AddScoped<ICarRecognitionService, CarRecognitionService>();
+
+builder.Services.AddScoped<IVisitFeatureCalculator, VisitFeatureCalculator>();
+builder.Services.AddScoped<IVehicleFeatureCalculator, VehicleFeatureCalculator>();
+builder.Services.AddScoped<ISpendingFeatureCalculator, SpendingFeatureCalculator>();
+builder.Services.AddScoped<IPromotionFeatureCalculator, PromotionFeatureCalculator>();
+builder.Services.AddScoped<IServicePreferenceCalculator, ServicePreferenceCalculator>();
+builder.Services.AddScoped<IBranchPreferenceCalculator, BranchPreferenceCalculator>();
+builder.Services.AddScoped<IEngagementFeatureCalculator, EngagementFeatureCalculator>();
+builder.Services.AddScoped<IConditionEvaluator, ConditionEvaluator>();
+builder.Services.AddScoped<IReflectionHelper, ReflectionHelper>();
+builder.Services.AddScoped<IConfidenceCalculator, ConfidenceCalculator>();
+builder.Services.AddScoped<IScenarioExecutionLogger, ScenarioExecutionLogger>();
 
 builder.Services.AddHostedService<AutoWashPro.API.Workers.AnnualTierResetWorker>();
 builder.Services.AddHostedService<AutoWashPro.API.Workers.CRMCampaignWorker>();
+builder.Services.AddHostedService<AutoWashPro.API.Workers.AutoWashCompletionWorker>();
 
 // ==============================================================================
 // 8. SWAGGER CONFIGURATION
@@ -192,7 +222,7 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
-        Description = "Chỉ cần dán Token (JWT) vào đây. Hệ thống sẽ tự động thêm 'Bearer ' đằng trước.",
+        Description = "Paste the JWT token here. The system will automatically prepend 'Bearer '.",
         Name = "Authorization",
         In = Microsoft.OpenApi.Models.ParameterLocation.Header,
         Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,

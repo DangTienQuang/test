@@ -1,5 +1,6 @@
-﻿using AutoWashPro.BLL.DTOs;
+using AutoWashPro.BLL.DTOs;
 using AutoWashPro.BLL.Exceptions;
+using AutoWashPro.BLL.Services;
 using AutoWashPro.DAL.Data;
 using AutoWashPro.DAL.Entities;
 using BLL.DTOs;
@@ -20,11 +21,16 @@ namespace BLL.Services
     {
         private readonly AutoWashDbContext _context;
         private readonly ILaneSchedulerService _laneSchedulerService;
+        private readonly IBookingMaterialUsageService _bookingMaterialUsageService;
 
-        public BusinessBookingService(AutoWashDbContext context, ILaneSchedulerService laneSchedulerService)
+        public BusinessBookingService(
+            AutoWashDbContext context,
+            ILaneSchedulerService laneSchedulerService,
+            IBookingMaterialUsageService bookingMaterialUsageService)
         {
             _context = context;
             _laneSchedulerService = laneSchedulerService;
+            _bookingMaterialUsageService = bookingMaterialUsageService;
         }
 
         public async Task<List<DTOs.Business.TimeSlotResponseDTO>> GetAvailableSlotsForBusinessAsync(int businessUserId, CheckBusinessSlotsRequestDTO request)
@@ -35,7 +41,7 @@ namespace BLL.Services
                     x.ApprovalStatus == "Approved");
 
             if (business == null)
-                throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp hoặc chưa được phê duyệt.");
+                throw new NotFoundException("Business profile not found or not approved.");
 
             var representativeVehicle = await _context.FleetVehicles
                 .Include(x => x.VehicleType)
@@ -45,7 +51,7 @@ namespace BLL.Services
                     x.Status == "Active");
 
             if (representativeVehicle == null)
-                throw new NotFoundException("Không tìm thấy phương tiện hoặc phương tiện chưa được kích hoạt.");
+                throw new NotFoundException("Vehicle not found or not activated.");
 
             // ── Timezone ─────────────────────────────────────────────────────
             TimeZoneInfo vnTimeZone;
@@ -56,7 +62,7 @@ namespace BLL.Services
             TimeSpan currentTimeInVN = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vnTimeZone).TimeOfDay;
 
             if (request.TargetDate.Date < todayInVN)
-                throw new BadRequestException("Không thể đặt lịch cho ngày trong quá khứ.");
+                throw new BadRequestException("Cannot book for a date in the past.");
 
             // ── Build schedule requests for N vehicles ────────────────────────
             // All vehicles in a fleet booking share the same type and services,
@@ -70,7 +76,7 @@ namespace BLL.Services
 
             // If no services selected yet fall back to base weight only (conservative estimate)
             if (!servicePrices.Any() && request.ServiceIds.Any())
-                throw new BadRequestException("Một hoặc nhiều dịch vụ không tồn tại hoặc chưa được cấu hình giá.");
+                throw new BadRequestException("One or more services do not exist or are not priced.");
 
             var simRequests = Enumerable.Range(0, (int)request.VehicleCount)
                 .Select(_ => new VehicleScheduleRequest
@@ -96,14 +102,14 @@ namespace BLL.Services
                     SlotId = slot.SlotId,
                     TimeRange = $"{slot.StartTime:hh\\:mm} - {slot.EndTime:hh\\:mm}",
                     IsAvailable = true,
-                    Reason = "Trống"
+                    Reason = "Available"
                 };
 
                 // Past-time guard
                 if (request.TargetDate.Date == todayInVN && slot.StartTime < currentTimeInVN)
                 {
                     slotDto.IsAvailable = false;
-                    slotDto.Reason = "Đã qua giờ";
+                    slotDto.Reason = "Past time";
                     response.Add(slotDto);
                     continue;
                 }
@@ -161,7 +167,7 @@ namespace BLL.Services
                     x.ApprovalStatus == "Approved");
 
             if (business == null)
-                throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+                throw new NotFoundException("Business profile not found.");
 
             // ── Validate all fleet vehicles belong to this business ───────────
             var vehicleIds = dto.Vehicles.Select(v => v.FleetVehicleId).ToList();
@@ -174,19 +180,19 @@ namespace BLL.Services
                 .ToListAsync();
 
             if (fleetVehicles.Count != dto.Vehicles.Count)
-                throw new NotFoundException("Một hoặc nhiều phương tiện không thuộc về doanh nghiệp này.");
+                throw new NotFoundException("One or more vehicles do not belong to this business.");
 
             var inactiveVehicle = fleetVehicles.FirstOrDefault(x => x.Status != "Active");
             if (inactiveVehicle != null)
                 throw new BadRequestException(
-                    $"Phương tiện {inactiveVehicle.LicensePlate} chưa được kích hoạt.");
+                    $"Vehicle {inactiveVehicle.LicensePlate} is not activated.");
 
             // ── Validate branch + slot ────────────────────────────────────────
             var branch = await _context.Branches
                 .FirstOrDefaultAsync(x => x.BranchId == dto.BranchId);
 
             if (branch == null)
-                throw new NotFoundException("Không tìm thấy chi nhánh.");
+                throw new NotFoundException("Branch not found.");
 
             var slot = await _context.TimeSlots
                 .FirstOrDefaultAsync(x =>
@@ -194,7 +200,7 @@ namespace BLL.Services
                     x.BranchId == dto.BranchId);
 
             if (slot == null)
-                throw new NotFoundException("Không tìm thấy khung giờ.");
+                throw new NotFoundException("Time slot not found.");
 
             DateTime scheduledTime = dto.ScheduledTime.Date.Add(slot.StartTime);
             TimeSpan slotDuration = slot.EndTime - slot.StartTime;
@@ -208,7 +214,7 @@ namespace BLL.Services
 
                 if (!item.ServiceIds.Any())
                     throw new BadRequestException(
-                        $"Phương tiện {vehicle.LicensePlate} phải có ít nhất một dịch vụ.");
+                        $"Vehicle {vehicle.LicensePlate} must have at least one service.");
 
                 var vehicleServicePrices = await _context.ServicePrices
                     .Where(sp =>
@@ -219,7 +225,7 @@ namespace BLL.Services
 
                 if (vehicleServicePrices.Count != item.ServiceIds.Count)
                     throw new BadRequestException(
-                        $"Một hoặc nhiều dịch vụ chưa được cấu hình giá cho phương tiện " +
+                        $"One or more services have not been priced for the vehicle " +
                         $"{vehicle.LicensePlate} ({vehicle.VehicleType.Name}).");
 
                 scheduleRequests.Add(new VehicleScheduleRequest
@@ -284,12 +290,13 @@ namespace BLL.Services
                     // Capacity check — accumulated across all vehicles in this request
                     if (dailyCapacity.BookedWeight + vehicle.VehicleType.BaseWeight > slot.MaxCapacity)
                         throw new BadRequestException(
-                            $"Khung giờ đã hết sức chứa cho phương tiện {vehicle.LicensePlate}.");
+                            $"The time slot is fully booked for vehicle {vehicle.LicensePlate}.");
 
                     dailyCapacity.BookedWeight += vehicle.VehicleType.BaseWeight;
 
                     var booking = new Booking
                     {
+                        UserId = business.UserId,
                         BusinessProfileId = business.BusinessProfileId,
                         FleetVehicleId = vehicle.FleetVehicleId,
                         BookingType = "Business",
@@ -300,6 +307,7 @@ namespace BLL.Services
                         OriginalPrice = vehicleTotal,
                         FinalAmount = vehicleTotal,
                         CapacityWeight = vehicle.VehicleType.BaseWeight,
+                        ActualVehicleTypeId = vehicle.VehicleTypeId,
                         FallbackQrCode = Guid.NewGuid().ToString("N")[..8].ToUpper(),
                         ProcessingLaneId = assignment.LaneId
                     };
@@ -372,7 +380,7 @@ namespace BLL.Services
                 .FirstOrDefaultAsync(x => x.UserId == businessUserId);
 
             if (business == null)
-                throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+                throw new NotFoundException("Business profile not found.");
 
             var booking = await _context.Bookings
                 .Include(x => x.FleetVehicle)
@@ -382,17 +390,17 @@ namespace BLL.Services
                     x.BusinessProfileId == business.BusinessProfileId);
 
             if (booking == null)
-                throw new NotFoundException("Không tìm thấy lịch đặt.");
+                throw new NotFoundException("Booking not found.");
 
             if (booking.Status != "Pending")
-                throw new BadRequestException("Chỉ có thể đổi lịch cho lịch đặt đang ở trạng thái chờ.");
+                throw new BadRequestException("Can only reschedule bookings in pending status.");
 
             // ── 24h cutoff check ───────────────────────────────────────────────
             // Business cannot reschedule once we're within 24h of the original slot start.
             if (booking.ScheduledTime <= DateTime.UtcNow.AddHours(24))
                 throw new BadRequestException(
-                    "Không thể đổi lịch trong vòng 24 giờ trước giờ hẹn. " +
-                    "Vui lòng liên hệ chi nhánh để được hỗ trợ.");
+                    "Cannot reschedule within 24 hours of the appointment time. " +
+                    "Please contact the branch for support.");
 
             // ── Validate new slot exists at the same branch ──────────────────
             var newSlot = await _context.TimeSlots
@@ -401,7 +409,7 @@ namespace BLL.Services
                     x.BranchId == booking.BranchId);
 
             if (newSlot == null)
-                throw new NotFoundException("Không tìm thấy khung giờ mới.");
+                throw new NotFoundException("New time slot not found.");
 
             DateTime newScheduledTime = dto.NewScheduledDate.Date.Add(newSlot.StartTime);
             TimeSpan newSlotDuration = newSlot.EndTime - newSlot.StartTime;
@@ -411,13 +419,13 @@ namespace BLL.Services
             // to dodge the cutoff by jumping into a near slot.
             if (newScheduledTime <= DateTime.UtcNow.AddHours(24))
                 throw new BadRequestException(
-                    "Khung giờ mới phải cách thời điểm hiện tại ít nhất 24 giờ.");
+                    "The new time slot must be at least 24 hours from the current time.");
 
             bool isSameSlot =
                 booking.ScheduledTime == newScheduledTime;
 
             if (isSameSlot)
-                throw new BadRequestException("Khung giờ mới giống với khung giờ hiện tại.");
+                throw new BadRequestException("The new time slot is identical to the current time slot.");
 
             // ── Get this vehicle's service prices (same services as original booking) ──
             var bookingDetails = await _context.BookingDetails
@@ -501,7 +509,7 @@ namespace BLL.Services
                 }
 
                 if (newDailyCapacity.BookedWeight + booking.CapacityWeight > newSlot.MaxCapacity)
-                    throw new BadRequestException("Khung giờ mới đã hết sức chứa.");
+                    throw new BadRequestException("The new time slot is fully booked.");
 
                 newDailyCapacity.BookedWeight += booking.CapacityWeight;
 
@@ -539,7 +547,7 @@ namespace BLL.Services
             var business = await _context.BusinessProfiles
                 .FirstOrDefaultAsync(x => x.UserId == businessUserId);
 
-            if (business == null) throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+            if (business == null) throw new NotFoundException("Business profile not found.");
 
             return await _context.FleetVehicles
                 .Include(x => x.VehicleType)
@@ -565,7 +573,7 @@ namespace BLL.Services
             var business = await _context.BusinessProfiles
                 .FirstOrDefaultAsync(x => x.UserId == businessUserId);
 
-            if (business == null) throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+            if (business == null) throw new NotFoundException("Business profile not found.");
 
             return await _context.Bookings
                 .Where(x =>
@@ -590,7 +598,7 @@ namespace BLL.Services
 
             if (business == null)
             {
-                throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+                throw new NotFoundException("Business profile not found.");
             }
 
             var booking = await _context.Bookings
@@ -602,7 +610,7 @@ namespace BLL.Services
 
             if (booking == null)
             {
-                throw new NotFoundException("Không tìm thấy lịch đặt.");
+                throw new NotFoundException("Booking not found.");
             }
 
             return new BusinessBookingDetailDTO
@@ -626,7 +634,7 @@ namespace BLL.Services
 
             if (business == null)
             {
-                throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+                throw new NotFoundException("Business profile not found.");
             }
 
             var booking = await _context.Bookings
@@ -636,12 +644,12 @@ namespace BLL.Services
 
             if (booking == null)
             {
-                throw new NotFoundException("Không tìm thấy lịch đặt.");
+                throw new NotFoundException("Booking not found.");
             }
 
             if (booking.Status != "Pending")
             {
-                throw new BadRequestException("Chỉ có thể hủy lịch đặt đang ở trạng thái chờ.");
+                throw new BadRequestException("Can only cancel bookings in pending status.");
             }
 
             var slot = await _context.TimeSlots
@@ -682,11 +690,11 @@ namespace BLL.Services
                 .FirstOrDefaultAsync(x =>
                     x.BookingId == bookingId);
 
-            if (booking == null) throw new NotFoundException("Không tìm thấy lịch đặt.");
+            if (booking == null) throw new NotFoundException("Booking not found.");
 
-            if (booking.BookingType != "Business") throw new BadRequestException("Không phải lịch đặt của doanh nghiệp.");
+            if (booking.BookingType != "Business") throw new BadRequestException("This is not a business booking.");
 
-            if (booking.Status != "Pending") throw new BadRequestException("Lịch đặt này chưa thể Check-in.");
+            if (booking.Status != "Pending") throw new BadRequestException("This booking cannot be checked in yet.");
 
             var detail = booking.BookingDetails.First();
 
@@ -724,7 +732,7 @@ namespace BLL.Services
 
             if (vehicle == null)
             {
-                throw new NotFoundException("Không tìm thấy phương tiện trong đội xe.");
+                throw new NotFoundException("Vehicle not found in the fleet.");
             }
 
             var branch = await _context.Branches
@@ -733,7 +741,7 @@ namespace BLL.Services
 
             if (branch == null)
             {
-                throw new NotFoundException("Không tìm thấy chi nhánh.");
+                throw new NotFoundException("Branch not found.");
             }
 
             var existingLog = await _context.FleetWashLogs
@@ -744,7 +752,7 @@ namespace BLL.Services
 
             if (existingLog != null)
             {
-                throw new BadRequestException("Phương tiện này đang trong quá trình rửa xe.");
+                throw new BadRequestException("This vehicle is currently undergoing wash processing.");
             }
 
             var washLog = new FleetWashLog
@@ -779,12 +787,12 @@ namespace BLL.Services
 
             if (washLog == null)
             {
-                throw new NotFoundException("Không tìm thấy nhật ký rửa xe.");
+                throw new NotFoundException("Car wash log not found.");
             }
 
             if (washLog.Status != "Processing")
             {
-                throw new BadRequestException("Phương tiện phải đang ở trạng thái xử lý.");
+                throw new BadRequestException("Vehicle must be in processing status.");
             }
 
             washLog.Status = "Completed";
@@ -802,12 +810,12 @@ namespace BLL.Services
 
             if (washLog == null)
             {
-                throw new NotFoundException("Không tìm thấy nhật ký rửa xe.");
+                throw new NotFoundException("Car wash log not found.");
             }
 
             if (washLog.Status != "Assigned")
             {
-                throw new BadRequestException("Phương tiện không ở trạng thái chờ xử lý.");
+                throw new BadRequestException("Vehicle is not in pending processing status.");
             }
 
             var lane = await _context.Lanes
@@ -815,7 +823,7 @@ namespace BLL.Services
 
             if (lane == null)
             {
-                throw new NotFoundException("Không tìm thấy làn rửa.");
+                throw new NotFoundException("Wash lane not found.");
             }
 
             washLog.Status = "Processing";
@@ -859,7 +867,7 @@ namespace BLL.Services
 
             if (washLog == null)
             {
-                throw new NotFoundException("Không tìm thấy nhật ký rửa xe.");
+                throw new NotFoundException("Car wash log not found.");
             }
 
             if (washLog.BookingId.HasValue)
@@ -870,15 +878,21 @@ namespace BLL.Services
 
             if (washLog.Status != "Processing")
             {
-                throw new BadRequestException("Chỉ có thể checkout phương tiện đang ở trạng thái xử lý.");
+                throw new BadRequestException("Can only check out vehicles that are currently in processing status.");
             }
 
             washLog.Status = "Completed";
             washLog.CompletedTime = DateTime.UtcNow;
 
-            if (washLog.Booking.Status != null)
+            if (washLog.Booking != null)
             {
                 washLog.Booking.Status = "Completed";
+                washLog.Booking.UpdatedAt = DateTime.UtcNow;
+            }
+
+            if (washLog.BookingId.HasValue)
+            {
+                await _bookingMaterialUsageService.ConsumeForCompletedBookingAsync(washLog.BookingId.Value);
             }
 
             await _context.SaveChangesAsync();
@@ -897,7 +911,7 @@ namespace BLL.Services
                 .FirstOrDefaultAsync(x => x.BookingId == bookingId);
 
             if (invoice == null)
-                throw new NotFoundException("Không tìm thấy hóa đơn.");
+                throw new NotFoundException("Invoice not found.");
 
             return new InvoiceDTO
             {
@@ -923,7 +937,7 @@ namespace BLL.Services
             var business = await _context.BusinessProfiles
                 .FirstOrDefaultAsync(x => x.UserId == businessUserId);
 
-            if (business == null) throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+            if (business == null) throw new NotFoundException("Business profile not found.");
 
             var query = _context.FleetWashLogs
                 .Include(x => x.FleetVehicle)
@@ -979,7 +993,7 @@ namespace BLL.Services
             var business = await _context.BusinessProfiles
                 .FirstOrDefaultAsync(x => x.UserId == businessUserId);
 
-            if (business == null) throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+            if (business == null) throw new NotFoundException("Business profile not found.");
 
             var today = DateTime.Today;
 
@@ -1021,7 +1035,7 @@ namespace BLL.Services
             var business = await _context.BusinessProfiles
                 .FirstOrDefaultAsync(x => x.UserId == businessUserId);
 
-            if (business == null) throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+            if (business == null) throw new NotFoundException("Business profile not found.");
 
             return await _context.Invoices
                 .Include(x => x.Booking)
@@ -1044,14 +1058,14 @@ namespace BLL.Services
             var business = await _context.BusinessProfiles
                 .FirstOrDefaultAsync(x => x.UserId == businessUserId);
 
-            if (business == null) throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+            if (business == null) throw new NotFoundException("Business profile not found.");
 
             var invoice = await _context.Invoices
                 .Include(x => x.Booking)
                 .Include(x => x.InvoiceItems)
                 .FirstOrDefaultAsync(x => x.InvoiceId == invoiceId && x.BusinessProfileId == business.BusinessProfileId);
 
-            if (invoice == null) throw new NotFoundException("Không tìm thấy hóa đơn.");
+            if (invoice == null) throw new NotFoundException("Invoice not found.");
 
             return new InvoiceDetailDTO
             {
@@ -1081,7 +1095,7 @@ namespace BLL.Services
         {
             var business = await _context.BusinessProfiles.FirstOrDefaultAsync(x => x.UserId == businessUserId);
 
-            if (business == null) throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+            if (business == null) throw new NotFoundException("Business profile not found.");
 
             var startDate = new DateTime(year, month, 1);
 
@@ -1126,26 +1140,26 @@ namespace BLL.Services
 
             if (washLog == null)
             {
-                throw new NotFoundException("Không tìm thấy nhật ký rửa xe.");
+                throw new NotFoundException("Car wash log not found.");
             }
 
             if (washLog.Status != "CheckedIn")
             {
-                throw new BadRequestException("Phương tiện không ở trạng thái chờ phân công.");
+                throw new BadRequestException("Vehicle is not in pending assignment status.");
             }
 
             var lane = await _context.Lanes.FirstOrDefaultAsync(x => x.LaneId == dto.LaneId);
 
             if (lane == null)
             {
-                throw new NotFoundException("Không tìm thấy làn rửa.");
+                throw new NotFoundException("Wash lane not found.");
             }
 
             var staff = await _context.Users.FirstOrDefaultAsync(x => x.UserId == dto.StaffUserId);
 
             if (staff == null)
             {
-                throw new NotFoundException("Không tìm thấy nhân viên.");
+                throw new NotFoundException("Employee not found.");
             }
 
             washLog.LaneId = dto.LaneId;
@@ -1161,7 +1175,7 @@ namespace BLL.Services
                 .FirstOrDefaultAsync(x => x.UserId == businessUserId);
 
             if (business == null)
-                throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+                throw new NotFoundException("Business profile not found.");
 
             var result = new List<BusinessVehicleStatusDTO>();
 
@@ -1236,7 +1250,7 @@ namespace BLL.Services
                 .FirstOrDefaultAsync(x => x.UserId == businessUserId);
 
             if (business == null)
-                throw new NotFoundException("Không tìm thấy hồ sơ doanh nghiệp.");
+                throw new NotFoundException("Business profile not found.");
 
             var result = new List<BusinessVehicleStatusDTO>();
 

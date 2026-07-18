@@ -7,16 +7,20 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using BLL.Helpers;
+using BLL.Services.Interface;
+using BLL.DTOs.Business;
 
 namespace AutoWashPro.BLL.Services
 {
     public class ManagerService : IManagerService
     {
         private readonly AutoWashDbContext _context;
+        private readonly IBranchRevenueAnalyticsService _branchRevenueAnalyticsService;
 
-        public ManagerService(AutoWashDbContext context)
+        public ManagerService(AutoWashDbContext context, IBranchRevenueAnalyticsService branchRevenueAnalyticsService)
         {
             _context = context;
+            _branchRevenueAnalyticsService = branchRevenueAnalyticsService;
         }
 
         private async Task<EmployeeProfile> GetManagerProfileAsync(int managerUserId)
@@ -83,7 +87,7 @@ namespace AutoWashPro.BLL.Services
 
             if (!hasScheduledShift)
             {
-                throw new BadRequestException("Nhân viên không có lịch làm việc trong ca này vào ngày được chọn.");
+                throw new BadRequestException("Employee does not have a work schedule in this shift on the selected date.");
             }
 
             // Verify staff is not already assigned to ANY lane for the exact same WorkShiftId on the exact same Date
@@ -92,7 +96,7 @@ namespace AutoWashPro.BLL.Services
 
             if (existingAssignment)
             {
-                throw new BadRequestException("Nhân viên này đã được phân công vào một làn khác trong ca làm việc này.");
+                throw new BadRequestException("This employee is already assigned to another lane in this shift.");
             }
 
             var assignment = new StaffLaneAssignment
@@ -163,7 +167,10 @@ namespace AutoWashPro.BLL.Services
                 ProcessingLaneName = b.ProcessingLane?.Name,
                 ProcessingStaffId = b.ProcessingStaffId,
                 ProcessingStaffName = b.ProcessingStaff?.EmployeeProfile?.FullName,
-                IsBusinessLane = b.ProcessingLane != null && b.ProcessingLane.IsBusinessLane
+                IsBusinessLane = b.ProcessingLane != null && b.ProcessingLane.IsBusinessLane,
+                ProcessingStartTime = b.ProcessingStartTime.HasValue ? b.ProcessingStartTime.Value.ToVnTime() : (DateTime?)null,
+                CompletedTime = b.CompletedTime.HasValue ? b.CompletedTime.Value.ToVnTime() : (DateTime?)null,
+                ActualDurationMinutes = b.ActualDurationMinutes
             }).ToList();
         }
 
@@ -225,7 +232,7 @@ namespace AutoWashPro.BLL.Services
 
             if (request.StartTime >= request.EndTime)
             {
-                throw new BadRequestException("Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc.");
+                throw new BadRequestException("Start time must be earlier than end time.");
             }
 
             // Kiểm tra trùng lặp thời gian trong chi nhánh của manager
@@ -237,7 +244,7 @@ namespace AutoWashPro.BLL.Services
 
             if (isOverlap)
             {
-                throw new BadRequestException("Khung giờ bị trùng lặp với một khung giờ đã tồn tại.");
+                throw new BadRequestException("Time slot overlaps with an existing time slot.");
             }
 
             var timeSlot = new TimeSlot
@@ -355,7 +362,7 @@ namespace AutoWashPro.BLL.Services
 
             if (!validLane)
             {
-                throw new BadRequestException("Làn (Lane) không hợp lệ hoặc không thuộc chi nhánh của bạn.");
+                throw new BadRequestException("Lane is invalid or does not belong to your branch.");
             }
 
             booking.ProcessingLaneId = assignment.LaneId;
@@ -414,14 +421,14 @@ namespace AutoWashPro.BLL.Services
             var timeSlot = await _context.TimeSlots.FindAsync(slotId);
             if (timeSlot == null || timeSlot.BranchId != managerProfile.BranchId)
             {
-                throw new NotFoundException("Không tìm thấy khung giờ trong chi nhánh của bạn.");
+                throw new NotFoundException("Time slot not found in your branch.");
             }
 
             request.BranchId = managerProfile.BranchId.Value;
 
             if (request.StartTime >= request.EndTime)
             {
-                throw new BadRequestException("Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc.");
+                throw new BadRequestException("Start time must be earlier than end time.");
             }
 
             var isOverlap = await _context.TimeSlots.AnyAsync(ts =>
@@ -433,7 +440,7 @@ namespace AutoWashPro.BLL.Services
 
             if (isOverlap)
             {
-                throw new BadRequestException("Khung giờ bị trùng lặp với một khung giờ đã tồn tại.");
+                throw new BadRequestException("Time slot overlaps with an existing time slot.");
             }
 
             timeSlot.StartTime = request.StartTime;
@@ -461,13 +468,13 @@ namespace AutoWashPro.BLL.Services
             var timeSlot = await _context.TimeSlots.FindAsync(slotId);
             if (timeSlot == null || timeSlot.BranchId != managerProfile.BranchId)
             {
-                throw new NotFoundException("Không tìm thấy khung giờ trong chi nhánh của bạn.");
+                throw new NotFoundException("Time slot not found in your branch.");
             }
 
             var isBooked = await _context.DailySlotCapacities.AnyAsync(dsc => dsc.SlotId == slotId && dsc.BookedWeight > 0);
             if (isBooked)
             {
-                throw new BadRequestException("Không thể xoá khung giờ này vì đã có người đặt lịch. Vui lòng kiểm tra lại.");
+                throw new BadRequestException("Cannot delete this time slot because there are existing bookings. Please check again.");
             }
 
             _context.TimeSlots.Remove(timeSlot);
@@ -497,6 +504,42 @@ namespace AutoWashPro.BLL.Services
             await _context.SaveChangesAsync();
 
             return true;
+        }
+
+        public async Task<MonthlyRevenueCampaignResultDTO> CheckRevenueStimulusCampaignAsync(int managerUserId, int? month = null, int? year = null)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+            return await _branchRevenueAnalyticsService.CheckAndTriggerMonthlyRevenueCampaignAsync(managerProfile.BranchId!.Value, month, year);
+        }
+
+        public async Task<List<VoucherProposalDTO>> GetPendingProposalsAsync(int managerUserId)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+            return await _branchRevenueAnalyticsService.GetPendingProposalsAsync(managerProfile.BranchId!.Value);
+        }
+
+        public async Task<VoucherProposalDTO> ModifyProposalAsync(int managerUserId, int voucherId, ModifyVoucherProposalDTO dto)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+            return await _branchRevenueAnalyticsService.ModifyProposalAsync(managerProfile.BranchId!.Value, voucherId, dto);
+        }
+
+        public async Task<MonthlyRevenueCampaignResultDTO> ApproveProposalAsync(int managerUserId, int voucherId)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+            return await _branchRevenueAnalyticsService.ApproveProposalAsync(managerProfile.BranchId!.Value, voucherId);
+        }
+
+        public async Task<bool> RejectProposalAsync(int managerUserId, int voucherId, string? rejectReason)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+            return await _branchRevenueAnalyticsService.RejectProposalAsync(managerProfile.BranchId!.Value, voucherId, rejectReason);
+        }
+
+        public async Task<BranchComprehensiveStimulusDTO> GenerateComprehensiveStimulusAnalysisAsync(int managerUserId, int? month = null, int? year = null)
+        {
+            var managerProfile = await GetManagerProfileAsync(managerUserId);
+            return await _branchRevenueAnalyticsService.GenerateComprehensiveStimulusAnalysisAsync(managerProfile.BranchId!.Value, month, year);
         }
     }
 }

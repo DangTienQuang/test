@@ -39,17 +39,17 @@ namespace AutoWashPro.BLL.DTOs
         public int? VehicleId { get; set; }
 
         [Required]
-        [MinLength(1, ErrorMessage = "Vui lòng chọn ít nhất 1 dịch vụ.")]
+        [MinLength(1, ErrorMessage = "Please select at least 1 service.")]
         public required List<int> ServiceIds { get; set; }
     }
     public class UpdateBookingStatusByPlateDTO
     {
-        [Required(ErrorMessage = "Biển số xe không được để trống.")]
+        [Required(ErrorMessage = "License plate is required.")]
         [MinLength(1)]
-        [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Biển số xe không hợp lệ.")]
+        [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "License plate is invalid.")]
         public string LicensePlate { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Trạng thái không được để trống.")]
+        [Required(ErrorMessage = "Status is required.")]
         public string NewStatus { get; set; } = string.Empty;
     }
 
@@ -79,7 +79,7 @@ namespace AutoWashPro.BLL.DTOs
         public required string LicensePlate { get; set; }
 
         [Required]
-        [MinLength(1, ErrorMessage = "Vui lòng chọn ít nhất 1 dịch vụ.")]
+        [MinLength(1, ErrorMessage = "Please select at least 1 service.")]
         public required List<int> ServiceIds { get; set; }
 
         [Required]
@@ -137,10 +137,10 @@ namespace AutoWashPro.BLL.DTOs
         public required string LicensePlate { get; set; }
 
         [Required]
-        [MinLength(1, ErrorMessage = "Vui lòng chọn ít nhất 1 dịch vụ.")]
+        [MinLength(1, ErrorMessage = "Please select at least 1 service.")]
         public required List<int> ServiceIds { get; set; }
 
-        public int UserId { get; set; } // Walk-ins might have user ID provided by Staff
+        public int UserId { get; set; }
 
         public int PointsToUse { get; set; } = 0;
 
@@ -151,6 +151,8 @@ namespace AutoWashPro.BLL.DTOs
         public string? ReturnUrl { get; set; }
 
         public string? CancelUrl { get; set; }
+
+        public bool ForceOverrideCapacity { get; set; } = false;
     }
 
     public class WalkInBookingResponseDTO : BookingResponseDTO
@@ -169,6 +171,9 @@ namespace AutoWashPro.BLL.DTOs
         public decimal PointDiscountAmount { get; set; }
         public decimal VoucherDiscountAmount { get; set; }
         public decimal FinalAmount { get; set; }
+        public DateTime? ProcessingStartTime { get; set; }
+        public DateTime? CompletedTime { get; set; }
+        public int? ActualDurationMinutes { get; set; }
     }
 
     public class AdminBookingResponseDTO : BookingResponseDTO
