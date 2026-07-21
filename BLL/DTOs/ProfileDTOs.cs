@@ -58,6 +58,7 @@ namespace AutoWashPro.BLL.DTOs
     public class UpdateUserProfileDTO
     {
         [RegularExpression(@"^(?!\s*$).+", ErrorMessage = "Full name cannot consist of only whitespace.")]
+        [MaxLength(255, ErrorMessage = "Full name cannot exceed 255 characters.")]
         public string? FullName { get; set; }
 
         [RegularExpression(@"^(0[3|5|7|8|9])+([0-9]{8})$", ErrorMessage = "Phone number is invalid.")]

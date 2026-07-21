@@ -25,6 +25,7 @@ namespace AutoWashPro.BLL.DTOs
         [Required(ErrorMessage = "Service name is required.")]
         public string ServiceName { get; set; }
 
+        [RegularExpression(@"^[^<>]*$", ErrorMessage = "HTML tags are not allowed in the description.")]
         public string? Description { get; set; }
 
         [Required(ErrorMessage = "Must configure at least 1 price for the service.")]
