@@ -116,6 +116,14 @@ namespace AutoWashPro.API.Controllers
             return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
+        [HttpGet("relocation-proposals")]
+        public async Task<IActionResult> GetRelocationProposals()
+        {
+            int userId = GetUserId();
+            var result = await _bookingService.GetRelocationProposalsAsync(userId);
+            return Ok(new { statusCode = 200, message = "Success", data = result });
+        }
+
         [Authorize(Roles = "Admin,Manager,Staff")]
         [HttpGet("user/{userId}")]
         public async Task<IActionResult> GetBookingsByUserId(int userId)
@@ -164,12 +172,37 @@ namespace AutoWashPro.API.Controllers
             return Ok(new { statusCode = 200, message = "Success", data = result });
         }
 
+        /// <remarks>
+        /// DEPRECATED: This endpoint is no longer supported.
+        /// Use POST /{id}/handle-overload-suggestion with body {"decision":"Switch"} instead.
+        /// </remarks>
         [Authorize]
         [HttpPost("{id}/accept-relocation")]
-        public async Task<IActionResult> AcceptRelocation(int id, [FromBody] AcceptRelocationRequestDTO request)
+        [Obsolete("Use handle-overload-suggestion instead.")]
+        public IActionResult AcceptRelocation(int id)
         {
-            var result = await _bookingService.AcceptRelocationAsync(GetUserId(), id, request);
-            return Ok(new { statusCode = 200, message = "Relocation accepted and voucher applied successfully.", data = result });
+            return StatusCode(410, new
+            {
+                statusCode = 410,
+                message = "This endpoint has been removed. Please use POST /api/v1/bookings/{id}/handle-overload-suggestion with body {\"decision\":\"Switch\"} instead.",
+                data = (object?)null
+            });
+        }
+
+        [Authorize]
+        [HttpGet("{id}/overload-suggestion")]
+        public async Task<IActionResult> GetPendingOverloadSuggestion(int id)
+        {
+            var result = await _bookingService.GetPendingOverloadSuggestionAsync(GetUserId(), id);
+            return Ok(new { statusCode = 200, message = "Success", data = result });
+        }
+
+        [Authorize]
+        [HttpPost("{id}/handle-overload-suggestion")]
+        public async Task<IActionResult> HandleOverloadSuggestion(int id, [FromBody] HandleOverloadDecisionDTO request)
+        {
+            var result = await _bookingService.HandleOverloadDecisionAsync(GetUserId(), id, request);
+            return Ok(new { statusCode = 200, message = "Overload suggestion handled successfully.", data = result });
         }
     }
 }

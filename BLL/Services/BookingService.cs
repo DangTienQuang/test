@@ -23,6 +23,7 @@ namespace AutoWashPro.BLL.Services
         private readonly IPayOsService _payOsService;
         private readonly IBookingMaterialUsageService _bookingMaterialUsageService;
         private readonly IOccupancyService _occupancyService;
+        private readonly global::BLL.Services.Interface.ILaneSchedulerService _laneSchedulerService;
 
         public BookingService(
             AutoWashDbContext context,
@@ -33,7 +34,8 @@ namespace AutoWashPro.BLL.Services
             IVoucherCampaignService voucherCampaignService,
             IPayOsService payOsService,
             IBookingMaterialUsageService bookingMaterialUsageService,
-            IOccupancyService occupancyService)
+            IOccupancyService occupancyService,
+            global::BLL.Services.Interface.ILaneSchedulerService laneSchedulerService)
         {
             _context = context;
             _walletService = walletService;
@@ -44,6 +46,7 @@ namespace AutoWashPro.BLL.Services
             _payOsService = payOsService;
             _bookingMaterialUsageService = bookingMaterialUsageService;
             _occupancyService = occupancyService;
+            _laneSchedulerService = laneSchedulerService;
         }
 
         public async Task<List<TimeSlotResponseDTO>> GetAvailableSlotsAsync(int userId, CheckAvailableSlotsRequestDTO request)
@@ -514,6 +517,7 @@ namespace AutoWashPro.BLL.Services
         public async Task<BookingPaymentStatusDTO> GetBookingPaymentStatusAsync(int bookingId)
         {
             var booking = await _context.Bookings
+                .Include(b => b.ProcessingLane)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(b => b.BookingId == bookingId);
 
@@ -563,9 +567,16 @@ namespace AutoWashPro.BLL.Services
                     var verified = await _payOsService.GetPaymentStatusAsync(tx.OrderCode!);
                     if (verified != null && verified.IsPaid)
                     {
+                        await _walletService.ConfirmTransactionPaymentAsync(tx.TransactionId, verified.Amount, tx.OrderCode!);
+                        
                         paymentStatus = "Completed";
-                        await MarkTransactionCompletedAsync(tx.TransactionId, verified.Amount);
                         paidAt = verified.PaidAt ?? DateTime.UtcNow;
+
+                        // Reload booking to get the exact updated lane
+                        booking = await _context.Bookings
+                            .Include(b => b.ProcessingLane)
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(b => b.BookingId == bookingId);
                     }
                     else if (verified != null && verified.IsCancelled)
                     {
@@ -573,11 +584,13 @@ namespace AutoWashPro.BLL.Services
                             ? "Expired"
                             : "Failed";
                         paymentStatus = terminalStatus;
-                        await MarkTransactionTerminalAsync(tx.TransactionId, terminalStatus);
+                        await _walletService.MarkTransactionTerminalAsync(tx.TransactionId, terminalStatus);
                     }
                 }
-                catch
+                catch (Exception)
                 {
+                    // If confirming payment fails, paymentStatus remains "Pending" (or whatever it was initialized to), 
+                    // preventing an incorrect "Completed" status.
                 }
             }
 
@@ -585,7 +598,6 @@ namespace AutoWashPro.BLL.Services
             {
                 paidAt = tx.CreatedAt;
             }
-
             return new BookingPaymentStatusDTO
             {
                 BookingId = bookingId,
@@ -593,83 +605,18 @@ namespace AutoWashPro.BLL.Services
                 PaymentMethod = paymentMethod,
                 OrderCode = orderCode,
                 Amount = amount,
-                PaidAt = paidAt
+                PaidAt = paidAt,
+                ProcessingLaneId = booking.ProcessingLaneId,
+                ProcessingLaneName = booking.ProcessingLane?.Name
             };
         }
 
-        private async Task MarkTransactionCompletedAsync(int transactionId, decimal? webhookAmount)
-        {
-            var tx = await _context.Transactions.FirstOrDefaultAsync(t => t.TransactionId == transactionId);
-            if (tx == null) return;
-            if (string.Equals(tx.Status, "Completed", StringComparison.OrdinalIgnoreCase)) return;
 
-            tx.Status = "Completed";
-            if (!string.IsNullOrEmpty(tx.OrderCode))
-            {
-                tx.Description = tx.TransactionType switch
-                {
-                    "Topup" => $"Deposit successful (Code: {tx.OrderCode})",
-                    "BookingPayment" => $"Booking payment successful (Code: {tx.OrderCode})",
-                    "WalkInPayment" => $"Walk-in payment successful (Code: {tx.OrderCode})",
-                    _ => tx.Description
-                };
-            }
-
-            if (webhookAmount.HasValue
-                && (tx.TransactionType == "BookingPayment" || tx.TransactionType == "WalkInPayment")
-                && tx.ReferenceBookingId.HasValue)
-            {
-                var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.BookingId == tx.ReferenceBookingId.Value);
-                if (booking != null) booking.UpdatedAt = DateTime.UtcNow;
-            }
-
-            if ((tx.TransactionType == "BookingPayment" || tx.TransactionType == "WalkInPayment")
-                && tx.ReferenceBookingId.HasValue)
-            {
-                var otherPendingBookingPayments = await _context.Transactions
-                    .Where(t => t.ReferenceBookingId == tx.ReferenceBookingId.Value
-                             && t.TransactionId != tx.TransactionId
-                             && (t.TransactionType == "BookingPayment" || t.TransactionType == "WalkInPayment")
-                             && t.Status == "Pending")
-                    .ToListAsync();
-                foreach (var pendingPayment in otherPendingBookingPayments)
-                {
-                    pendingPayment.Status = "Expired";
-                }
-            }
-
-            await _context.SaveChangesAsync();
-        }
-
-        private async Task MarkTransactionTerminalAsync(int transactionId, string terminalStatus)
-        {
-            if (terminalStatus != "Failed" && terminalStatus != "Expired" && terminalStatus != "Cancelled")
-                return;
-
-            var tx = await _context.Transactions.FirstOrDefaultAsync(t => t.TransactionId == transactionId);
-            if (tx == null) return;
-            if (string.Equals(tx.Status, "Completed", StringComparison.OrdinalIgnoreCase)) return;
-            if (string.Equals(tx.Status, terminalStatus, StringComparison.OrdinalIgnoreCase)) return;
-
-            tx.Status = terminalStatus;
-            if (!string.IsNullOrEmpty(tx.OrderCode))
-            {
-                tx.Description = tx.TransactionType switch
-                {
-                    "Topup" => $"Deposit failed/expired (Code: {tx.OrderCode})",
-                    "BookingPayment" => $"Booking payment failed/expired (Code: {tx.OrderCode})",
-                    "WalkInPayment" => $"Walk-in payment failed/expired (Code: {tx.OrderCode})",
-                    _ => tx.Description
-                };
-            }
-
-            await _context.SaveChangesAsync();
-        }
 
         public async Task<BookingResponseDTO> UpdateBookingStatusByLicensePlateAsync(string licensePlate, string newStatus)
         {
             // 1. KIỂM TRA DỮ LIỆU ĐẦU VÀO
-            var allowedStatuses = new[] { "Pending", "CheckedIn", "Completed", "Cancelled", "Delayed", "CancelledBySystem" };
+            var allowedStatuses = new[] { "Pending", "CheckedIn", "Processing", "Completed", "Cancelled", "Delayed", "CancelledBySystem" };
             if (!allowedStatuses.Contains(newStatus))
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException("Invalid status.");
 
@@ -722,6 +669,7 @@ namespace AutoWashPro.BLL.Services
 
             bool isStatusValid = false;
             if (newStatus == "CheckedIn" && booking.Status == "Pending") isStatusValid = true;
+            else if (newStatus == "Processing" && booking.Status == "CheckedIn") isStatusValid = true;
             else if (newStatus == "Completed" && (booking.Status == "CheckedIn" || booking.Status == "Processing")) isStatusValid = true;
             else if ((newStatus == "Cancelled" || newStatus == "Delayed") && (booking.Status == "Pending" || booking.Status == "CheckedIn")) isStatusValid = true;
 
@@ -766,7 +714,7 @@ namespace AutoWashPro.BLL.Services
             var activeBooking = await _context.Bookings
                 .Include(b => b.BookingDetails)
                     .ThenInclude(bd => bd.Service)
-                .Where(b => NormalizeLicensePlate(b.LicensePlate) == normalizedPlate
+                .Where(b => (b.LicensePlate ?? "").Replace("-", "").Replace(".", "").Replace(" ", "").ToUpper() == normalizedPlate
                          && (b.Status == "CheckedIn" || b.Status == "Processing"))
                 .OrderByDescending(b => b.BookingId)
                 .FirstOrDefaultAsync();
@@ -777,7 +725,7 @@ namespace AutoWashPro.BLL.Services
                 .Include(x => x.Booking)
                     .ThenInclude(b => b!.BookingDetails)
                         .ThenInclude(bd => bd.Service)
-                .Where(x => NormalizeLicensePlate(x.FleetVehicle.LicensePlate) == normalizedPlate
+                .Where(x => (x.FleetVehicle.LicensePlate ?? "").Replace("-", "").Replace(".", "").Replace(" ", "").ToUpper() == normalizedPlate
                          && (x.Status == "CheckedIn" || x.Status == "Processing" || x.Status == "Assigned"))
                 .OrderByDescending(x => x.FleetWashLogId)
                 .FirstOrDefaultAsync();
@@ -804,6 +752,11 @@ namespace AutoWashPro.BLL.Services
                     activeFleetLog.Status = "Completed";
                     activeFleetLog.CompletedTime = DateTime.UtcNow;
                     await _context.SaveChangesAsync();
+
+                    if (activeFleetLog.LaneId > 0)
+                    {
+                        await _laneSchedulerService.AssignNextVehicleInQueueAsync(activeFleetLog.LaneId.Value);
+                    }
                 }
 
                 var updatedBooking = await _context.Bookings
@@ -833,6 +786,11 @@ namespace AutoWashPro.BLL.Services
                 activeFleetLog.CompletedTime = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 
+                if (activeFleetLog.LaneId > 0)
+                {
+                    await _laneSchedulerService.AssignNextVehicleInQueueAsync(activeFleetLog.LaneId.Value);
+                }
+
                 return new BookingResponseDTO
                 {
                     BookingId = activeFleetLog.FleetWashLogId,
@@ -857,13 +815,26 @@ namespace AutoWashPro.BLL.Services
             var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.BookingId == bookingId);
             if (booking == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Booking not found.");
 
-            var allowedStatuses = new[] { "Pending", "CheckedIn", "Completed", "Cancelled", "Delayed", "CancelledBySystem" };
+            var allowedStatuses = new[] { "Pending", "CheckedIn", "Processing", "Completed", "Cancelled", "Delayed", "CancelledBySystem" };
             if (!allowedStatuses.Contains(newStatus)) throw new AutoWashPro.BLL.Exceptions.BadRequestException("Invalid status.");
 
-            if ((newStatus == "CheckedIn" || newStatus == "Completed")
-                && booking.FinalAmount > 0
-                && !await HasCompletedBookingPaymentAsync(booking.BookingId))
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Booking is unpaid; cannot check in or complete.");
+            if ((newStatus == "CheckedIn" || newStatus == "Processing" || newStatus == "Completed")
+                && !await global::BLL.Helpers.PaymentHelper.IsBookingPaidAsync(_context, booking))
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("BOOKING_PAYMENT_REQUIRED", "BOOKING_PAYMENT_REQUIRED");
+
+            if (newStatus == "Processing" && booking.ProcessingLaneId == null)
+            {
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("Booking does not have an assigned lane; cannot start processing.");
+            }
+
+            if (newStatus == "CheckedIn" && booking.ProcessingLaneId == null)
+            {
+                int laneIdToAssign = await _laneSchedulerService.AssignBestAvailableLaneAtomicAsync(booking.BookingId);
+                if (laneIdToAssign > 0)
+                {
+                    booking.ProcessingLaneId = laneIdToAssign;
+                }
+            }
 
             var isCompletingNow = newStatus == "Completed" && booking.Status != "Completed";
 
@@ -911,6 +882,11 @@ namespace AutoWashPro.BLL.Services
             if (isCompletingNow && booking.UserId.HasValue)
             {
                 await _voucherCampaignService.ProcessMilestoneCampaignsAsync(booking.UserId.Value);
+            }
+
+            if (isCompletingNow && booking.ProcessingLaneId.HasValue)
+            {
+                await _laneSchedulerService.AssignNextVehicleInQueueAsync(booking.ProcessingLaneId.Value);
             }
 
             return true;
@@ -1316,13 +1292,68 @@ namespace AutoWashPro.BLL.Services
                 })
                 .ToListAsync();
 
+            var proposals = await GetRelocationProposalsAsync(userId);
+
             foreach (var b in bookings)
             {
                 if (b.ProcessingStartTime.HasValue) b.ProcessingStartTime = b.ProcessingStartTime.Value.ToVnTime();
                 if (b.CompletedTime.HasValue) b.CompletedTime = b.CompletedTime.Value.ToVnTime();
+
+                var proposal = proposals.FirstOrDefault(p => p.BookingId == b.BookingId);
+                if (proposal != null)
+                {
+                    b.HasPendingRelocation = true;
+                    b.Relocation = proposal;
+                }
             }
 
             return bookings;
+        }
+
+        public async Task<List<RelocationProposalCustomerDTO>> GetRelocationProposalsAsync(int userId)
+        {
+            var now = DateTime.UtcNow;
+            
+            var pendingBookings = await _context.Bookings
+                .Include(b => b.Branch)
+                .Include(b => b.BookingDetails).ThenInclude(d => d.Service)
+                .Where(b => b.UserId == userId && b.Status == "Pending" && b.ScheduledTime >= now)
+                .ToListAsync();
+
+            var proposals = new List<RelocationProposalCustomerDTO>();
+
+            foreach (var booking in pendingBookings)
+            {
+                string voucherCodePrefix = $"SURGE_REL_{booking.BranchId}_{booking.BookingId}";
+                var relocationVoucher = await _context.Vouchers
+                    .Include(v => v.Branch)
+                    .FirstOrDefaultAsync(v => v.Code == voucherCodePrefix 
+                        && v.IsActive 
+                        && v.CurrentUsageCount == 0 
+                        && v.ExpiryDate > now);
+
+                if (relocationVoucher != null && relocationVoucher.Branch != null)
+                {
+                    proposals.Add(new RelocationProposalCustomerDTO
+                    {
+                        BookingId = booking.BookingId,
+                        LicensePlate = booking.LicensePlate ?? "",
+                        ServiceNames = booking.BookingDetails.Select(d => d.Service.ServiceName ?? "").ToList(),
+                        ScheduledTime = booking.ScheduledTime,
+                        OriginalBranchId = booking.BranchId,
+                        OriginalBranchName = booking.Branch?.Name ?? "",
+                        AlternativeBranchId = relocationVoucher.BranchId.Value,
+                        AlternativeBranchName = relocationVoucher.Branch.Name,
+                        AlternativeBranchAddress = relocationVoucher.Branch.Address ?? "",
+                        AlternativeBranchDistanceKm = 2.8, 
+                        VoucherCode = relocationVoucher.Code,
+                        VoucherDiscountAmount = relocationVoucher.DiscountAmount,
+                        ProposalExpiresAt = relocationVoucher.ExpiryDate
+                    });
+                }
+            }
+
+            return proposals;
         }
 
         public async Task<bool> CancelBookingAsync(int userId, int bookingId)
@@ -1854,7 +1885,7 @@ namespace AutoWashPro.BLL.Services
                 .Where(s => s.BranchId == request.BranchId && s.StartTime <= timeOfDay && s.EndTime >= timeOfDay)
                 .FirstOrDefaultAsync();
 
-            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
 
             if (slot != null)
             {
@@ -2106,6 +2137,29 @@ namespace AutoWashPro.BLL.Services
                     }
                 }
 
+                int? processingLaneId = null;
+                string? processingLaneName = null;
+                bool isWaitingForLane = true;
+
+                var isPaymentCompleted = await _context.Transactions.AnyAsync(t => t.ReferenceBookingId == booking.BookingId && (t.TransactionType == "WalkInPayment" || t.TransactionType == "Payment") && t.Status == "Completed");
+                
+                if (isPaymentCompleted)
+                {
+                    var bestLaneId = await _laneSchedulerService.GetBestAvailableLaneAsync(request.BranchId, false);
+                    if (bestLaneId > 0)
+                    {
+                        var lane = await _context.Lanes.FirstOrDefaultAsync(l => l.LaneId == bestLaneId);
+                        if (lane != null)
+                        {
+                            booking.ProcessingLaneId = bestLaneId;
+                            processingLaneId = bestLaneId;
+                            processingLaneName = lane.Name;
+                            isWaitingForLane = false;
+                            await _context.SaveChangesAsync();
+                        }
+                    }
+                }
+
                 await transaction.CommitAsync();
 
                 var serviceNames = await _context.Services.Where(s => request.ServiceIds.Contains(s.ServiceId)).Select(s => s.ServiceName).ToListAsync();
@@ -2121,7 +2175,10 @@ namespace AutoWashPro.BLL.Services
                     PointDiscountAmount = booking.PointDiscountAmount,
                     VoucherDiscountAmount = booking.VoucherDiscountAmount,
                     FinalAmount = booking.FinalAmount,
-                    PaymentUrl = paymentUrl
+                    PaymentUrl = paymentUrl,
+                    ProcessingLaneId = processingLaneId,
+                    ProcessingLaneName = processingLaneName,
+                    IsWaitingForLane = isWaitingForLane
                 };
             }
             catch (DbUpdateException ex)
@@ -2375,8 +2432,8 @@ namespace AutoWashPro.BLL.Services
 
             if (booking.Status == "Pending" || booking.Status == "Confirmed")
             {
-                if (booking.FinalAmount > 0 && !await HasCompletedBookingPaymentAsync(booking.BookingId))
-                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Booking is unpaid; cannot check in to the automated bay.");
+                if (!await global::BLL.Helpers.PaymentHelper.IsBookingPaidAsync(_context, booking))
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("BOOKING_PAYMENT_REQUIRED", "BOOKING_PAYMENT_REQUIRED");
 
                 booking.Status = "CheckedIn";
                 booking.UpdatedAt = DateTime.UtcNow;
@@ -2384,6 +2441,11 @@ namespace AutoWashPro.BLL.Services
 
             if (autoStart && (booking.Status == "CheckedIn" || booking.Status == "Pending" || booking.Status == "Confirmed"))
             {
+                if (!await global::BLL.Helpers.PaymentHelper.IsBookingPaidAsync(_context, booking))
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("BOOKING_PAYMENT_REQUIRED", "BOOKING_PAYMENT_REQUIRED");
+                if (booking.ProcessingLaneId == null)
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Booking does not have an assigned lane; cannot start processing.");
+
                 booking.Status = "Processing";
                 booking.ProcessingStartTime = DateTime.UtcNow;
                 booking.CompletedTime = null;
@@ -2488,6 +2550,11 @@ namespace AutoWashPro.BLL.Services
                 throw new AutoWashPro.BLL.Exceptions.NotFoundException("Booking not found or does not belong to the user.");
             }
 
+            if (booking.ScheduledTime <= DateTime.UtcNow)
+            {
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("This relocation proposal has expired because the scheduled time has passed.");
+            }
+
             if (booking.Status != "Pending")
             {
                 throw new AutoWashPro.BLL.Exceptions.BadRequestException($"Cannot relocate booking in status: {booking.Status}");
@@ -2507,7 +2574,7 @@ namespace AutoWashPro.BLL.Services
 
             // Adjust Capacity
             var originalSlot = await _context.TimeSlots
-                .FirstOrDefaultAsync(ts => booking.ScheduledTime.TimeOfDay >= ts.StartTime && booking.ScheduledTime.TimeOfDay <= ts.EndTime);
+                .FirstOrDefaultAsync(ts => ts.BranchId == booking.BranchId && booking.ScheduledTime.TimeOfDay >= ts.StartTime && booking.ScheduledTime.TimeOfDay <= ts.EndTime);
 
             if (originalSlot != null)
             {
@@ -2518,23 +2585,35 @@ namespace AutoWashPro.BLL.Services
                 {
                     originalCapacity.BookedWeight = Math.Max(0, originalCapacity.BookedWeight - booking.CapacityWeight);
                 }
+            }
 
+            var alternativeSlot = await _context.TimeSlots
+                .FirstOrDefaultAsync(ts => ts.BranchId == request.AlternativeBranchId && booking.ScheduledTime.TimeOfDay >= ts.StartTime && booking.ScheduledTime.TimeOfDay <= ts.EndTime);
+
+            if (alternativeSlot != null)
+            {
                 var newCapacity = await _context.DailySlotCapacities
-                    .FirstOrDefaultAsync(c => c.BranchId == request.AlternativeBranchId && c.Date == booking.ScheduledTime.Date && c.SlotId == originalSlot.SlotId);
+                    .FirstOrDefaultAsync(c => c.BranchId == request.AlternativeBranchId && c.Date == booking.ScheduledTime.Date && c.SlotId == alternativeSlot.SlotId);
                 
                 if (newCapacity == null)
                 {
+                    if (booking.CapacityWeight > alternativeSlot.MaxCapacity)
+                        throw new AutoWashPro.BLL.Exceptions.BadRequestException("The alternative branch is fully booked for this time slot.");
+                        
                     newCapacity = new DAL.Entities.DailySlotCapacity
                     {
                         BranchId = request.AlternativeBranchId,
                         Date = booking.ScheduledTime.Date,
-                        SlotId = originalSlot.SlotId,
+                        SlotId = alternativeSlot.SlotId,
                         BookedWeight = booking.CapacityWeight
                     };
                     _context.DailySlotCapacities.Add(newCapacity);
                 }
                 else
                 {
+                    if (newCapacity.BookedWeight + booking.CapacityWeight > alternativeSlot.MaxCapacity)
+                        throw new AutoWashPro.BLL.Exceptions.BadRequestException("The alternative branch is fully booked for this time slot.");
+                        
                     newCapacity.BookedWeight += booking.CapacityWeight;
                 }
             }
@@ -2568,6 +2647,287 @@ namespace AutoWashPro.BLL.Services
             };
         }
 
+        public async Task<OverloadSuggestionResponseDTO?> GetPendingOverloadSuggestionAsync(int userId, int bookingId)
+        {
+            var suggestion = await _context.OverloadSuggestions
+                .Include(s => s.Booking)
+                .Where(s => s.BookingId == bookingId 
+                         && s.Booking.UserId == userId 
+                         && !s.IsProcessed 
+                         && s.ExpiresAt > DateTime.UtcNow 
+                         && s.Booking.Status == "Pending" 
+                         && s.Booking.ScheduledTime > DateTime.UtcNow)
+                .OrderByDescending(s => s.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (suggestion == null) return null;
+
+            return new OverloadSuggestionResponseDTO
+            {
+                SuggestionId = suggestion.Id,
+                BookingId = suggestion.BookingId,
+                SuggestedBranchId = suggestion.SuggestedBranchId,
+                SuggestedBranchName = suggestion.SuggestedBranchName,
+                SuggestedSlotId = suggestion.SuggestedSlotId,
+                SuggestedTime = suggestion.SuggestedTime,
+                ExpiresAt = suggestion.ExpiresAt
+            };
+        }
+
+        public async Task<HandleOverloadDecisionResponseDTO> HandleOverloadDecisionAsync(int userId, int bookingId, HandleOverloadDecisionDTO request)
+        {
+            int retryCount = 3;
+            while (retryCount > 0)
+            {
+                try
+                {
+                    return await HandleOverloadDecisionInnerAsync(userId, bookingId, request);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    retryCount--;
+                    if (retryCount == 0) throw new AutoWashPro.BLL.Exceptions.ConflictException("Data was modified by another transaction. Please reload and try again.", "CONCURRENCY_CONFLICT");
+                    await Task.Delay(50);
+                }
+                catch (MySqlConnector.MySqlException ex) when (ex.Number == 1213 || ex.Number == 1205)
+                {
+                    retryCount--;
+                    if (retryCount == 0) throw new AutoWashPro.BLL.Exceptions.ConflictException("Data was modified by another transaction. Please reload and try again.", "CONCURRENCY_CONFLICT");
+                    await Task.Delay(50);
+                }
+            }
+            throw new AutoWashPro.BLL.Exceptions.ConflictException("Data was modified by another transaction. Please reload and try again.", "CONCURRENCY_CONFLICT");
+        }
+
+        private async Task<HandleOverloadDecisionResponseDTO> HandleOverloadDecisionInnerAsync(int userId, int bookingId, HandleOverloadDecisionDTO request)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            try
+            {
+                var booking = await _context.Bookings
+                    .Include(b => b.BookingDetails)
+                    .ThenInclude(bd => bd.Service)
+                    .FirstOrDefaultAsync(b => b.BookingId == bookingId && b.UserId == userId);
+
+                if (booking == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("Booking not found");
+                if (booking.Status != "Pending") throw new AutoWashPro.BLL.Exceptions.ConflictException("Booking is not pending.");
+                if (booking.ScheduledTime <= DateTime.UtcNow) throw new AutoWashPro.BLL.Exceptions.ConflictException("Booking scheduled time has already passed.");
+
+                // Normalise decision — frontend sends exactly "Switch" | "Cancel" | "Keep"
+                var decision = request.Decision?.Trim();
+                if (!string.Equals(decision, "Switch", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(decision, "Cancel", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(decision, "Keep", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Decision must be Switch, Cancel, or Keep.");
+                }
+                // Normalise to title-case
+                decision = char.ToUpper(decision![0]) + decision.Substring(1).ToLower();
+
+                var now = DateTime.UtcNow;
+
+                // P0.1: Look up the active suggestion from DB — FE does NOT send suggestionId
+                var suggestion = await _context.OverloadSuggestions
+                    .Where(s => s.BookingId == bookingId && !s.IsProcessed && s.ExpiresAt > now)
+                    .OrderByDescending(s => s.CreatedAt)
+                    .FirstOrDefaultAsync();
+
+                if (suggestion == null) throw new AutoWashPro.BLL.Exceptions.NotFoundException("No active overload suggestion found for this booking.");
+                if (suggestion.IsProcessed) throw new AutoWashPro.BLL.Exceptions.ConflictException("The overload suggestion has already been processed.");
+                if (suggestion.ExpiresAt < now) throw new AutoWashPro.BLL.Exceptions.ConflictException("The overload suggestion has expired.");
+
+                var response = new HandleOverloadDecisionResponseDTO 
+                { 
+                    Success = true,
+                    Decision = decision
+                };
+
+                if (decision == "Keep")
+                {
+                    booking.IsWaitAccepted = true;
+                    suggestion.IsProcessed = true;
+                    await _context.SaveChangesAsync();
+                    
+                    response.Message = "You have chosen to keep your current booking and wait.";
+                }
+                else if (decision == "Cancel")
+                {
+                    var oldSlot = await _context.DailySlotCapacities
+                        .Include(c => c.TimeSlot)
+                        .FirstOrDefaultAsync(c => c.BranchId == booking.BranchId && c.Date == booking.ScheduledTime.Date && c.TimeSlot.StartTime <= booking.ScheduledTime.TimeOfDay && c.TimeSlot.EndTime > booking.ScheduledTime.TimeOfDay);
+                    
+                    if (oldSlot != null)
+                    {
+                        oldSlot.BookedWeight = Math.Max(0, oldSlot.BookedWeight - (booking.CapacityWeight > 0 ? booking.CapacityWeight : 1));
+                    }
+
+                    booking.Status = "Cancelled";
+                    suggestion.IsProcessed = true;
+                    
+                    response.Refund = new OverloadRefundDTO
+                    {
+                        RefundedAmount = 0,
+                        RefundDestination = null,
+                        RefundedPoints = 0,
+                        RestoredVoucherId = null
+                    };
+
+                    // Refund Wallet / PayOS
+                    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userId);
+                    bool paymentCompleted = await _context.Transactions.AnyAsync(t => t.ReferenceBookingId == booking.BookingId && (t.TransactionType == "WalkInPayment" || t.TransactionType == "Payment" || t.TransactionType == "BookingPayment") && t.Status == "Completed");
+                    bool refundExists = await _context.Transactions.AnyAsync(t => t.ReferenceBookingId == booking.BookingId && t.TransactionType == "Refund");
+                    
+                    if (wallet != null && booking.FinalAmount > 0 && paymentCompleted && !refundExists)
+                    {
+                        wallet.Balance += booking.FinalAmount;
+
+                        var refundTx = new Transaction
+                        {
+                            WalletId = wallet.WalletId,
+                            Amount = booking.FinalAmount,
+                            TransactionType = "Refund",
+                            Description = $"Refund for overload cancelled booking #{booking.BookingId}",
+                            ReferenceBookingId = booking.BookingId
+                        };
+                        _context.Transactions.Add(refundTx);
+                        
+                        response.Refund.RefundedAmount = booking.FinalAmount;
+                        response.Refund.RefundDestination = "Wallet";
+                    }
+
+                    if (booking.PointsUsed > 0)
+                    {
+                        await _walletService.RefundSpendablePointsAsync(
+                            userId,
+                            booking.PointsUsed,
+                            $"Points refunded for overload-cancelled booking #{booking.BookingId}"
+                        );
+                        response.Refund.RefundedPoints = booking.PointsUsed;
+                    }
+
+                    if (booking.AppliedVoucherId.HasValue)
+                    {
+                        var userVoucher = await _context.UserVouchers
+                            .Include(uv => uv.Voucher)
+                            .FirstOrDefaultAsync(uv => uv.UserId == userId && uv.VoucherId == booking.AppliedVoucherId.Value);
+                        if (userVoucher != null)
+                        {
+                            if (userVoucher.UsageCount > 0)
+                            {
+                                userVoucher.UsageCount -= 1;
+                            }
+                            userVoucher.IsUsed = false;
+                            userVoucher.UsedDate = userVoucher.UsageCount > 0 ? userVoucher.UsedDate : null;
+                            userVoucher.LastUsedDate = userVoucher.UsageCount > 0 ? userVoucher.LastUsedDate : null;
+                            if (userVoucher.Voucher.CurrentUsageCount > 0)
+                            {
+                                userVoucher.Voucher.CurrentUsageCount -= 1;
+                            }
+                            response.Refund.RestoredVoucherId = booking.AppliedVoucherId.Value;
+                        }
+                    }
+
+                    await _context.SaveChangesAsync();
+                    
+                    response.Message = "Booking cancelled due to overload. Penalty waived. Refunds processed.";
+                }
+                else if (decision == "Switch")
+                {
+                    var oldSlot = await _context.DailySlotCapacities
+                        .Include(c => c.TimeSlot)
+                        .FirstOrDefaultAsync(c => c.BranchId == booking.BranchId && c.Date == booking.ScheduledTime.Date && c.TimeSlot.StartTime <= booking.ScheduledTime.TimeOfDay && c.TimeSlot.EndTime > booking.ScheduledTime.TimeOfDay);
+                    
+                    if (oldSlot != null)
+                    {
+                        oldSlot.BookedWeight = Math.Max(0, oldSlot.BookedWeight - (booking.CapacityWeight > 0 ? booking.CapacityWeight : 1));
+                    }
+
+                    var destBranch = await _context.Branches.FirstOrDefaultAsync(b => b.BranchId == suggestion.SuggestedBranchId && b.IsActive);
+                    if (destBranch == null) throw new AutoWashPro.BLL.Exceptions.ConflictException("The destination branch is no longer active.", "DESTINATION_BRANCH_INACTIVE");
+
+                    var newSlot = await _context.DailySlotCapacities
+                        .Include(c => c.TimeSlot)
+                        .FirstOrDefaultAsync(c => c.SlotId == suggestion.SuggestedSlotId 
+                                               && c.BranchId == suggestion.SuggestedBranchId 
+                                               && c.Date == suggestion.SuggestedTime.Date);
+                    
+                    if (newSlot == null || newSlot.BookedWeight + (booking.CapacityWeight > 0 ? booking.CapacityWeight : 1) > newSlot.TimeSlot.MaxCapacity)
+                    {
+                        throw new AutoWashPro.BLL.Exceptions.ConflictException("Target slot is full or unavailable.");
+                    }
+
+                    newSlot.BookedWeight += (booking.CapacityWeight > 0 ? booking.CapacityWeight : 1);
+
+                    booking.BranchId = suggestion.SuggestedBranchId;
+                    booking.ScheduledTime = suggestion.SuggestedTime;
+                    booking.IsWaitAccepted = true;
+                    suggestion.IsProcessed = true;
+                    
+                    decimal discountValue = booking.OriginalPrice > 0 ? booking.OriginalPrice * 0.10m : 50000m;
+                    var voucher = new Voucher
+                    {
+                        Code = $"OVL-{Guid.NewGuid().ToString().Substring(0, 6).ToUpper()}",
+                        DiscountAmount = discountValue,
+                        MaxUsages = 1,
+                        MaxUsagePerUser = 1,
+                        ExpiryDate = DateTime.UtcNow.AddMonths(1),
+                        IsActive = true,
+                        VoucherType = AutoWashPro.DAL.Enums.VoucherType.Discount,
+                        CampaignType = AutoWashPro.DAL.Enums.VoucherCampaignType.Manual,
+                        ProposalNote = "Overload compensation voucher 10%"
+                    };
+                    _context.Vouchers.Add(voucher);
+                    await _context.SaveChangesAsync();
+
+                    var userVoucher = new UserVoucher
+                    {
+                        UserId = userId,
+                        VoucherId = voucher.VoucherId,
+                        ExpiryDate = voucher.ExpiryDate,
+                        ReceivedDate = DateTime.UtcNow
+                    };
+                    _context.UserVouchers.Add(userVoucher);
+                    await _context.SaveChangesAsync();
+                    
+                    response.Message = "Switched to new branch successfully. You received a compensation voucher.";
+                    response.Voucher = new VoucherResponseDTO
+                    {
+                        VoucherId = voucher.VoucherId,
+                        Code = voucher.Code,
+                        DiscountAmount = voucher.DiscountAmount,
+                        ExpiryDate = voucher.ExpiryDate,
+                        IsActive = voucher.IsActive
+                    };
+                }
+                else
+                {
+                    throw new AutoWashPro.BLL.Exceptions.BadRequestException("Decision must be Switch, Cancel, or Keep.");
+                }
+
+                await transaction.CommitAsync();
+
+                response.UpdatedBooking = new BookingResponseDTO
+                {
+                    BookingId = booking.BookingId,
+                    LicensePlate = booking.LicensePlate ?? "",
+                    ServiceNames = booking.BookingDetails.Select(d => d.Service.ServiceName ?? "").ToList(),
+                    ScheduledTime = booking.ScheduledTime,
+                    Status = booking.Status,
+                    OriginalPrice = booking.OriginalPrice,
+                    VoucherDiscountAmount = booking.VoucherDiscountAmount,
+                    PointDiscountAmount = booking.PointDiscountAmount,
+                    FinalAmount = booking.FinalAmount
+                };
+
+                return response;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
         private static long GeneratePayOsOrderCode()
         {
             var timestampPart = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % 1_000_000_000_000;
@@ -2578,13 +2938,13 @@ namespace AutoWashPro.BLL.Services
         private static int ToPayOsAmount(decimal amount)
         {
             if (amount <= 0)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("So tien thanh toan PayOS phai lon hon 0.");
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("PayOS payment amount must be greater than 0.");
 
             if (amount != decimal.Truncate(amount))
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("PayOS chi ho tro so tien VND nguyen, khong co phan thap phan.");
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("PayOS only supports whole VND amounts with no decimal part.");
 
             if (amount > int.MaxValue)
-                throw new AutoWashPro.BLL.Exceptions.BadRequestException("So tien thanh toan PayOS vuot qua gioi han ho tro.");
+                throw new AutoWashPro.BLL.Exceptions.BadRequestException("PayOS payment amount exceeds supported limit.");
 
             return decimal.ToInt32(amount);
         }

@@ -21,6 +21,7 @@ namespace AutoWashPro.BLL.Services
         Task<BookingResponseDTO> UpdateBookingStatusByLicensePlateAsync(string licensePlate, string newStatus);
         Task<BookingResponseDTO> AutoCheckOutByLicensePlateAsync(string licensePlate);
         Task<List<BookingResponseDTO>> GetMyBookingsAsync(int userId);
+        Task<List<RelocationProposalCustomerDTO>> GetRelocationProposalsAsync(int userId);
         Task<bool> CancelBookingAsync(int userId, int bookingId);
         Task<bool> UpdateVehicleConditionAsync(int staffId, int bookingId, UpdateVehicleConditionDTO request);
         Task MarkAsNoShowAsync(int bookingId);
@@ -32,5 +33,7 @@ namespace AutoWashPro.BLL.Services
         Task<BookingResponseDTO> AutoCheckInAndStartProcessingAsync(string licensePlate, int branchId, bool autoStart);
         Task<int> ProcessOverdueAutomatedWashesAsync();
         Task<BookingResponseDTO> AcceptRelocationAsync(int userId, int bookingId, AcceptRelocationRequestDTO request);
+        Task<OverloadSuggestionResponseDTO?> GetPendingOverloadSuggestionAsync(int userId, int bookingId);
+        Task<HandleOverloadDecisionResponseDTO> HandleOverloadDecisionAsync(int userId, int bookingId, HandleOverloadDecisionDTO request);
     }
 }

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using BLL.Helpers;
 using BLL.Services.Interface;
 using BLL.DTOs.Business;
+using AutoWashPro.BLL.Services.Interface;
 
 namespace AutoWashPro.BLL.Services
 {
@@ -16,11 +17,16 @@ namespace AutoWashPro.BLL.Services
     {
         private readonly AutoWashDbContext _context;
         private readonly IBranchRevenueAnalyticsService _branchRevenueAnalyticsService;
+        private readonly IOverloadSuggestionService _overloadSuggestionService;
 
-        public ManagerService(AutoWashDbContext context, IBranchRevenueAnalyticsService branchRevenueAnalyticsService)
+        public ManagerService(
+            AutoWashDbContext context,
+            IBranchRevenueAnalyticsService branchRevenueAnalyticsService,
+            IOverloadSuggestionService overloadSuggestionService)
         {
             _context = context;
             _branchRevenueAnalyticsService = branchRevenueAnalyticsService;
+            _overloadSuggestionService = overloadSuggestionService;
         }
 
         private async Task<EmployeeProfile> GetManagerProfileAsync(int managerUserId)
@@ -344,32 +350,96 @@ namespace AutoWashPro.BLL.Services
         {
             var managerProfile = await GetManagerProfileAsync(managerUserId);
 
-            var booking = await _context.Bookings
-                .FirstOrDefaultAsync(b => b.BookingId == bookingId && b.BranchId == managerProfile.BranchId);
-
-            if (booking == null)
+            int retryCount = 3;
+            while (retryCount > 0)
             {
-                throw new NotFoundException("Booking not found in your branch.");
+                try
+                {
+                    using var dbTransaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+
+                    var booking = await _context.Bookings
+                        .FirstOrDefaultAsync(b => b.BookingId == bookingId && b.BranchId == managerProfile.BranchId);
+
+                    if (booking == null)
+                    {
+                        throw new NotFoundException("Booking not found in your branch.");
+                    }
+
+                    if (booking.Status != "Pending" && booking.Status != "CheckedIn")
+                    {
+                        throw new BadRequestException("Booking is not in a valid state for check-in and assignment.");
+                    }
+
+                    if (booking.Status == "CheckedIn" && booking.ProcessingLaneId != null && booking.ProcessingLaneId != assignment.LaneId)
+                    {
+                        throw new BadRequestException("Booking already has a lane assigned. Please use reassignment.");
+                    }
+
+                    if (!await global::BLL.Helpers.PaymentHelper.IsBookingPaidAsync(_context, booking))
+                    {
+                        throw new BadRequestException("BOOKING_PAYMENT_REQUIRED");
+                    }
+
+                    var validLane = await _context.Lanes
+                        .FirstOrDefaultAsync(l => l.LaneId == assignment.LaneId && l.BranchId == managerProfile.BranchId);
+
+                    if (validLane == null)
+                    {
+                        throw new BadRequestException("Lane is invalid or does not belong to your branch.");
+                    }
+
+                    if (!validLane.IsActive)
+                    {
+                        throw new BadRequestException("LANE_INACTIVE");
+                    }
+
+                    bool isBusinessBooking = booking.BookingType == "Business";
+                    if (validLane.IsBusinessLane != isBusinessBooking)
+                    {
+                        throw new BadRequestException("LANE_TYPE_MISMATCH");
+                    }
+
+                    // Check if lane is available (not reserved by another active booking/wash log)
+                    bool laneOccupied = await _context.Bookings.AnyAsync(b => 
+                        b.ProcessingLaneId == assignment.LaneId 
+                        && b.BookingId != bookingId 
+                        && (b.Status == "Processing" || b.Status == "CheckedIn"));
+
+                    if (!laneOccupied)
+                    {
+                        laneOccupied = await _context.FleetWashLogs.AnyAsync(f => 
+                            f.LaneId == assignment.LaneId 
+                            && (f.Status == "Processing" || f.Status == "CheckedIn" || f.Status == "Assigned"));
+                    }
+
+                    if (laneOccupied)
+                    {
+                        throw new BadRequestException("LANE_UNAVAILABLE");
+                    }
+
+                    booking.ProcessingLaneId = assignment.LaneId;
+                    booking.Status = "CheckedIn";
+                    booking.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    await dbTransaction.CommitAsync();
+                    return true;
+                }
+                catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+                {
+                    retryCount--;
+                    if (retryCount == 0) throw;
+                    await Task.Delay(50);
+                }
+                catch (MySqlConnector.MySqlException ex) when (ex.Number == 1213 || ex.Number == 1205) // Deadlock or Lock wait timeout
+                {
+                    retryCount--;
+                    if (retryCount == 0) throw;
+                    await Task.Delay(50);
+                }
             }
-
-            if (booking.Status != "Pending" && booking.Status != "CheckedIn")
-            {
-                throw new BadRequestException("Booking is not in a valid state for check-in and assignment.");
-            }
-
-            var validLane = await _context.Lanes
-                .AnyAsync(l => l.LaneId == assignment.LaneId && l.BranchId == managerProfile.BranchId);
-
-            if (!validLane)
-            {
-                throw new BadRequestException("Lane is invalid or does not belong to your branch.");
-            }
-
-            booking.ProcessingLaneId = assignment.LaneId;
-            booking.Status = "CheckedIn";
-
-            await _context.SaveChangesAsync();
-            return true;
+            
+            return false;
         }
 
         public async Task<LaneDTO> UpdateLaneAsync(int managerUserId, int laneId, UpdateLaneDTO request)
@@ -542,73 +612,15 @@ namespace AutoWashPro.BLL.Services
             return await _branchRevenueAnalyticsService.GenerateComprehensiveStimulusAnalysisAsync(managerProfile.BranchId!.Value, month, year);
         }
 
-        public async Task<List<RelocationProposalDTO>> ScanAndNotifyRelocationAsync(int managerUserId)
+        /// <summary>
+        /// P0.3: Delegates to OverloadSuggestionService.CheckAndTriggerOverloadAsync.
+        /// Creates OverloadSuggestion rows for affected pending bookings and sends FCM.
+        /// Vouchers are only issued when the customer accepts Switch via handle-overload-suggestion.
+        /// </summary>
+        public async Task<OverloadScanResultDTO> ScanAndNotifyRelocationAsync(int managerUserId)
         {
             var managerProfile = await GetManagerProfileAsync(managerUserId);
-            int branchId = managerProfile.BranchId!.Value;
-
-            var now = DateTime.UtcNow;
-            var twoHoursLater = now.AddHours(2);
-
-            var pendingBookings = await _context.Bookings
-                .Include(b => b.User)
-                    .ThenInclude(u => u.CustomerProfile)
-                .Where(b => b.BranchId == branchId 
-                            && b.Status == "Pending" 
-                            && b.ScheduledTime >= now 
-                            && b.ScheduledTime <= twoHoursLater)
-                .ToListAsync();
-
-            var proposals = new List<RelocationProposalDTO>();
-
-            if (!pendingBookings.Any()) return proposals;
-
-            var alternativeBranch = await _context.Branches
-                .Where(b => b.BranchId != branchId && b.IsActive)
-                .FirstOrDefaultAsync();
-
-            if (alternativeBranch == null) return proposals;
-
-            foreach (var booking in pendingBookings)
-            {
-                string voucherCode = $"SURGE_REL_{branchId}_{booking.BookingId}";
-                var existingVoucher = await _context.Vouchers.FirstOrDefaultAsync(v => v.Code == voucherCode);
-                
-                if (existingVoucher == null)
-                {
-                    existingVoucher = new Voucher
-                    {
-                        Code = voucherCode,
-                        ProposalNote = $"Voucher đền bù do dời lịch khẩn cấp sang {alternativeBranch.Name}",
-                        DiscountAmount = 50000,
-                        VoucherType = AutoWashPro.DAL.Enums.VoucherType.Discount,
-                        MinOrderAmount = 0,
-                        StartDate = now,
-                        ExpiryDate = now.AddDays(7),
-                        IsActive = true,
-                        MaxUsages = 1,
-                        CurrentUsageCount = 0,
-                        ApprovalStatus = "Approved", 
-                        BranchId = alternativeBranch.BranchId
-                    };
-                    _context.Vouchers.Add(existingVoucher);
-                }
-
-                proposals.Add(new RelocationProposalDTO
-                {
-                    BookingId = booking.BookingId,
-                    CustomerName = booking.User?.CustomerProfile?.FullName ?? "Khách hàng",
-                    LicensePlate = booking.LicensePlate,
-                    ScheduledTime = booking.ScheduledTime,
-                    OriginalBranchId = branchId,
-                    AlternativeBranchId = alternativeBranch.BranchId,
-                    VoucherCode = voucherCode,
-                    DiscountAmount = 20
-                });
-            }
-
-            await _context.SaveChangesAsync();
-            return proposals;
+            return await _overloadSuggestionService.CheckAndTriggerOverloadAsync(managerProfile.BranchId!.Value);
         }
     }
 }

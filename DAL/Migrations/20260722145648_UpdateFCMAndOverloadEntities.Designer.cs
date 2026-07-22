@@ -3,6 +3,7 @@ using System;
 using AutoWashPro.DAL.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DAL.Migrations
 {
     [DbContext(typeof(AutoWashDbContext))]
-    partial class AutoWashDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260722145648_UpdateFCMAndOverloadEntities")]
+    partial class UpdateFCMAndOverloadEntities
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1411,7 +1414,8 @@ namespace DAL.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BookingId");
+                    b.HasIndex("BookingId")
+                        .IsUnique();
 
                     b.ToTable("OverloadSuggestions");
                 });
@@ -3293,8 +3297,8 @@ namespace DAL.Migrations
             modelBuilder.Entity("AutoWashPro.DAL.Entities.OverloadSuggestion", b =>
                 {
                     b.HasOne("AutoWashPro.DAL.Entities.Booking", "Booking")
-                        .WithMany("OverloadSuggestions")
-                        .HasForeignKey("BookingId")
+                        .WithOne("OverloadSuggestion")
+                        .HasForeignKey("AutoWashPro.DAL.Entities.OverloadSuggestion", "BookingId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -3819,7 +3823,7 @@ namespace DAL.Migrations
                 {
                     b.Navigation("BookingDetails");
 
-                    b.Navigation("OverloadSuggestions");
+                    b.Navigation("OverloadSuggestion");
                 });
 
             modelBuilder.Entity("AutoWashPro.DAL.Entities.Branch", b =>

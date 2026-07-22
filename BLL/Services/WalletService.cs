@@ -23,14 +23,16 @@ namespace AutoWashPro.BLL.Services
         private readonly ILogger<WalletService> _logger;
         private readonly ITierService _tierService;
         private readonly IEmailService _emailService;
+        private readonly global::BLL.Services.Interface.ILaneSchedulerService _laneSchedulerService;
 
-        public WalletService(AutoWashDbContext context, PayOSClient payOSClient, ILogger<WalletService> logger, ITierService tierService, IEmailService emailService)
+        public WalletService(AutoWashDbContext context, PayOSClient payOSClient, ILogger<WalletService> logger, ITierService tierService, IEmailService emailService, global::BLL.Services.Interface.ILaneSchedulerService laneSchedulerService)
         {
             _context = context;
             _payOSClient = payOSClient;
             _logger = logger;
             _tierService = tierService;
             _emailService = emailService;
+            _laneSchedulerService = laneSchedulerService;
         }
 
         public async Task<WalletResponseDTO> GetWalletInfoAsync(int userId)
@@ -194,7 +196,7 @@ namespace AutoWashPro.BLL.Services
         {
             if (webhookData.Data == null)
             {
-                _logger.LogWarning("Webhook khong co du lieu. Code: {Code}", webhookData.Code);
+                _logger.LogWarning("Webhook contains no data. Code: {Code}", webhookData.Code);
                 return;
             }
 
@@ -205,132 +207,35 @@ namespace AutoWashPro.BLL.Services
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Webhook PayOS khong hop le.");
+                _logger.LogWarning(ex, "Invalid PayOS webhook.");
                 throw new UnauthorizedException("Invalid PayOS webhook.");
             }
 
             if (webhookData.Code != "00" || !webhookData.Success)
             {
-                _logger.LogWarning("Webhook bao thanh toan khong thanh cong. Code: {Code}", webhookData.Code);
+                _logger.LogWarning("Webhook reported unsuccessful payment. Code: {Code}", webhookData.Code);
                 return;
             }
 
             var orderCodeStr = data.OrderCode.ToString();
 
-            int? paidBookingId = null;
-            using var dbTransaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
-            try
+            var transaction = await _context.Transactions
+                .Include(t => t.Wallet)
+                .FirstOrDefaultAsync(t => t.OrderCode == orderCodeStr);
+
+            if (transaction == null)
             {
-                var transaction = await _context.Transactions
-                    .Include(t => t.Wallet)
-                    .FirstOrDefaultAsync(t => t.OrderCode == orderCodeStr);
-
-                if (transaction == null)
-                {
-                    _logger.LogWarning("Khong tim thay giao dich voi OrderCode: {OrderCode}", data.OrderCode);
-                    throw new NotFoundException("PayOS transaction corresponding to orderCode not found.");
-                }
-
-                if (transaction.Status != "Pending")
-                {
-                    _logger.LogInformation("Giao dich {OrderCode} dang o trang thai {Status}.", data.OrderCode, transaction.Status);
-                    return;
-                }
-
-                if (transaction.Amount != data.Amount)
-                {
-                    throw new BadRequestException("Webhook amount does not match the pending transaction.");
-                }
-
-                transaction.Status = "Completed";
-                transaction.Description = transaction.TransactionType switch
-                {
-                    "Topup" => $"Deposit successful (Code: {data.OrderCode})",
-                    "BookingPayment" => $"Booking payment successful (Code: {data.OrderCode})",
-                    "WalkInPayment" => $"Walk-in payment successful (Code: {data.OrderCode})",
-                    _ => transaction.Description
-                };
-
-                if (transaction.TransactionType == "Topup")
-                {
-                    if (transaction.Wallet == null)
-                        throw new BadRequestException("Giao dich nap vi thieu thong tin vi.");
-
-                    transaction.Status = "Completed";
-                    transaction.Description = $"Nap tien thanh cong (Ma: {data.OrderCode})";
-                    transaction.Wallet.Balance += data.Amount;
-                }
-                else if (transaction.TransactionType == "BookingPayment" || transaction.TransactionType == "WalkInPayment")
-                {
-                    if (!transaction.ReferenceBookingId.HasValue)
-                        throw new BadRequestException("Booking payment transaction is missing booking ID.");
-
-                    transaction.Status = "Completed";
-                    transaction.Description = $"Thanh toan booking thanh cong (Ma: {data.OrderCode})";
-
-                    var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.BookingId == transaction.ReferenceBookingId.Value);
-                    if (booking == null)
-                        throw new NotFoundException("Booking requiring payment confirmation not found.");
-
-                    booking.UpdatedAt = DateTime.UtcNow;
-                    paidBookingId = booking.BookingId;
-
-                    var otherPendingBookingPayments = await _context.Transactions
-                        .Where(t => t.ReferenceBookingId == booking.BookingId
-                                 && t.TransactionId != transaction.TransactionId
-                                 && (t.TransactionType == "BookingPayment" || t.TransactionType == "WalkInPayment")
-                                 && t.Status == "Pending")
-                        .ToListAsync();
-
-                    foreach (var pendingPayment in otherPendingBookingPayments)
-                    {
-                        pendingPayment.Status = "Expired";
-                    }
-                }
-                else if (transaction.TransactionType == "WalkInPayment")
-                {
-                    transaction.Status = "Completed";
-                    transaction.Description = $"Thanh toan walk-in thanh cong (Ma: {data.OrderCode})";
-
-                    if (!transaction.ReferenceBookingId.HasValue)
-                        throw new BadRequestException("Giao dich thanh toan walk-in thieu ma booking.");
-
-                    var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.BookingId == transaction.ReferenceBookingId.Value);
-                    if (booking == null)
-                        throw new NotFoundException("Khong tim thay booking walk-in can xac nhan thanh toan.");
-
-                    booking.UpdatedAt = DateTime.UtcNow;
-
-                    var otherPendingWalkInPayments = await _context.Transactions
-                        .Where(t => t.ReferenceBookingId == booking.BookingId
-                                 && t.TransactionId != transaction.TransactionId
-                                 && t.TransactionType == "WalkInPayment"
-                                 && t.Status == "Pending")
-                        .ToListAsync();
-
-                    foreach (var pendingPayment in otherPendingWalkInPayments)
-                    {
-                        pendingPayment.Status = "Expired";
-                    }
-                }
-                else
-                {
-                    throw new BadRequestException("Webhook transaction type not supported.");
-                }
-
-                await _context.SaveChangesAsync();
-                await dbTransaction.CommitAsync();
-            }
-            catch
-            {
-                await dbTransaction.RollbackAsync();
-                throw;
+                _logger.LogWarning("Transaction with OrderCode not found: {OrderCode}", data.OrderCode);
+                throw new NotFoundException("PayOS transaction corresponding to orderCode not found.");
             }
 
-            if (paidBookingId.HasValue)
+            if (transaction.Status != "Pending")
             {
-                await SendBookingPaymentConfirmationEmailAsync(paidBookingId.Value);
+                _logger.LogInformation("Transaction {OrderCode} is currently in {Status} status.", data.OrderCode, transaction.Status);
+                return;
             }
+
+            await ConfirmTransactionPaymentAsync(transaction.TransactionId, data.Amount, orderCodeStr);
         }
 
         public async Task<List<TransactionResponseDTO>> GetTransactionsAsync(int userId)
@@ -367,7 +272,7 @@ namespace AutoWashPro.BLL.Services
 
                 if (booking?.User == null || string.IsNullOrWhiteSpace(booking.User.Email))
                 {
-                    _logger.LogWarning("Khong the gui email booking #{BookingId}: user/email khong hop le.", bookingId);
+                    _logger.LogWarning("Cannot send email for booking #{BookingId}: invalid user/email.", bookingId);
                     return;
                 }
 
@@ -379,12 +284,12 @@ namespace AutoWashPro.BLL.Services
 
                 await _emailService.SendEmailAsync(
                     booking.User.Email,
-                    $"[SmartWash] Dat lich thanh cong - #{booking.BookingId}",
+                    $"[SmartWash] Booking successful - #{booking.BookingId}",
                     emailHtml);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Khong the gui email xac nhan booking #{BookingId} sau khi thanh toan QR.", bookingId);
+                _logger.LogWarning(ex, "Failed to send confirmation email for booking #{BookingId} after QR payment.", bookingId);
             }
         }
 
@@ -461,6 +366,99 @@ namespace AutoWashPro.BLL.Services
             }
         }
 
+        public async Task MarkTransactionTerminalAsync(int transactionId, string terminalStatus)
+        {
+            var tx = await _context.Transactions.FirstOrDefaultAsync(t => t.TransactionId == transactionId);
+            if (tx == null) return;
+            if (string.Equals(tx.Status, "Completed", StringComparison.OrdinalIgnoreCase)) return;
+
+            tx.Status = terminalStatus;
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task ConfirmTransactionPaymentAsync(int transactionId, decimal? webhookAmount, string orderCode)
+        {
+            using var dbTransaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            try
+            {
+                var transaction = await _context.Transactions
+                    .Include(t => t.Wallet)
+                    .FirstOrDefaultAsync(t => t.TransactionId == transactionId);
+                
+                if (transaction == null) return;
+                if (transaction.Status == "Completed") return;
+
+                if (webhookAmount.HasValue && transaction.Amount != webhookAmount.Value)
+                {
+                    throw new BadRequestException("Webhook amount does not match the pending transaction.");
+                }
+
+                if (transaction.TransactionType == "Topup")
+                {
+                    if (transaction.Wallet == null)
+                        throw new BadRequestException("Wallet top-up transaction is missing wallet info.");
+
+                    transaction.Status = "Completed";
+                    transaction.Description = $"Top-up successful (Code: {orderCode})";
+                    transaction.Wallet.Balance += transaction.Amount;
+                }
+                else if (transaction.TransactionType == "BookingPayment" || transaction.TransactionType == "WalkInPayment")
+                {
+                    if (!transaction.ReferenceBookingId.HasValue)
+                        throw new BadRequestException("Booking payment transaction is missing booking ID.");
+
+                    transaction.Status = "Completed";
+                    transaction.Description = transaction.TransactionType == "WalkInPayment" 
+                        ? $"Walk-in payment successful (Code: {orderCode})" 
+                        : $"Booking payment successful (Code: {orderCode})";
+
+                    var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.BookingId == transaction.ReferenceBookingId.Value);
+                    if (booking != null)
+                    {
+                        booking.UpdatedAt = DateTime.UtcNow;
+
+                        var otherPendingBookingPayments = await _context.Transactions
+                            .Where(t => t.ReferenceBookingId == booking.BookingId
+                                     && t.TransactionId != transaction.TransactionId
+                                     && (t.TransactionType == "BookingPayment" || t.TransactionType == "WalkInPayment")
+                                     && t.Status == "Pending")
+                            .ToListAsync();
+
+                        foreach (var pendingPayment in otherPendingBookingPayments)
+                        {
+                            pendingPayment.Status = "Expired";
+                        }
+
+                        if (transaction.TransactionType == "WalkInPayment" && booking.ProcessingLaneId == null && booking.Status == "CheckedIn")
+                        {
+                            var bestLaneId = await _laneSchedulerService.GetBestAvailableLaneAsync(booking.BranchId, booking.BookingType == "Business");
+                            if (bestLaneId > 0)
+                            {
+                                booking.ProcessingLaneId = bestLaneId;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    throw new BadRequestException("Transaction type not supported for webhook.");
+                }
+
+                await _context.SaveChangesAsync();
+                await dbTransaction.CommitAsync();
+
+                if ((transaction.TransactionType == "BookingPayment" || transaction.TransactionType == "WalkInPayment") && transaction.ReferenceBookingId.HasValue)
+                {
+                    _ = Task.Run(() => SendBookingPaymentConfirmationEmailAsync(transaction.ReferenceBookingId.Value));
+                }
+            }
+            catch
+            {
+                await dbTransaction.RollbackAsync();
+                throw;
+            }
+        }
+
         public async Task<int> AwardCompletionPointsAsync(int userId, int pointsEarned, int bookingId)
         {
             if (pointsEarned <= 0) throw new BadRequestException("Bonus points must be greater than 0.");
@@ -533,13 +531,13 @@ namespace AutoWashPro.BLL.Services
         private static int ToPayOsAmount(decimal amount)
         {
             if (amount <= 0)
-                throw new BadRequestException("So tien thanh toan PayOS phai lon hon 0.");
+                throw new BadRequestException("PayOS payment amount must be greater than 0.");
 
             if (amount != decimal.Truncate(amount))
-                throw new BadRequestException("PayOS chi ho tro so tien VND nguyen, khong co phan thap phan.");
+                throw new BadRequestException("PayOS only supports whole VND amounts, without decimal parts.");
 
             if (amount > int.MaxValue)
-                throw new BadRequestException("So tien thanh toan PayOS vuot qua gioi han ho tro.");
+                throw new BadRequestException("PayOS payment amount exceeds the supported limit.");
 
             return decimal.ToInt32(amount);
         }

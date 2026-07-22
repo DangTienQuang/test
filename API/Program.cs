@@ -143,6 +143,38 @@ builder.Services.AddSingleton<PaddleOcrService>(sp =>
 
 QuestPDF.Settings.License = LicenseType.Community;
 
+// 5.3 Firebase Cloud Messaging Integration
+try
+{
+    var credentialEnv = Environment.GetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS");
+    var credentialJson = builder.Configuration["FirebaseAdmin:CredentialJson"];
+
+    if (!string.IsNullOrEmpty(credentialEnv))
+    {
+        FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions()
+        {
+            Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromFile(credentialEnv)
+        });
+        Console.WriteLine("[INFO] Firebase initialized using GOOGLE_APPLICATION_CREDENTIALS.");
+    }
+    else if (!string.IsNullOrEmpty(credentialJson))
+    {
+        FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions()
+        {
+            Credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromJson(credentialJson)
+        });
+        Console.WriteLine("[INFO] Firebase initialized using User Secrets / Configuration.");
+    }
+    else
+    {
+        Console.WriteLine("[WARNING] Firebase credentials not found in env or secrets. Push notifications will fail.");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[ERROR] Failed to initialize Firebase: {ex.Message}");
+}
+
 // ==============================================================================
 // 6. DEPENDENCY INJECTION (BLL Services)
 // ==============================================================================
@@ -160,6 +192,8 @@ builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IVoucherCampaignService, VoucherCampaignService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
+builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
+builder.Services.AddScoped<IOverloadSuggestionService, OverloadSuggestionService>();
 builder.Services.AddScoped<IAIChatbotService, AIChatbotService>();
 builder.Services.AddScoped<IAIModerationService, AIModerationService>();
 builder.Services.AddHttpClient<ILLMService, GeminiAIService>();
@@ -255,7 +289,7 @@ builder.Services.AddScoped<IBookingAttendanceService, BookingAttendanceService>(
 builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
 builder.Services.Configure<BLL.Helpers.CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 
-builder.Services.AddHostedService<AutoWashPro.API.Workers.AnnualTierResetWorker>();
+// Note: AnnualTierResetWorker is already registered at line 247; duplicate removed.
 
 builder.Services.AddSingleton(provider =>
 {

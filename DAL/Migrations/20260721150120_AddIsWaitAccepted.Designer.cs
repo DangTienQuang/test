@@ -3,6 +3,7 @@ using System;
 using AutoWashPro.DAL.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DAL.Migrations
 {
     [DbContext(typeof(AutoWashDbContext))]
-    partial class AutoWashDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260721150120_AddIsWaitAccepted")]
+    partial class AddIsWaitAccepted
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -278,9 +281,6 @@ namespace DAL.Migrations
 
                     b.Property<decimal>("OriginalPrice")
                         .HasColumnType("decimal(65,30)");
-
-                    b.Property<DateTime?>("OverloadNotifiedAt")
-                        .HasColumnType("datetime(6)");
 
                     b.Property<decimal>("PointDiscountAmount")
                         .HasColumnType("decimal(65,30)");
@@ -1377,45 +1377,6 @@ namespace DAL.Migrations
                     b.ToTable("MaterialUnits");
                 });
 
-            modelBuilder.Entity("AutoWashPro.DAL.Entities.OverloadSuggestion", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    b.Property<int>("BookingId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<bool>("IsProcessed")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<int>("SuggestedBranchId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("SuggestedBranchName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("varchar(100)");
-
-                    b.Property<int>("SuggestedSlotId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("SuggestedTime")
-                        .HasColumnType("datetime(6)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BookingId");
-
-                    b.ToTable("OverloadSuggestions");
-                });
-
             modelBuilder.Entity("AutoWashPro.DAL.Entities.OvertimeRequest", b =>
                 {
                     b.Property<int>("OvertimeRequestId")
@@ -2064,36 +2025,6 @@ namespace DAL.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
-                });
-
-            modelBuilder.Entity("AutoWashPro.DAL.Entities.UserFcmToken", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime?>("LastUsedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Token")
-                        .IsUnique();
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("UserFcmTokens");
                 });
 
             modelBuilder.Entity("AutoWashPro.DAL.Entities.UserVoucher", b =>
@@ -3290,17 +3221,6 @@ namespace DAL.Migrations
                     b.Navigation("Warehouse");
                 });
 
-            modelBuilder.Entity("AutoWashPro.DAL.Entities.OverloadSuggestion", b =>
-                {
-                    b.HasOne("AutoWashPro.DAL.Entities.Booking", "Booking")
-                        .WithMany("OverloadSuggestions")
-                        .HasForeignKey("BookingId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Booking");
-                });
-
             modelBuilder.Entity("AutoWashPro.DAL.Entities.OvertimeRequest", b =>
                 {
                     b.HasOne("AutoWashPro.DAL.Entities.User", "StaffUser")
@@ -3548,17 +3468,6 @@ namespace DAL.Migrations
                         .HasForeignKey("WalletId");
 
                     b.Navigation("Wallet");
-                });
-
-            modelBuilder.Entity("AutoWashPro.DAL.Entities.UserFcmToken", b =>
-                {
-                    b.HasOne("AutoWashPro.DAL.Entities.User", "User")
-                        .WithMany("FcmTokens")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("AutoWashPro.DAL.Entities.UserVoucher", b =>
@@ -3818,8 +3727,6 @@ namespace DAL.Migrations
             modelBuilder.Entity("AutoWashPro.DAL.Entities.Booking", b =>
                 {
                     b.Navigation("BookingDetails");
-
-                    b.Navigation("OverloadSuggestions");
                 });
 
             modelBuilder.Entity("AutoWashPro.DAL.Entities.Branch", b =>
@@ -3890,8 +3797,6 @@ namespace DAL.Migrations
                         .IsRequired();
 
                     b.Navigation("EmployeeProfile");
-
-                    b.Navigation("FcmTokens");
 
                     b.Navigation("LaneAssignments");
 

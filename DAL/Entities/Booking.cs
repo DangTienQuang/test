@@ -89,5 +89,11 @@ namespace AutoWashPro.DAL.Entities
 
         [ForeignKey(nameof(FleetVehicleId))]
         public FleetVehicle? FleetVehicle { get; set; }
+
+        public bool IsWaitAccepted { get; set; } = false;
+
+        public DateTime? OverloadNotifiedAt { get; set; }
+
+        public ICollection<OverloadSuggestion> OverloadSuggestions { get; set; } = new List<OverloadSuggestion>();
     }
 }

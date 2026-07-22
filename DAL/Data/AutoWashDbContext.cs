@@ -1,4 +1,4 @@
-﻿using AutoWashPro.DAL.Entities;
+using AutoWashPro.DAL.Entities;
 using DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -68,10 +68,16 @@ namespace AutoWashPro.DAL.Data
         public DbSet<AIDecisionHistory> AIDecisionHistories { get; set; }
         public DbSet<AILearning> AILearnings { get; set; }
         public DbSet<AIAuditLog> AIAuditLogs { get; set; }
+        public DbSet<UserFcmToken> UserFcmTokens { get; set; }
+        public DbSet<OverloadSuggestion> OverloadSuggestions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<UserFcmToken>()
+                .HasIndex(t => t.Token)
+                .IsUnique();
 
             modelBuilder.Entity<Vehicle>()
                 .HasIndex(v => v.LicensePlate)

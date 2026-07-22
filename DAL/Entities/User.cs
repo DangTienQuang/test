@@ -1,4 +1,4 @@
-﻿using DAL.Entities;
+using DAL.Entities;
 using System;
 using System.Collections.Generic;
 using System.Collections.Generic;
@@ -34,6 +34,9 @@ namespace AutoWashPro.DAL.Entities
         [MaxLength(128)]
         public string? EmailVerificationOtpHash { get; set; }
         public DateTime? EmailVerificationOtpExpiresAt { get; set; }
+        
+        public ICollection<UserFcmToken> FcmTokens { get; set; } = new List<UserFcmToken>();
+
         public CustomerProfile CustomerProfile { get; set; } = null!;
         public StaffProfile? StaffProfile { get; set; }
         public ManagerProfile? ManagerProfile { get; set; }

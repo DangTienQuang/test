@@ -17,12 +17,16 @@ namespace AutoWashPro.BLL.Services
         private readonly AutoWashDbContext _context;
         private readonly IWalletService _walletService;
         private readonly IBookingMaterialUsageService _bookingMaterialUsageService;
+        private readonly global::BLL.Services.Interface.ILaneSchedulerService _laneSchedulerService;
+        private readonly global::AutoWashPro.BLL.Services.Interface.IOverloadSuggestionService _overloadSuggestionService;
 
-        public OperationStaffService(AutoWashDbContext context, IWalletService walletService, IBookingMaterialUsageService bookingMaterialUsageService)
+        public OperationStaffService(AutoWashDbContext context, IWalletService walletService, IBookingMaterialUsageService bookingMaterialUsageService, global::BLL.Services.Interface.ILaneSchedulerService laneSchedulerService, global::AutoWashPro.BLL.Services.Interface.IOverloadSuggestionService overloadSuggestionService)
         {
             _context = context;
             _walletService = walletService;
             _bookingMaterialUsageService = bookingMaterialUsageService;
+            _laneSchedulerService = laneSchedulerService;
+            _overloadSuggestionService = overloadSuggestionService;
         }
 
         public async Task<StaffLaneTaskDTO?> GetTodayLaneAssignmentAsync(int staffUserId, DateTime? date = null)
@@ -40,7 +44,7 @@ namespace AutoWashPro.BLL.Services
                 return new StaffLaneTaskDTO
                 {
                     LaneId = 0,
-                    LaneName = "Mọi làn rửa xe (All Lanes)",
+                    LaneName = "All Lanes",
                     AssignedDate = targetDate
                 };
             }
@@ -74,23 +78,37 @@ namespace AutoWashPro.BLL.Services
                 throw new BadRequestException("Can only check in vehicles in Pending status.");
             }
 
-            int laneIdToAssign = assignment?.LaneId ?? booking.ProcessingLaneId ?? await _context.Lanes.Where(l => l.BranchId == booking.BranchId && l.IsActive).Select(l => l.LaneId).FirstOrDefaultAsync();
-            if (laneIdToAssign == 0)
+            if (!await global::BLL.Helpers.PaymentHelper.IsBookingPaidAsync(_context, booking))
             {
-                laneIdToAssign = await _context.Lanes.Select(l => l.LaneId).FirstOrDefaultAsync();
+                throw new BadRequestException("BOOKING_PAYMENT_REQUIRED");
             }
 
-            booking.ProcessingLaneId = laneIdToAssign;
+            if (booking.ProcessingLaneId == null)
+            {
+                var laneId = await _laneSchedulerService.AssignBestAvailableLaneAtomicAsync(bookingId);
+                if (laneId > 0) booking.ProcessingLaneId = laneId;
+            }
+
             booking.ProcessingStaffId = staffUserId;
             booking.Status = "CheckedIn";
 
             await _context.SaveChangesAsync();
+
+            // P0.4: Await the overload check — do NOT fire-and-forget with a scoped DbContext,
+            // as the scope may be disposed before the async task completes (ObjectDisposedException).
+            await _overloadSuggestionService.CheckAndTriggerOverloadAsync(booking.BranchId);
+
             return true;
         }
 
         public async Task<List<StaffBookingDTO>> GetAssignedBookingsAsync(int staffUserId, DateTime? date = null)
         {
             var targetDate = date?.Date ?? DateTime.UtcNow.ToVnTime().Date;
+
+            var staffBranchId = await _context.EmployeeProfiles
+                .Where(e => e.EmployeeId == staffUserId)
+                .Select(e => e.BranchId)
+                .FirstOrDefaultAsync();
 
             var bookings = await _context.Bookings
                 .Include(b => b.BookingDetails)
@@ -99,7 +117,9 @@ namespace AutoWashPro.BLL.Services
                 .Include(b => b.User)
                 .ThenInclude(u => u!.CustomerProfile)
                 .ThenInclude(p => p!.Tier)
-                .Where(b => (b.Status == "CheckedIn" || b.Status == "Processing")
+                .Include(b => b.ProcessingLane)
+                .Where(b => b.BranchId == staffBranchId
+                         && (b.Status == "CheckedIn" || b.Status == "Processing")
                          && (b.ScheduledTime.Date == targetDate || b.ProcessingStartTime.HasValue))
                 .OrderByDescending(b => b.User != null && b.User.CustomerProfile != null && b.User.CustomerProfile.Tier != null
                                          ? b.User.CustomerProfile.Tier.MinAccumulatedPoints
@@ -155,7 +175,10 @@ namespace AutoWashPro.BLL.Services
                     CompletedTime = b.CompletedTime.HasValue ? b.CompletedTime.Value.ToVnTime() : (DateTime?)null,
                     ActualDurationMinutes = b.ActualDurationMinutes,
                     CustomerTierName = b.User?.CustomerProfile?.Tier?.TierName ?? "WalkIn / Standard",
-                    CustomerTierPoints = b.User?.CustomerProfile?.Tier?.MinAccumulatedPoints ?? 0
+                    CustomerTierPoints = b.User?.CustomerProfile?.Tier?.MinAccumulatedPoints ?? 0,
+                    UserId = b.UserId,
+                    ProcessingLaneId = b.ProcessingLaneId,
+                    ProcessingLaneName = b.ProcessingLane?.Name
                 };
             }).ToList();
         }
@@ -175,6 +198,22 @@ namespace AutoWashPro.BLL.Services
             {
                  if (booking.Status != "CheckedIn" && booking.Status != "Processing")
                      throw new BadRequestException("Can only start processing checked-in vehicles.");
+                     
+                 if (booking.FinalAmount > 0)
+                 {
+                     var hasCompletedPayment = await _context.Transactions
+                         .AnyAsync(t => t.ReferenceBookingId == bookingId && t.Status == "Completed");
+                     if (!hasCompletedPayment)
+                     {
+                         throw new BadRequestException("BOOKING_PAYMENT_REQUIRED");
+                     }
+                 }
+
+                 if (booking.ProcessingLaneId == null)
+                 {
+                     throw new BadRequestException("Booking does not have an assigned lane; cannot start processing.");
+                 }
+
                  booking.ProcessingStaffId = staffUserId;
                  booking.ProcessingStartTime = DateTime.UtcNow;
                  booking.CompletedTime = null;
@@ -231,6 +270,11 @@ namespace AutoWashPro.BLL.Services
             }
 
             await _context.SaveChangesAsync();
+
+            if (isCompletingNow && booking.ProcessingLaneId.HasValue)
+            {
+                await _laneSchedulerService.AssignNextVehicleInQueueAsync(booking.ProcessingLaneId.Value);
+            }
 
             return true;
         }
